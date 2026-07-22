@@ -66,7 +66,7 @@
   <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1" name="viewport" />
-    <title>Heating Survey Web Form</title>
+    <title>Heating Survey and Heat Loss Calculator</title>
     <!-- ============================================================
          DURABLE STORAGE SHIM (Capacitor)
          Keeps the app's synchronous localStorage code unchanged, but
@@ -1769,6 +1769,7 @@
         <div class="tabs" role="tablist" aria-label="Survey sections">
           <button id="frontTab" class="tab active" data-tab="frontForm" role="tab" aria-controls="frontForm" aria-selected="true">Front</button>
           <button id="radsTab" class="tab" data-tab="radsForm" role="tab" aria-controls="radsForm" aria-selected="false">Rads</button>
+          <button id="heatlossTab" class="tab" data-tab="heatlossForm" role="tab" aria-controls="heatlossForm" aria-selected="false">Heat Loss</button>
           <button id="a12aTab" class="tab" data-tab="a12aForm" role="tab" aria-controls="a12aForm" aria-selected="false">A12a</button>
           <button id="profileTab" class="tab" data-tab="profileForm" role="tab" aria-controls="profileForm" aria-selected="false">Profile</button>
         </div>
@@ -1808,6 +1809,7 @@
         <div id="commonForm"></div>
         <section class="section active" id="frontForm" role="tabpanel" aria-labelledby="frontTab" aria-hidden="false"></section>
         <section class="section" id="radsForm" role="tabpanel" aria-labelledby="radsTab" aria-hidden="true"></section>
+        <section class="section" id="heatlossForm" role="tabpanel" aria-labelledby="heatlossTab" aria-hidden="true"></section>
         <section class="section" id="a12aForm" role="tabpanel" aria-labelledby="a12aTab" aria-hidden="true"></section>
         <section class="section" id="profileForm" role="tabpanel" aria-labelledby="profileTab" aria-hidden="true"></section>
       </aside>
@@ -7587,6 +7589,619 @@
           setTimeout(updateSectionBadgesV58, 300);
         });
         setTimeout(updateSectionBadgesV58, 0);
+      })();
+    </script>
+    <style>
+      /* ============================================================
+         V59 HEAT LOSS CALCULATOR
+         ============================================================ */
+      #heatlossForm .hl-intro {
+        border-left: 4px solid #2563eb;
+        background: #eff6ff;
+      }
+      #heatlossForm details {
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        background: #fff;
+        margin: 12px 0;
+        overflow: hidden;
+      }
+      #heatlossForm details > summary {
+        min-height: 62px;
+        padding: 15px 16px;
+        background: #f3f4f6;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .hl-room-body {
+        padding: 14px;
+      }
+      .hl-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 12px;
+      }
+      .hl-grid .field {
+        margin: 0;
+      }
+      .hl-grid .field small,
+      .hl-help {
+        display: block;
+        margin-top: 4px;
+        color: #6b7280;
+        line-height: 1.3;
+        font-size: 12px;
+      }
+      .hl-room-result,
+      .hl-property-result {
+        margin-top: 14px;
+        border-radius: 10px;
+        border: 1px solid #bfdbfe;
+        background: #eff6ff;
+        padding: 12px;
+      }
+      .hl-room-result strong,
+      .hl-property-result strong {
+        color: #1d4ed8;
+      }
+      .hl-result-main {
+        font-size: 19px;
+        font-weight: 800;
+        margin-bottom: 5px;
+      }
+      .hl-result-breakdown {
+        color: #374151;
+        line-height: 1.5;
+      }
+      .hl-warning {
+        color: #92400e;
+        margin-top: 5px;
+        font-weight: 700;
+      }
+      .hl-assumption {
+        display: inline-block;
+        margin-left: 6px;
+        border-radius: 999px;
+        background: #fef3c7;
+        color: #92400e;
+        padding: 2px 7px;
+        font-size: 11px;
+      }
+      .hl-total-number {
+        font-size: 28px;
+        font-weight: 800;
+        color: #1d4ed8;
+      }
+      .heatloss-sheet {
+        width: 1180px;
+      }
+      .heatloss-sheet th,
+      .heatloss-sheet td {
+        font-size: 11px;
+      }
+      body.theme-dark #heatlossForm .hl-intro,
+      body.theme-dark .hl-room-result,
+      body.theme-dark .hl-property-result {
+        background: #172554 !important;
+        border-color: #1d4ed8 !important;
+        color: #e5e7eb !important;
+      }
+      body.theme-dark #heatlossForm details,
+      body.theme-dark #heatlossForm details > summary {
+        background: #111827 !important;
+        border-color: #374151 !important;
+        color: #f9fafb !important;
+      }
+      body.theme-dark .hl-result-breakdown,
+      body.theme-dark .hl-help,
+      body.theme-dark .hl-grid .field small {
+        color: #cbd5e1 !important;
+      }
+      @media (max-width: 700px) {
+        .hl-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media print {
+        .heatloss-sheet {
+          width: 100% !important;
+          max-width: 285mm !important;
+          min-width: 0 !important;
+        }
+      }
+    </style>
+
+    <script>
+      /* ============================================================
+         V59 ROOM BY ROOM HEAT LOSS CALCULATOR
+
+         Survey-grade calculation:
+           transmission = U-value x area x temperature difference
+           ventilation = 0.33 x ACH x room volume x temperature difference
+
+         Indicative presets can be overridden. This calculator is not
+         presented as a certified BS EN 12831 or MCS design tool.
+         ============================================================ */
+      (function () {
+        const WALL_PRESETS_V59 = {
+          "Solid brick, uninsulated": 2.1,
+          "Cavity wall, uninsulated": 1.6,
+          "Cavity wall, insulated": 0.55,
+          "Modern insulated wall": 0.28,
+          "Custom U-value": null,
+        };
+        const WINDOW_PRESETS_V59 = {
+          "Single glazing": 4.8,
+          "Older double glazing": 2.8,
+          "Modern double glazing": 1.4,
+          "Triple glazing": 0.9,
+          "Custom U-value": null,
+        };
+
+        function hlNumberV59(id, fallback) {
+          const field = document.getElementById(id);
+          const number = Number(field && field.value);
+          return Number.isFinite(number) ? number : (fallback || 0);
+        }
+
+        function hlValueV59(id) {
+          const field = document.getElementById(id);
+          return field ? String(field.value || "") : "";
+        }
+
+        function hlSetV59(id, value) {
+          const field = document.getElementById(id);
+          if (field && String(field.value) !== String(value)) field.value = value;
+        }
+
+        function hlFieldV59(id, label, type, options, help) {
+          const safeId = escapeHtml(id);
+          const safeLabel = escapeHtml(label);
+          let control = "";
+          if (type === "select") {
+            control = `<select id="${safeId}" data-id="${safeId}">${(options || [])
+              .map(function (option) {
+                return `<option>${escapeHtml(option)}</option>`;
+              })
+              .join("")}</select>`;
+          } else {
+            const step = type === "number" ? ' step="any" inputmode="decimal"' : "";
+            control = `<input id="${safeId}" data-id="${safeId}" type="${type}"${step}>`;
+          }
+          return `<div class="field"><label for="${safeId}">${safeLabel}</label>${control}${help ? `<small>${escapeHtml(help)}</small>` : ""}</div>`;
+        }
+
+        function targetTemperatureV59(roomName) {
+          const name = String(roomName || "").toLowerCase();
+          if (name.includes("bath") || name.includes("shower")) return 22;
+          if (name.includes("lounge") || name.includes("living") || name.includes("d room") || name.includes("dining")) return 21;
+          if (name.includes("kitchen")) return 20;
+          if (name.includes("bed")) return 18;
+          if (name.includes("hall") || name.includes("landing") || name.includes("wc") || name.includes("toilet")) return 18;
+          return 20;
+        }
+
+        function roomHeatLossHtmlV59(roomName, index) {
+          const key = roomKeyFromName(roomName);
+          return `<details ${index < 2 ? "open" : ""} data-hl-room="${escapeHtml(key)}">
+            <summary><span>${escapeHtml(roomName)}</span><span id="hl_${escapeHtml(key)}_summary">Enter dimensions</span></summary>
+            <div class="hl-room-body">
+              <div class="hl-grid">
+                ${hlFieldV59(`hl_${key}_length`, "Length (m)", "number", null, "Copied to the radiator schedule")}
+                ${hlFieldV59(`hl_${key}_width`, "Width (m)", "number", null, "Copied to the radiator schedule")}
+                ${hlFieldV59(`hl_${key}_height`, "Ceiling height (m)", "number")}
+                ${hlFieldV59(`hl_${key}_indoor_temp`, "Design room temperature (°C)", "number")}
+                ${hlFieldV59(`hl_${key}_external_wall_length`, "Total exposed wall length (m)", "number", null, "Leave blank to estimate from the outside-wall count on Rads")}
+                ${hlFieldV59(`hl_${key}_wall_preset`, "Wall construction", "select", Object.keys(WALL_PRESETS_V59))}
+                ${hlFieldV59(`hl_${key}_wall_u`, "Wall U-value (W/m²K)", "number")}
+                ${hlFieldV59(`hl_${key}_window_area`, "Total window area (m²)", "number")}
+                ${hlFieldV59(`hl_${key}_window_preset`, "Window construction", "select", Object.keys(WINDOW_PRESETS_V59))}
+                ${hlFieldV59(`hl_${key}_window_u`, "Window U-value (W/m²K)", "number")}
+                ${hlFieldV59(`hl_${key}_door_area`, "External door area (m²)", "number")}
+                ${hlFieldV59(`hl_${key}_door_u`, "Door U-value (W/m²K)", "number")}
+                ${hlFieldV59(`hl_${key}_floor_exposed`, "Floor to ground or unheated space?", "select", ["No", "Yes"])}
+                ${hlFieldV59(`hl_${key}_floor_u`, "Floor U-value (W/m²K)", "number")}
+                ${hlFieldV59(`hl_${key}_roof_exposed`, "Ceiling or roof to loft/outside?", "select", ["No", "Yes"])}
+                ${hlFieldV59(`hl_${key}_roof_u`, "Ceiling or roof U-value (W/m²K)", "number")}
+                ${hlFieldV59(`hl_${key}_ach`, "Air changes per hour", "number", null, "0.5 ACH is the starting survey assumption")}
+              </div>
+              <div class="hl-room-result" id="hl_${escapeHtml(key)}_result">
+                <div class="hl-result-main">Enter the room length and width</div>
+              </div>
+            </div>
+          </details>`;
+        }
+
+        function propertyHeatLossHtmlV59() {
+          return `<div class="card hl-intro">
+            <h3>Room-by-room heat loss</h3>
+            <p>This estimates the peak heat required to maintain each room at its design temperature. Check every construction assumption before using the result to select equipment.</p>
+            <p class="hl-help">Indicative U-values are starting points only. Measured or documented values should replace them whenever available.</p>
+          </div>
+          <div class="card">
+            <h3>Property design conditions</h3>
+            <div class="hl-grid">
+              ${hlFieldV59("hl_outdoor_temp", "Outdoor design temperature (°C)", "number", null, "Use the local design temperature for the property postcode")}
+              ${hlFieldV59("hl_bridge_pct", "Thermal bridge allowance (%)", "number", null, "Applied to calculated fabric loss")}
+            </div>
+            <div class="hl-property-result">
+              <div class="hl-total-number" id="hl_property_total">0.00 kW</div>
+              <div id="hl_property_detail">Enter at least one room to begin.</div>
+            </div>
+          </div>`;
+        }
+
+        function restoreHeatLossValuesV59(data) {
+          Object.entries(data || {}).forEach(function (entry) {
+            const id = entry[0];
+            if (!id.startsWith("hl_")) return;
+            const field = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
+            if (field) field.value = entry[1];
+          });
+        }
+
+        function applyHeatLossDefaultsV59() {
+          if (!hlValueV59("hl_outdoor_temp")) hlSetV59("hl_outdoor_temp", -3);
+          if (!hlValueV59("hl_bridge_pct")) hlSetV59("hl_bridge_pct", 10);
+          allRoomNames().forEach(function (roomName) {
+            const key = roomKeyFromName(roomName);
+            const defaults = {
+              [`hl_${key}_height`]: 2.4,
+              [`hl_${key}_indoor_temp`]: targetTemperatureV59(roomName),
+              [`hl_${key}_wall_preset`]: "Cavity wall, insulated",
+              [`hl_${key}_wall_u`]: 0.55,
+              [`hl_${key}_window_preset`]: "Modern double glazing",
+              [`hl_${key}_window_u`]: 1.4,
+              [`hl_${key}_door_u`]: 1.8,
+              [`hl_${key}_floor_exposed`]: "No",
+              [`hl_${key}_floor_u`]: 0.25,
+              [`hl_${key}_roof_exposed`]: "No",
+              [`hl_${key}_roof_u`]: 0.18,
+              [`hl_${key}_ach`]: 0.5,
+            };
+            Object.entries(defaults).forEach(function (entry) {
+              if (!hlValueV59(entry[0])) hlSetV59(entry[0], entry[1]);
+            });
+
+            const radLength = hlNumberV59(`rad_${key}_len`, 0);
+            const radWidth = hlNumberV59(`rad_${key}_wid`, 0);
+            if (!hlValueV59(`hl_${key}_length`) && radLength > 0) hlSetV59(`hl_${key}_length`, radLength);
+            if (!hlValueV59(`hl_${key}_width`) && radWidth > 0) hlSetV59(`hl_${key}_width`, radWidth);
+          });
+        }
+
+        function applyConstructionPresetV59(id) {
+          const wallMatch = id.match(/^hl_(.+)_wall_preset$/);
+          if (wallMatch) {
+            const value = WALL_PRESETS_V59[hlValueV59(id)];
+            if (value != null) hlSetV59(`hl_${wallMatch[1]}_wall_u`, value);
+          }
+          const windowMatch = id.match(/^hl_(.+)_window_preset$/);
+          if (windowMatch) {
+            const value = WINDOW_PRESETS_V59[hlValueV59(id)];
+            if (value != null) hlSetV59(`hl_${windowMatch[1]}_window_u`, value);
+          }
+        }
+
+        function syncHeatLossRoomToRadsV59(key) {
+          const length = hlValueV59(`hl_${key}_length`);
+          const width = hlValueV59(`hl_${key}_width`);
+          if (length !== "") hlSetV59(`rad_${key}_len`, length);
+          if (width !== "") hlSetV59(`rad_${key}_wid`, width);
+        }
+
+        function estimatedWallLengthV59(length, width, wallCount) {
+          const shorter = Math.min(length, width);
+          const longer = Math.max(length, width);
+          if (wallCount === 1) return shorter;
+          if (wallCount === 2) return length + width;
+          if (wallCount === 3) return length + width + longer;
+          if (wallCount >= 4) return 2 * (length + width);
+          return 0;
+        }
+
+        function computeHeatLossValuesV59(input) {
+          const deltaT = Math.max(0, Number(input.deltaT) || 0);
+          const floorArea = Math.max(0, Number(input.floorArea) || 0);
+          const volume = Math.max(0, Number(input.volume) || 0);
+          const wallWatts = Math.max(0, Number(input.netWallArea) || 0) * Math.max(0, Number(input.wallU) || 0) * deltaT;
+          const windowWatts = Math.max(0, Number(input.windowArea) || 0) * Math.max(0, Number(input.windowU) || 0) * deltaT;
+          const doorWatts = Math.max(0, Number(input.doorArea) || 0) * Math.max(0, Number(input.doorU) || 0) * deltaT;
+          const floorWatts = input.floorExposed ? floorArea * Math.max(0, Number(input.floorU) || 0) * deltaT : 0;
+          const roofWatts = input.roofExposed ? floorArea * Math.max(0, Number(input.roofU) || 0) * deltaT : 0;
+          const ventilationWatts = 0.33 * Math.max(0, Number(input.ach) || 0) * volume * deltaT;
+          const fabricBeforeBridges = wallWatts + windowWatts + doorWatts + floorWatts + roofWatts;
+          const bridgeWatts = fabricBeforeBridges * Math.max(0, Number(input.bridgePercent) || 0) / 100;
+          const fabricWatts = fabricBeforeBridges + bridgeWatts;
+          return {
+            wallWatts: wallWatts,
+            windowWatts: windowWatts,
+            doorWatts: doorWatts,
+            floorWatts: floorWatts,
+            roofWatts: roofWatts,
+            ventilationWatts: ventilationWatts,
+            bridgeWatts: bridgeWatts,
+            fabricWatts: fabricWatts,
+            totalWatts: fabricWatts + ventilationWatts,
+          };
+        }
+        window.computeHeatLossValuesV59 = computeHeatLossValuesV59;
+
+        function calculateRoomHeatLossV59(roomName) {
+          const key = roomKeyFromName(roomName);
+          const length = hlNumberV59(`hl_${key}_length`, hlNumberV59(`rad_${key}_len`, 0));
+          const width = hlNumberV59(`hl_${key}_width`, hlNumberV59(`rad_${key}_wid`, 0));
+          const height = hlNumberV59(`hl_${key}_height`, 2.4);
+          const indoor = hlNumberV59(`hl_${key}_indoor_temp`, targetTemperatureV59(roomName));
+          const outdoor = hlNumberV59("hl_outdoor_temp", -3);
+          const deltaT = Math.max(0, indoor - outdoor);
+          const floorArea = length * width;
+          const volume = floorArea * height;
+          const outsideWallCount = Math.round(hlNumberV59(`rad_${key}_outside`, 0));
+          const enteredWallLength = hlNumberV59(`hl_${key}_external_wall_length`, 0);
+          const assumedWall = enteredWallLength <= 0 && outsideWallCount > 0;
+          const wallLength = enteredWallLength > 0
+            ? enteredWallLength
+            : estimatedWallLengthV59(length, width, outsideWallCount);
+          const windowArea = Math.max(0, hlNumberV59(`hl_${key}_window_area`, 0));
+          const doorArea = Math.max(0, hlNumberV59(`hl_${key}_door_area`, 0));
+          const grossWallArea = Math.max(0, wallLength * height);
+          const netWallArea = Math.max(0, grossWallArea - windowArea - doorArea);
+          const wallU = Math.max(0, hlNumberV59(`hl_${key}_wall_u`, 0));
+          const windowU = Math.max(0, hlNumberV59(`hl_${key}_window_u`, 0));
+          const doorU = Math.max(0, hlNumberV59(`hl_${key}_door_u`, 0));
+          const floorU = Math.max(0, hlNumberV59(`hl_${key}_floor_u`, 0));
+          const roofU = Math.max(0, hlNumberV59(`hl_${key}_roof_u`, 0));
+          const ach = Math.max(0, hlNumberV59(`hl_${key}_ach`, 0));
+          const floorExposed = hlValueV59(`hl_${key}_floor_exposed`) === "Yes";
+          const roofExposed = hlValueV59(`hl_${key}_roof_exposed`) === "Yes";
+          const started = length > 0 || width > 0 || enteredWallLength > 0 || windowArea > 0 || doorArea > 0;
+          const complete = length > 0 && width > 0 && height > 0;
+
+          const heat = complete ? computeHeatLossValuesV59({
+            deltaT: deltaT,
+            floorArea: floorArea,
+            volume: volume,
+            netWallArea: netWallArea,
+            wallU: wallU,
+            windowArea: windowArea,
+            windowU: windowU,
+            doorArea: doorArea,
+            doorU: doorU,
+            floorExposed: floorExposed,
+            floorU: floorU,
+            roofExposed: roofExposed,
+            roofU: roofU,
+            ach: ach,
+            bridgePercent: hlNumberV59("hl_bridge_pct", 0),
+          }) : computeHeatLossValuesV59({});
+          const fabricWatts = heat.fabricWatts;
+          const ventilationWatts = heat.ventilationWatts;
+          const bridgeWatts = heat.bridgeWatts;
+          const totalWatts = heat.totalWatts;
+          const warnings = [];
+          if (started && !complete) warnings.push("Length, width and height are required");
+          if (complete && windowArea + doorArea > grossWallArea && grossWallArea > 0) warnings.push("Openings exceed the exposed wall area");
+          if (complete && wallLength === 0 && !floorExposed && !roofExposed) warnings.push("No exposed fabric has been recorded");
+
+          return {
+            roomName: roomName,
+            key: key,
+            started: started,
+            complete: complete,
+            length: length,
+            width: width,
+            height: height,
+            indoor: indoor,
+            outdoor: outdoor,
+            deltaT: deltaT,
+            floorArea: floorArea,
+            volume: volume,
+            wallLength: wallLength,
+            assumedWall: assumedWall,
+            netWallArea: netWallArea,
+            fabricWatts: fabricWatts,
+            ventilationWatts: ventilationWatts,
+            bridgeWatts: bridgeWatts,
+            totalWatts: totalWatts,
+            wattsPerSquareMetre: floorArea > 0 ? totalWatts / floorArea : 0,
+            warnings: warnings,
+          };
+        }
+
+        function renderRoomResultV59(result) {
+          const resultBox = document.getElementById(`hl_${result.key}_result`);
+          const summary = document.getElementById(`hl_${result.key}_summary`);
+          const radKw = document.getElementById(`rad_${result.key}_kw`);
+          if (!result.started) {
+            if (resultBox) resultBox.innerHTML = '<div class="hl-result-main">Enter the room length and width</div>';
+            if (summary) summary.textContent = "Enter dimensions";
+            if (radKw) radKw.value = "";
+            return;
+          }
+          if (!result.complete) {
+            if (resultBox) resultBox.innerHTML = `<div class="hl-result-main">Incomplete room</div><div class="hl-warning">${escapeHtml(result.warnings.join(". "))}</div>`;
+            if (summary) summary.textContent = "Incomplete";
+            if (radKw) radKw.value = "";
+            return;
+          }
+          const kw = result.totalWatts / 1000;
+          if (radKw) {
+            radKw.value = kw.toFixed(2);
+            radKw.readOnly = true;
+            radKw.title = "Calculated from the Heat Loss tab.";
+          }
+          if (summary) summary.textContent = `${Math.round(result.totalWatts)} W`;
+          if (resultBox) {
+            resultBox.innerHTML = `<div class="hl-result-main"><strong>${Math.round(result.totalWatts)} W</strong> (${kw.toFixed(2)} kW) ${result.assumedWall ? '<span class="hl-assumption">wall length estimated</span>' : ""}</div>
+              <div class="hl-result-breakdown">Fabric: ${Math.round(result.fabricWatts)} W &nbsp; Ventilation: ${Math.round(result.ventilationWatts)} W &nbsp; Load density: ${result.wattsPerSquareMetre.toFixed(1)} W/m²</div>
+              ${result.warnings.length ? `<div class="hl-warning">${escapeHtml(result.warnings.join(". "))}</div>` : ""}`;
+          }
+        }
+
+        function calculateHeatLossV59() {
+          const results = allRoomNames().map(calculateRoomHeatLossV59);
+          const included = results.filter(function (result) {
+            return result.started && result.complete;
+          });
+          results.forEach(renderRoomResultV59);
+          const totalWatts = included.reduce(function (sum, result) {
+            return sum + result.totalWatts;
+          }, 0);
+          const totalArea = included.reduce(function (sum, result) {
+            return sum + result.floorArea;
+          }, 0);
+          window.heatLossResultsV59 = {
+            rooms: results,
+            includedRooms: included,
+            totalWatts: totalWatts,
+            totalArea: totalArea,
+            wattsPerSquareMetre: totalArea > 0 ? totalWatts / totalArea : 0,
+          };
+          const total = document.getElementById("hl_property_total");
+          const detail = document.getElementById("hl_property_detail");
+          if (total) total.textContent = `${(totalWatts / 1000).toFixed(2)} kW`;
+          if (detail) {
+            detail.textContent = included.length
+              ? `${included.length} room${included.length === 1 ? "" : "s"} included, ${Math.round(totalWatts)} W total, ${window.heatLossResultsV59.wattsPerSquareMetre.toFixed(1)} W/m² across entered rooms.`
+              : "Enter at least one room to begin.";
+          }
+          return window.heatLossResultsV59;
+        }
+
+        function heatLossInputV59(event) {
+          const id = event.target && event.target.dataset ? event.target.dataset.id : "";
+          if (!id) return;
+          applyConstructionPresetV59(id);
+          const roomMatch = id.match(/^hl_(.+)_(length|width)$/);
+          if (roomMatch) syncHeatLossRoomToRadsV59(roomMatch[1]);
+          calculateHeatLossV59();
+          if (typeof update === "function") update();
+        }
+
+        function rebuildHeatLossFormV59(savedData) {
+          const container = document.getElementById("heatlossForm");
+          if (!container) return;
+          const data = savedData || (typeof getData === "function" ? getData() : {});
+          container.innerHTML = propertyHeatLossHtmlV59() + `<div class="card"><h3>Rooms</h3>${allRoomNames()
+            .map(roomHeatLossHtmlV59)
+            .join("")}</div>`;
+          restoreHeatLossValuesV59(data);
+          applyHeatLossDefaultsV59();
+          container.querySelectorAll("[data-id]").forEach(function (field) {
+            field.addEventListener("input", heatLossInputV59);
+            field.addEventListener("change", heatLossInputV59);
+          });
+          calculateHeatLossV59();
+        }
+
+        function renderHeatLossSheetV59() {
+          const calculation = window.heatLossResultsV59 || calculateHeatLossV59();
+          const rows = calculation.rooms.filter(function (room) { return room.started; });
+          return `<div class="sheet-wrap" id="heatLossSheetV59">
+            <div class="sheet-title"><h2>Heat Loss</h2><small>Room-by-room survey calculation</small></div>
+            <table class="sheet heatloss-sheet">
+              <tr><td class="label">Address</td><td colspan="5" class="input">${cell("site_address")}</td><td class="label">Outdoor design</td><td class="input">${escapeHtml(hlValueV59("hl_outdoor_temp"))} °C</td></tr>
+              <tr><th>Room</th><th>Dimensions</th><th>Room temp</th><th>Exposed wall</th><th>Fabric</th><th>Ventilation</th><th>W/m²</th><th>Total</th></tr>
+              ${rows.length ? rows.map(function (room) {
+                return `<tr>
+                  <td>${escapeHtml(room.roomName)}</td>
+                  <td>${room.complete ? `${room.length.toFixed(2)} x ${room.width.toFixed(2)} x ${room.height.toFixed(2)} m` : "Incomplete"}</td>
+                  <td>${room.indoor.toFixed(1)} °C</td>
+                  <td>${room.wallLength.toFixed(2)} m${room.assumedWall ? " (estimated)" : ""}</td>
+                  <td>${Math.round(room.fabricWatts)} W</td>
+                  <td>${Math.round(room.ventilationWatts)} W</td>
+                  <td>${room.wattsPerSquareMetre.toFixed(1)}</td>
+                  <td class="input"><b>${Math.round(room.totalWatts)} W</b></td>
+                </tr>`;
+              }).join("") : '<tr><td colspan="8" class="center">No rooms entered</td></tr>'}
+              <tr><td colspan="6" class="label right">Property design heat loss</td><td class="input">${calculation.wattsPerSquareMetre.toFixed(1)} W/m²</td><td class="input"><b>${(calculation.totalWatts / 1000).toFixed(2)} kW</b></td></tr>
+              <tr><td colspan="8" class="small">Calculation uses fabric U-value x area x temperature difference, plus 0.33 x room volume x air changes per hour x temperature difference. Indicative presets must be checked against the surveyed construction. This is a survey estimate and is not a certified MCS or BS EN 12831 design report.</td></tr>
+            </table>
+          </div>`;
+        }
+
+        const previousSetDefaultsV59 = setDefaults;
+        setDefaults = function () {
+          const result = previousSetDefaultsV59.apply(this, arguments);
+          applyHeatLossDefaultsV59();
+          return result;
+        };
+
+        const previousRebuildRadsV59 = rebuildRadsForm;
+        rebuildRadsForm = function () {
+          const saved = typeof getData === "function" ? getData() : {};
+          const result = previousRebuildRadsV59.apply(this, arguments);
+          rebuildHeatLossFormV59(saved);
+          return result;
+        };
+
+        const previousSetDataV59 = window.setData || setData;
+        setData = window.setData = function (data) {
+          rebuildHeatLossFormV59(data || {});
+          const result = previousSetDataV59.apply(this, arguments);
+          rebuildHeatLossFormV59(data || {});
+          calculateHeatLossV59();
+          return result;
+        };
+
+        const previousRecommendedOutputV59 = calculateRecommendedOutput;
+        calculateRecommendedOutput = function () {
+          const calculation = window.heatLossResultsV59 || calculateHeatLossV59();
+          if (calculation.totalWatts > 0) return Number((calculation.totalWatts / 1000).toFixed(2));
+          return previousRecommendedOutputV59.apply(this, arguments);
+        };
+
+        const previousTotalKwV59 = calcTotalKw;
+        calcTotalKw = function () {
+          const calculation = window.heatLossResultsV59 || calculateHeatLossV59();
+          if (calculation.totalWatts > 0) return (calculation.totalWatts / 1000).toFixed(2);
+          return previousTotalKwV59.apply(this, arguments);
+        };
+
+        const previousUpdateCalculatedOutputV59 = updateCalculatedOutputField;
+        updateCalculatedOutputField = function () {
+          const result = previousUpdateCalculatedOutputV59.apply(this, arguments);
+          const calculation = window.heatLossResultsV59;
+          const field = document.getElementById("r_output_temp");
+          if (field && calculation && calculation.totalWatts > 0) {
+            field.title = "Calculated from the completed rooms on the Heat Loss tab.";
+          }
+          return result;
+        };
+
+        const previousRenderProfileV59 = renderProfile;
+        renderProfile = function () {
+          return previousRenderProfileV59.apply(this, arguments) + renderHeatLossSheetV59();
+        };
+
+        const previousBuildPrintHtmlV59 = buildPrintHtml;
+        buildPrintHtml = function (title, sheetTitles, orientation) {
+          const sheets = Array.from(sheetTitles || []);
+          if (sheets.includes("Front") && sheets.includes("Rads") && !sheets.includes("Heat Loss")) sheets.push("Heat Loss");
+          return previousBuildPrintHtmlV59.call(this, title, sheets, orientation);
+        };
+
+        const previousUpdateV59 = update;
+        update = function () {
+          allRoomNames().forEach(function (roomName) {
+            syncHeatLossRoomToRadsV59(roomKeyFromName(roomName));
+          });
+          calculateHeatLossV59();
+          return previousUpdateV59.apply(this, arguments);
+        };
+
+        rebuildHeatLossFormV59();
+        const pdfButtonsV59 = document.querySelectorAll("#pdfPanel button");
+        pdfButtonsV59.forEach(function (button) {
+          if (button.textContent.includes("Front + Rads PDF")) button.textContent = "Save Front + Rads + Heat Loss PDF";
+        });
+        update();
       })();
     </script>
   </body>
