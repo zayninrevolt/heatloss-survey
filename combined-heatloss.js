@@ -384,7 +384,7 @@
       fieldHtml('hl_' + key + '_ventilation_mode', 'Room air-change rate', 'select', AIR_CHANGE_MODES, 'Automatic uses the MCS/CIBSE 0.5 ACH room minimum, or 0 ACH where the room has no external envelope.') +
       fieldHtml('hl_' + key + '_manual_ach', 'Manual ACH override', 'number', null, 'Only used when Manual override is selected.') +
       fieldHtml('hl_' + key + '_ventilation_device', 'Additional vent, fan or flue', 'select', optionsFromMap(VALUES.ventilationDevice), 'Adds the published default airflow for this room. Select the closest item and use the ACH override where required.') +
-      fieldHtml('hl_' + key + '_rad_quantity', 'Number of radiators', 'select', ['Automatic', '1', '2'], 'Automatic tries one radiator first, then two matching radiators if required.') +
+      fieldHtml('hl_' + key + '_rad_quantity', 'Number of radiators', 'select', ['Automatic', '1', '2'], 'Automatic tries one radiator first, then two independently sized radiators if required.') +
       '</div>' +
       '<div class="hl-room-result" id="hl_' + escapeHtml(key) + '_result">' +
       '<div class="hl-result-main">Enter the room length and width</div>' +
@@ -842,14 +842,7 @@
   function persistCombinedData() {
     if (!persistenceReady) return;
     var data = {};
-    var selectors = [
-      '#radsForm [data-id^="hl_"]',
-      '#radsForm [data-id="r_ceiling"]',
-      '#radsForm [data-id^="rad_"][data-id$="_len"]',
-      '#radsForm [data-id^="rad_"][data-id$="_wid"]',
-      '#radsForm [data-id^="rad_"][data-id$="_outside"]'
-    ].join(',');
-    document.querySelectorAll(selectors).forEach(function (field) {
+    document.querySelectorAll('#radsForm [data-id]').forEach(function (field) {
       data[field.dataset.id] = field.value;
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -858,7 +851,12 @@
   function restoreValues(data) {
     Object.entries(data || {}).forEach(function (entry) {
       var field = document.querySelector('[data-id="' + CSS.escape(entry[0]) + '"]');
-      if (field) field.value = entry[1];
+      if (!field) return;
+      if (field.tagName === 'SELECT' && /_new_size_2$/.test(field.id)) {
+        if (entry[1]) field.dataset.restoredValue = entry[1];
+        else delete field.dataset.restoredValue;
+      }
+      field.value = entry[1];
     });
     migrateOldHeatLossValues(data || {});
   }
@@ -1149,6 +1147,71 @@
     });
   }
 
+  function stelradIndividualOptions(correctionFactor, filters) {
+    filters = filters || {};
+    var options = [];
+    STELRAD_ELITE_MODELS.forEach(function (model) {
+      if (filters.maxHeight && model.height > filters.maxHeight) return;
+      if (filters.panelType && filters.panelType !== 'Any' &&
+          model.type !== filters.panelType) return;
+      model.widths.forEach(function (width) {
+        if (filters.maxWidth && width > filters.maxWidth) return;
+        var watts = model.wattsPerMetre * (width / 1000) * correctionFactor;
+        options.push({
+          type: model.type,
+          height: model.height,
+          width: width,
+          watts: watts,
+          unitWatts: watts,
+          quantity: 1,
+          ratedWatts: model.wattsPerMetre * (width / 1000),
+          size: model.height + '(h) x ' + width + '(w) ' + model.type
+        });
+      });
+    });
+    return options.sort(function (a, b) {
+      return a.height - b.height || a.width - b.width || a.type.localeCompare(b.type);
+    });
+  }
+
+  function suitableStelradPairData(requiredWatts, correctionFactor, filters) {
+    var maximumWatts = requiredWatts * 1.5;
+    var units = stelradIndividualOptions(correctionFactor, filters).filter(function (option) {
+      return option.watts < maximumWatts;
+    });
+    var pairs = [];
+    var participatingSizes = {};
+    units.forEach(function (first, firstIndex) {
+      for (var secondIndex = firstIndex; secondIndex < units.length; secondIndex += 1) {
+        var second = units[secondIndex];
+        var watts = first.watts + second.watts;
+        if (watts < requiredWatts || watts > maximumWatts + 0.01) continue;
+        participatingSizes[first.size] = true;
+        participatingSizes[second.size] = true;
+        pairs.push({
+          first: first,
+          second: second,
+          watts: watts,
+          size: first.size + ' + ' + second.size,
+          quantity: 2,
+          oversizePercent: Math.max(0, (watts - requiredWatts) / requiredWatts * 100)
+        });
+      }
+    });
+    pairs.sort(function (a, b) {
+      return a.watts - b.watts || a.size.localeCompare(b.size);
+    });
+    return {
+      units: units.filter(function (option) { return participatingSizes[option.size]; }),
+      pairs: pairs
+    };
+  }
+
+  function legacyPairSize(selection) {
+    var match = String(selection || '').match(/^2\s+x\s+(.+)$/i);
+    return match ? match[1] : String(selection || '');
+  }
+
   function recommendStelradElite(requiredWatts, indoor, currentSelection, key) {
     var flow = Number(stringValue('hl_radiator_temperature')) || 75;
     var returnTemperature = flow - 10;
@@ -1163,24 +1226,91 @@
       panelType: stringValue('hl_' + key + '_rad_panel_type') || 'Any'
     };
     var quantityChoice = stringValue('hl_' + key + '_rad_quantity') || 'Automatic';
+    var currentFirstSize = legacyPairSize(currentSelection);
+    var currentSecondField = document.getElementById('rad_' + key + '_new_size_2');
+    var currentSecondSize = stringValue('rad_' + key + '_new_size_2') ||
+      (currentSecondField && currentSecondField.dataset.restoredValue) || '';
+    if (!currentSecondSize && String(currentSelection || '').match(/^2\s+x\s+/i)) {
+      currentSecondSize = currentFirstSize;
+    }
     var options = [];
+    var secondOptions = [];
+    var selectedFirst = null;
+    var selectedSecond = null;
+    var selected = null;
+    var pairCount = 0;
+    var usesTwo = false;
     if (validTemperature) {
-      if (quantityChoice === '2') {
-        options = suitableStelradOptions(requiredWatts, correctionFactor, filters, 2);
+      var singleOptions = suitableStelradOptions(
+        requiredWatts, correctionFactor, filters, 1
+      );
+      usesTwo = quantityChoice === '2' ||
+        (quantityChoice === 'Automatic' && !singleOptions.length);
+      if (!usesTwo) {
+        options = singleOptions;
+        selectedFirst = options.find(function (option) {
+          return option.size === currentFirstSize;
+        }) || options.find(function (option) {
+          return option.height === 600 && option.type === 'K2';
+        }) || options.reduce(function (closest, option) {
+          return !closest || option.watts < closest.watts ? option : closest;
+        }, null);
+        selected = selectedFirst;
       } else {
-        options = suitableStelradOptions(requiredWatts, correctionFactor, filters, 1);
-        if (quantityChoice === 'Automatic' && !options.length) {
-          options = suitableStelradOptions(requiredWatts, correctionFactor, filters, 2);
+        var pairData = suitableStelradPairData(requiredWatts, correctionFactor, filters);
+        pairCount = pairData.pairs.length;
+        options = pairData.units;
+        var currentFirst = options.find(function (option) {
+          return option.size === currentFirstSize;
+        });
+        var currentSecond = options.find(function (option) {
+          return option.size === currentSecondSize;
+        });
+        var currentWatts = currentFirst && currentSecond
+          ? currentFirst.watts + currentSecond.watts
+          : 0;
+        var currentPairValid = currentWatts >= requiredWatts &&
+          currentWatts <= requiredWatts * 1.5 + 0.01;
+        var bestPair = currentPairValid
+          ? { first: currentFirst, second: currentSecond, watts: currentWatts }
+          : pairData.pairs.find(function (pair) {
+            return currentFirst &&
+              (pair.first.size === currentFirst.size || pair.second.size === currentFirst.size);
+          }) || pairData.pairs[0];
+        if (bestPair) {
+          selectedFirst = currentPairValid
+            ? currentFirst
+            : bestPair.first.size === (currentFirst && currentFirst.size)
+              ? bestPair.first
+              : bestPair.second.size === (currentFirst && currentFirst.size)
+                ? bestPair.second
+                : bestPair.first;
+          secondOptions = options.filter(function (option) {
+            var combined = selectedFirst.watts + option.watts;
+            return combined >= requiredWatts && combined <= requiredWatts * 1.5 + 0.01;
+          });
+          selectedSecond = currentPairValid
+            ? currentSecond
+            : secondOptions.find(function (option) {
+              return option.size === currentSecondSize;
+            }) || secondOptions.reduce(function (closest, option) {
+              return !closest || option.watts < closest.watts ? option : closest;
+            }, null);
+          if (selectedSecond) {
+            selected = {
+              first: selectedFirst,
+              second: selectedSecond,
+              watts: selectedFirst.watts + selectedSecond.watts,
+              size: selectedFirst.size + ' + ' + selectedSecond.size,
+              quantity: 2,
+              oversizePercent: Math.max(0,
+                (selectedFirst.watts + selectedSecond.watts - requiredWatts) /
+                requiredWatts * 100)
+            };
+          }
         }
       }
     }
-    var selected = options.find(function (option) {
-      return option.size === currentSelection;
-    }) || options.find(function (option) {
-      return option.height === 600 && option.type === 'K2';
-    }) || options.reduce(function (closest, option) {
-      return !closest || option.watts < closest.watts ? option : closest;
-    }, null);
     return {
       flow: flow,
       returnTemperature: returnTemperature,
@@ -1190,7 +1320,12 @@
       correctionFactor: correctionFactor,
       filters: filters,
       quantityChoice: quantityChoice,
+      usesTwo: usesTwo,
       options: options,
+      secondOptions: secondOptions,
+      selectedFirst: selectedFirst,
+      selectedSecond: selectedSecond,
+      pairCount: pairCount,
       selected: selected,
       temperatureWarning: !validTemperature
     };
@@ -1438,7 +1573,9 @@
         : 'Radiator ΔT is outside Stelrad’s published 20°C to 65°C correction table');
     }
     if (radiator && !radiator.temperatureWarning && !radiator.selected) {
-      warnings.push('No Elite option matches the chosen quantity, size filters and 50% oversize limit');
+      warnings.push(radiator.usesTwo
+        ? 'No two-radiator Elite combination meets the room requirement within the 50% oversize limit'
+        : 'No single Elite radiator meets the room requirement within the 50% oversize limit');
     }
     var heatedInternalWatts = isHeatedInternalWall(internalWallType)
       ? heat.internalWallWatts
@@ -1519,22 +1656,62 @@
     };
   }
 
+  function setRadiatorFieldLabel(key, suffix, text) {
+    var field = document.getElementById('rad_' + key + '_' + suffix);
+    if (!field) return;
+    var label = document.querySelector('label[for="' + field.id + '"]');
+    if (label) label.textContent = text;
+  }
+
   function clearCalculatedRadiatorFields(key) {
-    ['kw', 'new_size', 'output'].forEach(function (suffix) {
+    ['kw', 'new_size', 'new_size_2', 'output'].forEach(function (suffix) {
       var field = document.getElementById('rad_' + key + '_' + suffix);
       if (!field) return;
       field.value = '';
-      if (suffix === 'new_size' && field.tagName === 'SELECT') {
+      if ((suffix === 'new_size' || suffix === 'new_size_2') &&
+          field.tagName === 'SELECT') {
         field.innerHTML = '<option value="">Complete the room heat loss first</option>';
       }
       field.readOnly = true;
       field.removeAttribute('title');
     });
+    var secondWrap = document.getElementById('hl_' + key + '_second_radiator_wrap');
+    if (secondWrap) secondWrap.hidden = true;
   }
 
-  function radiatorOptionLabel(option, requiredWatts) {
-    return option.size + ' | ' + (option.watts / 1000).toFixed(2) +
-      ' kW | +' + Math.round(Math.max(0, option.watts - requiredWatts)) + ' W';
+  function radiatorOptionLabel(option, requiredWatts, individual) {
+    var label = option.size + ' | ' + (option.watts / 1000).toFixed(2) + ' kW';
+    if (!individual) {
+      label += ' | +' + Math.round(Math.max(0, option.watts - requiredWatts)) + ' W';
+    }
+    return label;
+  }
+
+  function populateRadiatorSelect(field, options, selectedSize, placeholderText,
+    requiredWatts, individual) {
+    field.innerHTML = '';
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = placeholderText;
+    field.appendChild(placeholder);
+    var groups = {};
+    (options || []).forEach(function (option) {
+      if (!groups[option.height]) {
+        groups[option.height] = document.createElement('optgroup');
+        groups[option.height].label = option.height + 'mm high';
+        field.appendChild(groups[option.height]);
+      }
+      var choice = document.createElement('option');
+      choice.value = option.size;
+      choice.textContent = radiatorOptionLabel(option, requiredWatts, individual);
+      choice.dataset.watts = option.watts.toFixed(2);
+      groups[option.height].appendChild(choice);
+    });
+    if (selectedSize && (options || []).some(function (option) {
+      return option.size === selectedSize;
+    })) {
+      field.value = selectedSize;
+    }
   }
 
   function configureRadiatorSelect(result) {
@@ -1550,56 +1727,63 @@
       field.replaceWith(select);
       field = select;
     }
+    var secondField = document.getElementById('rad_' + result.key + '_new_size_2');
+    var secondWrap = document.getElementById('hl_' + result.key + '_second_radiator_wrap');
     if (field.dataset.stelradWired !== 'yes') {
       field.dataset.stelradWired = 'yes';
       field.addEventListener('change', function () {
-        var selectedOption = field.options[field.selectedIndex];
-        var output = document.getElementById('rad_' + result.key + '_output');
-        if (output) {
-          output.value = selectedOption && selectedOption.dataset.watts
-            ? (Number(selectedOption.dataset.watts) / 1000).toFixed(2)
-            : '';
-        }
+        if (typeof update === 'function') update();
+        persistCombinedData();
+      });
+    }
+    if (secondField && secondField.dataset.stelradWired !== 'yes') {
+      secondField.dataset.stelradWired = 'yes';
+      secondField.addEventListener('change', function () {
         if (typeof update === 'function') update();
         persistCombinedData();
       });
     }
 
-    field.innerHTML = '';
-    var placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = result.totalWatts <= 0
-      ? 'No radiator output required'
-      : result.radiator && result.radiator.temperatureWarning
+    var radiator = result.radiator;
+    var usesTwo = radiator && radiator.usesTwo;
+    var warningPlaceholder = radiator && radiator.temperatureWarning
       ? 'Review the radiator design temperature'
       : 'Choose a suitable Stelrad Elite';
-    field.appendChild(placeholder);
-
-    var groups = {};
-    (result.radiator ? result.radiator.options : []).forEach(function (option) {
-      if (!groups[option.height]) {
-        groups[option.height] = document.createElement('optgroup');
-        groups[option.height].label = option.height + 'mm high';
-        field.appendChild(groups[option.height]);
+    populateRadiatorSelect(
+      field,
+      radiator ? radiator.options : [],
+      radiator && radiator.selectedFirst ? radiator.selectedFirst.size : existingValue,
+      result.totalWatts <= 0 ? 'No radiator output required' :
+        (usesTwo ? 'Choose radiator 1' : warningPlaceholder),
+      result.totalWatts,
+      Boolean(usesTwo)
+    );
+    setRadiatorFieldLabel(result.key, 'new_size', result.roomName +
+      (usesTwo ? ' - Radiator 1' : ' - New Size'));
+    field.setAttribute('aria-label', result.roomName +
+      (usesTwo ? ' - Radiator 1' : ' - New Size'));
+    if (secondField) {
+      if (secondWrap) secondWrap.hidden = !usesTwo;
+      if (usesTwo) {
+        populateRadiatorSelect(
+          secondField,
+          radiator.secondOptions,
+          radiator.selectedSecond ? radiator.selectedSecond.size : secondField.value,
+          radiator.temperatureWarning ? 'Review the radiator design temperature' :
+            'Choose radiator 2',
+          result.totalWatts,
+          true
+        );
+        delete secondField.dataset.restoredValue;
+        secondField.setAttribute('aria-label', result.roomName + ' - Radiator 2');
+      } else {
+        secondField.value = '';
+        delete secondField.dataset.restoredValue;
       }
-      var choice = document.createElement('option');
-      choice.value = option.size;
-      choice.textContent = radiatorOptionLabel(option, result.totalWatts);
-      choice.dataset.watts = option.watts.toFixed(2);
-      groups[option.height].appendChild(choice);
-    });
-
-    var selectedSize = result.radiator && result.radiator.selected
-      ? result.radiator.selected.size
-      : existingValue;
-    if (selectedSize && result.radiator.options.some(function (option) {
-      return option.size === selectedSize;
-    })) {
-      field.value = selectedSize;
     }
     field.title = 'Suitable Stelrad Elite radiators at the selected design temperature. ' +
       'Choose another height, width or panel type where required.';
-    return field;
+    return { first: field, second: secondField };
   }
 
   function renderRoomResult(result) {
@@ -1629,19 +1813,17 @@
       radKw.readOnly = true;
       radKw.title = 'Calculated from Heat loss details in this room.';
     }
-    var newSize = configureRadiatorSelect(result);
+    var radiatorFields = configureRadiatorSelect(result);
     var radOutput = document.getElementById('rad_' + result.key + '_output');
     if (result.radiator && result.radiator.selected) {
-      if (newSize) {
-        newSize.value = result.radiator.selected.size;
-      }
       if (radOutput) {
         radOutput.value = (result.radiator.selected.watts / 1000).toFixed(2);
         radOutput.readOnly = true;
         radOutput.title = 'Temperature-corrected Stelrad output.';
       }
     } else {
-      if (newSize) newSize.value = '';
+      if (radiatorFields && radiatorFields.first) radiatorFields.first.value = '';
+      if (radiatorFields && radiatorFields.second) radiatorFields.second.value = '';
       if (radOutput) radOutput.value = '';
     }
     var radiatorHtml = '';
@@ -1652,14 +1834,22 @@
         (result.radiator.temperatureWarning
           ? 'Enter valid temperatures with a ΔT from 20°C to 65°C.'
           : result.radiator.selected
-            ? result.radiator.selected.size + ' gives ' +
-              (result.radiator.selected.watts / 1000).toFixed(2) + ' kW. ' +
-              result.radiator.options.length + ' suitable size' +
-              (result.radiator.options.length === 1 ? '' : 's') +
-              ' within the 50% oversize limit ' +
-              (result.radiator.options.length === 1 ? 'is' : 'are') +
-              ' available in the New Size dropdown.'
-            : 'No Elite option matches the selected quantity and size filters within the 50% oversize limit.') +
+            ? result.radiator.usesTwo
+              ? result.radiator.selectedFirst.size + ' plus ' +
+                result.radiator.selectedSecond.size + ' gives ' +
+                (result.radiator.selected.watts / 1000).toFixed(2) +
+                ' kW combined. ' + result.radiator.pairCount +
+                ' valid combinations meet the 50% oversize limit.'
+              : result.radiator.selected.size + ' gives ' +
+                (result.radiator.selected.watts / 1000).toFixed(2) + ' kW. ' +
+                result.radiator.options.length + ' suitable size' +
+                (result.radiator.options.length === 1 ? '' : 's') +
+                ' within the 50% oversize limit ' +
+                (result.radiator.options.length === 1 ? 'is' : 'are') +
+                ' available in the New Size dropdown.'
+            : result.radiator.usesTwo
+              ? 'No pair of Elite radiators meets the room requirement within the 50% oversize limit.'
+              : 'No single Elite radiator meets the room requirement within the 50% oversize limit.') +
         (result.radiator.temperatureWarning ? '' :
           '<small>Published ΔT50 output × ' + result.radiator.correctionFactor.toFixed(3) +
           ' correction factor at ΔT' + result.radiator.deltaT.toFixed(1) + '.</small>') +
@@ -1991,6 +2181,13 @@
     var newSizeMatch = original.match(newSizePattern);
     var newSizeField = newSizeMatch ? newSizeMatch[0] : '';
     if (newSizeField) original = original.replace(newSizePattern, '');
+    var secondRadiatorField =
+      '<div class="field hl-second-radiator" id="hl_' + key +
+      '_second_radiator_wrap" hidden>' +
+      '<label for="rad_' + key + '_new_size_2">' + escapeHtml(roomName) +
+      ' - Radiator 2</label>' +
+      '<select id="rad_' + key + '_new_size_2" data-id="rad_' + key +
+      '_new_size_2"><option value="">Choose radiator 2</option></select></div>';
     var outputPattern = new RegExp(
       '<div class="field">\\s*<label for="rad_' + key +
       '_output">[\\s\\S]*?<\\/div>'
@@ -2000,7 +2197,8 @@
     if (outputField) original = original.replace(outputPattern, '');
     return original.replace(
       /<\/details>\s*$/,
-      roomDropdownHtml(roomName) + newSizeField + outputField + '</details>'
+      roomDropdownHtml(roomName) + newSizeField + secondRadiatorField +
+        outputField + '</details>'
     );
   };
 
@@ -2082,6 +2280,15 @@
           var targetId = 'hl_' + duplicateKey + '_' + suffix;
           if (sourceData[sourceId] != null) setValue(targetId, sourceData[sourceId]);
         });
+        var sourceSecondRadiator = sourceData['rad_' + sourceKey + '_new_size_2'];
+        if (sourceSecondRadiator != null) {
+          var duplicateSecondField = document.getElementById(
+            'rad_' + duplicateKey + '_new_size_2'
+          );
+          if (duplicateSecondField) {
+            duplicateSecondField.dataset.restoredValue = sourceSecondRadiator;
+          }
+        }
         update();
       }
     };

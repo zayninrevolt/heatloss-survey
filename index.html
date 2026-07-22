@@ -2415,7 +2415,7 @@
           .map((room) => {
             let key = room.toLowerCase().replace(/[^a-z0-9]+/g, "_");
             return `<tr>
-    <td>${room}</td>${["len", "wid", "outside", "ex_size", "ex_loc", "ex_trv", "new_size", "new_loc", "new_trv", "sill", "kw", "tc", "laminate", "output"].map((x) => `<td class="input">${cell(`rad_${key}_${x}`)}</td>`).join("")}</tr>`;
+    <td>${room}</td>${["len", "wid", "outside", "ex_size", "ex_loc", "ex_trv", "new_size", "new_loc", "new_trv", "sill", "kw", "tc", "laminate", "output"].map((x) => `<td class="input">${x === "new_size" ? cell(`rad_${key}_${x}`) + (val(`rad_${key}_new_size_2`) ? `<br>+ ${cell(`rad_${key}_new_size_2`)}` : "") : cell(`rad_${key}_${x}`)}</td>`).join("")}</tr>`;
           })
           .join("");
         let mats = materialFields
@@ -4497,9 +4497,13 @@
           "laminate",
           "output",
         ]
-          .map(
-            (field) => `<td class="input">${cell(`rad_${key}_${field}`)}</td>`,
-          )
+          .map((field) => {
+            if (field === "new_size") {
+              const secondSize = val(`rad_${key}_new_size_2`);
+              return `<td class="input">${cell(`rad_${key}_${field}`)}${secondSize ? `<br>+ ${cell(`rad_${key}_new_size_2`)}` : ""}</td>`;
+            }
+            return `<td class="input">${cell(`rad_${key}_${field}`)}</td>`;
+          })
           .join("")}
       </tr>
     `;
@@ -6136,6 +6140,11 @@
             if (input) input.value = "";
           });
 
+          const secondRadiator = document.getElementById(
+            `rad_${roomKey}_new_size_2`,
+          );
+          if (secondRadiator) secondRadiator.value = "";
+
           document
             .querySelectorAll(`[data-id^="hl_${CSS.escape(roomKey)}_"]`)
             .forEach(function (input) {
@@ -6384,12 +6393,15 @@
           names.forEach(function (roomName) {
             const key = roomKeyFromName(roomName);
             const newSizeField = document.getElementById(`rad_${key}_new_size`);
+            const secondSizeField = document.getElementById(
+              `rad_${key}_new_size_2`,
+            );
 
             if (newSizeField && isRadiatorEntry(newSizeField.value)) {
-              const quantityMatch = String(newSizeField.value).match(
-                /^(\d+)\s+x\s+\d+\(h\)/i,
-              );
-              count += quantityMatch ? Number(quantityMatch[1]) : 1;
+              count += 1;
+            }
+            if (secondSizeField && isRadiatorEntry(secondSizeField.value)) {
+              count += 1;
             }
           });
 
@@ -6404,7 +6416,7 @@
           totalRadsField.value = String(count);
           totalRadsField.readOnly = true;
           totalRadsField.title =
-            "Auto-counted from the selected radiator quantity in each room.";
+            "Auto-counted from both selected radiator fields in each room.";
         };
 
         function hasValue(id) {
@@ -8304,7 +8316,7 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=74">
-    <script src="combined-heatloss.js?v=74"></script>
+    <link rel="stylesheet" href="combined-heatloss.css?v=75">
+    <script src="combined-heatloss.js?v=75"></script>
   </body>
 </html>

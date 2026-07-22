@@ -31,7 +31,7 @@ The property age uses the current England and Wales RdSAP age bands A to M. Ther
 
 ## Stelrad Elite sizing
 
-Every completed room provides a dropdown of suitable Stelrad Elite radiators. Sizes use the format `600(h) x 1200(w) K2`, with the smallest suitable 600mm-high K2 selected by default where available. The dropdown includes the suitable heights, widths and panel types. A room can use one radiator, two matching radiators, or automatic mode, which tries one first and then two when no single model works. Each listed selection meets the room requirement without exceeding it by more than 50%. The selected model and its total temperature-corrected output are saved with the survey.
+Every completed room provides a dropdown of suitable Stelrad Elite radiators. Sizes use the format `600(h) x 1200(w) K2`, with the smallest suitable 600mm-high K2 selected by default where available. The dropdown includes the suitable heights, widths and panel types. A room can use one radiator or two independently selected radiators, so the height, width and panel type can differ. Automatic mode tries one first and then two when no single model works. Every single selection or two-radiator combination meets the room requirement without exceeding it by more than 50%. Both selected models and their combined temperature-corrected output are saved with the survey.
 
 The front-page range-rate output is a minimum of 12 kW. When the combined temperature-corrected output of the selected room radiators exceeds 12 kW, the higher combined figure is used instead.
 
