@@ -29,7 +29,7 @@ Simple mode keeps the normal survey short. Detailed mode adds a second external-
 
 Internal walls can be marked as adjoining a heated room or an unheated space. A heated wall uses the difference between the current room and the selected adjoining room for radiator sizing, while that internal transfer is excluded from the whole-property heat loss. Unheated options include garages, cellars, cupboards, corridors, conservatories, roof voids, neighbouring dwellings and outside air. A known adjacent temperature overrides the standard factor.
 
-The property age uses the current England and Wales RdSAP age bands A to M. If the age is not known, the app opens the official GOV.UK EPC address search. A postcode identifies an area rather than one property, so the surveyor must choose the exact address and confirm later extensions or alterations on site. The static app does not embed government developer credentials. Unknown remains a valid selection when no reliable record is available. Age bands also apply the current MCS default room temperatures: bands A to J use room-specific 18°C, 21°C or 22°C values, while band K onwards uses 21°C throughout except bathrooms and shower rooms at 22°C.
+The property age uses the current England and Wales RdSAP age bands A to M. The normal public EPC certificate does not display the stored construction-age field. The separate GOV.UK developer dataset contains a construction-age band, but requires GOV.UK One Login and an authenticated API workflow, so a static GitHub Pages app cannot import it securely. The app links to that data service and otherwise accepts title deeds, council building-control records, homeowner information, a visual estimate or Unknown. Unknown remains valid when no reliable record is available. Age bands also apply the current MCS default room temperatures: bands A to J use room-specific 18°C, 21°C or 22°C values, while band K onwards uses 21°C throughout except bathrooms and shower rooms at 22°C.
 
 ## Stelrad Elite sizing
 
@@ -53,7 +53,7 @@ Technical references:
 - [MCS U-value reference](https://heatloadcalculator.mcscertified.com/docs/reference-sources/u-values)
 - [MCS ventilation-rate reference](https://heatloadcalculator.mcscertified.com/docs/reference-sources/ventilation-rates)
 - [MCS thermal-bridging reference](https://heatloadcalculator.mcscertified.com/docs/reference-sources/thermal-bridging)
-- [GOV.UK energy certificate search](https://www.gov.uk/find-energy-certificate)
+- [GOV.UK energy performance data service](https://get-energy-performance-data.epb-integration.digital.communities.gov.uk/)
 - [Elevation API EU](https://www.elevation-api.eu/)
 - [Met Office weather-station locations](https://www.metoffice.gov.uk/research/climate/maps-and-data/uk-synoptic-and-climate-stations)
 
