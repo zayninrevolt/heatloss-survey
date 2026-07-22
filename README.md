@@ -21,26 +21,25 @@ The Heat Loss PDF includes a second assumptions page listing the selected wall, 
 
 The property postcode can automatically select the nearest MCS/CIBSE reference weather station and its 99.6% outdoor design temperature. An optional property altitude applies the MCS correction of 0.6°C per complete 100m above the reference station. The result remains editable. Postcode coordinates are retrieved from the public postcodes.io service; no other survey details are sent.
 
-Technical U-value entry is replaced with plain construction choices. These include single brick or stud and plasterboard internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice. Property-wide construction defaults can be applied to all rooms and then adjusted room by room.
+Technical U-value entry is replaced with plain construction choices. These include single brick or stud and plasterboard internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice. Property-wide defaults apply external wall, window and draught choices only. Floor and ceiling or loft construction must be selected inside each room so ground-floor and first-floor rooms can be treated correctly.
 
 Internal walls can be marked as adjoining a heated room or an unheated space. A heated wall uses the difference between the current room and the selected adjoining room for radiator sizing, while that internal transfer is excluded from the whole-property heat loss. An unheated space uses half the indoor-to-outdoor temperature difference.
 
 ## Stelrad Elite sizing
 
-Every completed room recommends the smallest suitable 600mm-high Stelrad Elite for the chosen K1, K2 or K3 panel type. Sizes use the format `600(h) x 1200(w) K2`. The app also shows the smallest suitable width for all three panel types.
+Every completed room provides a dropdown of suitable Stelrad Elite radiators. Sizes use the format `600(h) x 1200(w) K2`, with the smallest suitable 600mm-high K2 selected by default where available. The dropdown includes alternative widths, heights and K1, K2 or K3 panel types so an installer can match an existing radiator width or work around available wall space. The selected model and its temperature-corrected output are saved with the survey.
 
-Published outputs at 600mm height and ΔT50 are:
+The listed Elite heights are:
 
-- K1: 1.000 kW per metre
-- K2: 1.778 kW per metre
-- K3: 2.514 kW per metre
+- K1 and K2: 300mm, 450mm, 600mm and 700mm
+- K3: 300mm, 500mm, 600mm and 700mm
 
-At 1200mm wide this is 1.20 kW for K1, 2.13 kW for K2 and 3.02 kW for K3. The app multiplies these ratings by Stelrad's published correction factor using mean water temperature minus room temperature. The radiator temperature selector is limited to 75°C nominal ΔT50, 65°C nominal ΔT40 and 55°C nominal ΔT30. These use 75/65, 65/55 and 55/45°C flow and return pairs respectively.
+The app uses Stelrad's published ΔT50 output for each height and panel type, then applies Stelrad's correction factor using mean water temperature minus room temperature. The radiator temperature selector is limited to 75°C nominal ΔT50, 65°C nominal ΔT40 and 55°C nominal ΔT30. These use 75/65, 65/55 and 55/45°C flow and return pairs respectively.
 
 Technical references:
 
-- [Stelrad Elite K1 and K2 technical data](https://www.stelrad.com/wp-content/uploads/2015/04/21160_Elite_Web.pdf)
-- [Stelrad Elite K3 technical data](https://www.stelrad.com/trade/wp-content/uploads/2020/10/28092_Elite_K3_Web-3.pdf)
+- [Stelrad Elite K1 and K2 technical data](https://www.stelrad.com/wp-content/uploads/2019/06/Elite-web-PDF.pdf)
+- [Stelrad Elite K3 technical data](https://www.stelrad.com/wp-content/uploads/2020/10/Elite_-K3_Web.pdf)
 - [Stelrad correction factors](https://www.stelrad.com/trade/stelrad-correction-factor/)
 - [MCS design conditions](https://heatloadcalculator.mcscertified.com/docs/reference-sources/design-conditions)
 - [MCS U-value reference](https://heatloadcalculator.mcscertified.com/docs/reference-sources/u-values)

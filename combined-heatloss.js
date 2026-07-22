@@ -22,11 +22,25 @@
     { location: 'Swindon', station: 'Brize Norton', latitude: 51.7580, longitude: -1.5760, temperature: -4.6, altitude: 82 }
   ];
   var STELRAD_ELITE_WATTS_PER_METRE_600 = { K1: 1000, K2: 1778, K3: 2514 };
-  var STELRAD_WIDTHS = {
-    K1: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1500, 1600, 1800, 2000, 2200, 2400, 2500, 2600, 2800, 3000],
-    K2: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1500, 1600, 1800, 2000, 2200, 2400, 2500, 2600, 2800, 3000],
-    K3: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000, 2400]
-  };
+  var STELRAD_STANDARD_WIDTHS = [
+    400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600,
+    1800, 2000, 2200, 2400, 2600, 2800, 3000
+  ];
+  var STELRAD_300_WIDTHS = [500, 1000, 1500, 2000, 2500, 3000];
+  var STELRAD_ELITE_MODELS = [
+    { type: 'K1', height: 300, wattsPerMetre: 517, widths: STELRAD_300_WIDTHS },
+    { type: 'K1', height: 450, wattsPerMetre: 768, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'K1', height: 600, wattsPerMetre: 1000, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'K1', height: 700, wattsPerMetre: 1142, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'K2', height: 300, wattsPerMetre: 1012, widths: STELRAD_300_WIDTHS },
+    { type: 'K2', height: 450, wattsPerMetre: 1409, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'K2', height: 600, wattsPerMetre: 1778, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'K2', height: 700, wattsPerMetre: 2011, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'K3', height: 300, wattsPerMetre: 1418, widths: [1000, 2000] },
+    { type: 'K3', height: 500, wattsPerMetre: 2169, widths: [600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000, 2400] },
+    { type: 'K3', height: 600, wattsPerMetre: 2514, widths: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000, 2400] },
+    { type: 'K3', height: 700, wattsPerMetre: 2841, widths: [500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000] }
+  ];
   var STELRAD_CORRECTION_FACTORS = {
     20: 0.302, 21: 0.322, 22: 0.342, 23: 0.363, 24: 0.383,
     25: 0.404, 26: 0.426, 27: 0.447, 28: 0.469, 29: 0.491,
@@ -97,8 +111,7 @@
     'door_type',
     'floor_type',
     'loft_type',
-    'air_change',
-    'radiator_type'
+    'air_change'
   ];
 
   function numberValue(id, fallback) {
@@ -191,11 +204,6 @@
         return { label: candidate, value: roomKeyFromName(candidate) };
       })
     );
-    var radiatorTypes = [
-      { label: 'K1', value: 'K1' },
-      { label: 'K2, standard choice', value: 'K2' },
-      { label: 'K3', value: 'K3' }
-    ];
     return '<details class="hl-room-dropdown" data-hl-room="' +
       escapeHtml(key) + '">' +
       '<summary><span>Heat loss details</span><span id="hl_' +
@@ -216,7 +224,6 @@
       fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
       fieldHtml('hl_' + key + '_air_change', 'Draught level', 'select', optionsFromMap(VALUES.airChange)) +
-      fieldHtml('hl_' + key + '_radiator_type', 'Stelrad Elite panel type', 'select', radiatorTypes, 'K2 is used by default. The smallest suitable 600mm-high width is selected.') +
       '</div>' +
       '<div class="hl-room-result" id="hl_' + escapeHtml(key) + '_result">' +
       '<div class="hl-result-main">Enter the room length and width</div>' +
@@ -237,7 +244,7 @@
     ];
     return '<div class="card hl-summary-card" id="heatLossSummaryCard">' +
       '<h3>Heat loss summary</h3>' +
-      '<p>Open Heat loss details inside each room. The room load and a suitable 600mm-high Stelrad Elite are calculated automatically.</p>' +
+      '<p>Open Heat loss details inside each room. The room load is calculated automatically, then suitable Stelrad Elite sizes can be selected in the radiator schedule.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
       fieldHtml('hl_bridge_pct', 'Thermal bridge allowance', 'select', bridgeOptions) +
@@ -246,12 +253,10 @@
       fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
       '</div>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
-      '<p class="hl-help">Choose once, then apply to every visible room. Individual rooms can still be changed.</p>' +
+      '<p class="hl-help">Applies external wall, window and draught defaults only. Floor and loft must be selected inside each room.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_default_wall', 'External wall', 'select', optionsFromMap(VALUES.externalWall)) +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
-      fieldHtml('hl_default_floor', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
-      fieldHtml('hl_default_loft', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
       fieldHtml('hl_default_air_change', 'Draught level', 'select', optionsFromMap(VALUES.airChange)) +
       '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
       '<div class="hl-postcode-lookup">' +
@@ -660,8 +665,6 @@
     var propertyDefaults = {
       hl_default_wall: 'Cavity wall, insulated',
       hl_default_window: 'Double glazing',
-      hl_default_floor: 'Heated room below',
-      hl_default_loft: 'Heated room above',
       hl_default_air_change: 'Standard room'
     };
     Object.entries(propertyDefaults).forEach(function (entry) {
@@ -683,10 +686,7 @@
         internal_wall_type: 'No internal wall included',
         window_type: 'Double glazing',
         door_type: 'No external door',
-        floor_type: 'Heated room below',
-        loft_type: 'Heated room above',
-        air_change: 'Standard room',
-        radiator_type: 'K2'
+        air_change: 'Standard room'
       };
       Object.entries(defaults).forEach(function (entry) {
         var id = 'hl_' + key + '_' + entry[0];
@@ -700,8 +700,6 @@
     var defaults = {
       wall_type: stringValue('hl_default_wall'),
       window_type: stringValue('hl_default_window'),
-      floor_type: stringValue('hl_default_floor'),
-      loft_type: stringValue('hl_default_loft'),
       air_change: stringValue('hl_default_air_change')
     };
     allRoomNames().forEach(function (roomName) {
@@ -766,39 +764,60 @@
     return lowerFactor + (upperFactor - lowerFactor) * (value - lower);
   }
 
-  function stelradOutput(type, width, correctionFactor) {
-    return STELRAD_ELITE_WATTS_PER_METRE_600[type] * (width / 1000) * correctionFactor;
-  }
-
-  function stelradOption(type, requiredWatts, correctionFactor) {
-    var widths = STELRAD_WIDTHS[type];
-    var width = widths.find(function (candidate) {
-      return stelradOutput(type, candidate, correctionFactor) >= requiredWatts;
+  function stelradModel(type, height) {
+    return STELRAD_ELITE_MODELS.find(function (model) {
+      return model.type === type && model.height === Number(height || 600);
     });
-    if (!width) return { type: type, suitable: false, width: widths[widths.length - 1] };
-    return {
-      type: type,
-      suitable: true,
-      width: width,
-      watts: stelradOutput(type, width, correctionFactor),
-      ratedWatts: stelradOutput(type, width, 1),
-      size: '600(h) x ' + width + '(w) ' + type
-    };
   }
 
-  function recommendStelradElite(requiredWatts, indoor, preferredType) {
+  function stelradOutput(type, width, correctionFactor, height) {
+    var model = stelradModel(type, height || 600);
+    return model
+      ? model.wattsPerMetre * (width / 1000) * correctionFactor
+      : 0;
+  }
+
+  function suitableStelradOptions(requiredWatts, correctionFactor) {
+    var options = [];
+    STELRAD_ELITE_MODELS.forEach(function (model) {
+      model.widths.forEach(function (width) {
+        var watts = model.wattsPerMetre * (width / 1000) * correctionFactor;
+        if (watts < requiredWatts) return;
+        options.push({
+          type: model.type,
+          height: model.height,
+          width: width,
+          watts: watts,
+          ratedWatts: model.wattsPerMetre * (width / 1000),
+          oversizePercent: requiredWatts > 0
+            ? Math.max(0, (watts - requiredWatts) / requiredWatts * 100)
+            : 0,
+          size: model.height + '(h) x ' + width + '(w) ' + model.type
+        });
+      });
+    });
+    return options.sort(function (a, b) {
+      return a.height - b.height || a.width - b.width || a.type.localeCompare(b.type);
+    });
+  }
+
+  function recommendStelradElite(requiredWatts, indoor, currentSelection) {
     var flow = Number(stringValue('hl_radiator_temperature')) || 75;
     var returnTemperature = flow - 10;
     var meanWater = (flow + returnTemperature) / 2;
     var deltaT = meanWater - indoor;
     var correctionFactor = stelradCorrectionFactor(deltaT);
     var validTemperature = flow > returnTemperature && deltaT >= 20 && deltaT <= 65;
-    var options = validTemperature ? ['K1', 'K2', 'K3'].map(function (type) {
-      return stelradOption(type, requiredWatts, correctionFactor);
-    }) : [];
+    var options = validTemperature
+      ? suitableStelradOptions(requiredWatts, correctionFactor)
+      : [];
     var selected = options.find(function (option) {
-      return option.type === preferredType && option.suitable;
-    }) || options.find(function (option) { return option.suitable; }) || null;
+      return option.size === currentSelection;
+    }) || options.find(function (option) {
+      return option.height === 600 && option.type === 'K2';
+    }) || options.reduce(function (closest, option) {
+      return !closest || option.watts < closest.watts ? option : closest;
+    }, null);
     return {
       flow: flow,
       returnTemperature: returnTemperature,
@@ -813,8 +832,10 @@
   }
   window.stelradEliteSizingV63 = {
     wattsPerMetre: STELRAD_ELITE_WATTS_PER_METRE_600,
+    models: STELRAD_ELITE_MODELS,
     correctionFactor: stelradCorrectionFactor,
-    output: stelradOutput
+    output: stelradOutput,
+    suitableOptions: suitableStelradOptions
   };
 
   function computeHeatLossValues(input) {
@@ -957,9 +978,9 @@
         floorU === 0 && roofU === 0) {
       warnings.push('No exposed wall, floor or loft has been recorded');
     }
-    var preferredRadiatorType = stringValue('hl_' + key + '_radiator_type') || 'K2';
+    var currentRadiatorSelection = stringValue('rad_' + key + '_new_size');
     var radiator = complete
-      ? recommendStelradElite(heat.totalWatts, indoor, preferredRadiatorType)
+      ? recommendStelradElite(heat.totalWatts, indoor, currentRadiatorSelection)
       : null;
     if (radiator && radiator.temperatureWarning) {
       warnings.push(radiator.flow <= radiator.returnTemperature
@@ -967,7 +988,7 @@
         : 'Radiator ΔT is outside Stelrad’s published 20°C to 65°C correction table');
     }
     if (radiator && !radiator.temperatureWarning && !radiator.selected) {
-      warnings.push('One 600mm-high Elite is not large enough; use multiple radiators or review the design');
+      warnings.push('No single Elite in the listed range is large enough; use multiple radiators or review the design');
     }
     var heatedInternalWatts = isHeatedInternalWall(internalWallType)
       ? heat.internalWallWatts
@@ -1013,7 +1034,6 @@
       totalWatts: heat.totalWatts,
       propertyWatts: Math.max(0, heat.totalWatts - heatedInternalWatts),
       wattsPerSquareMetre: floorArea > 0 ? heat.totalWatts / floorArea : 0,
-      preferredRadiatorType: preferredRadiatorType,
       radiator: radiator,
       warnings: warnings
     };
@@ -1024,9 +1044,80 @@
       var field = document.getElementById('rad_' + key + '_' + suffix);
       if (!field) return;
       field.value = '';
+      if (suffix === 'new_size' && field.tagName === 'SELECT') {
+        field.innerHTML = '<option value="">Complete the room heat loss first</option>';
+      }
       field.readOnly = true;
       field.removeAttribute('title');
     });
+  }
+
+  function radiatorOptionLabel(option, requiredWatts) {
+    return option.size + ' | ' + (option.watts / 1000).toFixed(2) +
+      ' kW | +' + Math.round(Math.max(0, option.watts - requiredWatts)) + ' W';
+  }
+
+  function configureRadiatorSelect(result) {
+    var field = document.getElementById('rad_' + result.key + '_new_size');
+    if (!field) return null;
+    var existingValue = field.value;
+    if (field.tagName !== 'SELECT') {
+      var select = document.createElement('select');
+      select.id = field.id;
+      select.dataset.id = field.dataset.id;
+      select.className = field.className;
+      select.setAttribute('aria-label', result.roomName + ' - New Size');
+      field.replaceWith(select);
+      field = select;
+    }
+    if (field.dataset.stelradWired !== 'yes') {
+      field.dataset.stelradWired = 'yes';
+      field.addEventListener('change', function () {
+        var selectedOption = field.options[field.selectedIndex];
+        var output = document.getElementById('rad_' + result.key + '_output');
+        if (output) {
+          output.value = selectedOption && selectedOption.dataset.watts
+            ? (Number(selectedOption.dataset.watts) / 1000).toFixed(2)
+            : '';
+        }
+        if (typeof update === 'function') update();
+        persistCombinedData();
+      });
+    }
+
+    field.innerHTML = '';
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = result.radiator && result.radiator.temperatureWarning
+      ? 'Review the radiator design temperature'
+      : 'Choose a suitable Stelrad Elite';
+    field.appendChild(placeholder);
+
+    var groups = {};
+    (result.radiator ? result.radiator.options : []).forEach(function (option) {
+      if (!groups[option.height]) {
+        groups[option.height] = document.createElement('optgroup');
+        groups[option.height].label = option.height + 'mm high';
+        field.appendChild(groups[option.height]);
+      }
+      var choice = document.createElement('option');
+      choice.value = option.size;
+      choice.textContent = radiatorOptionLabel(option, result.totalWatts);
+      choice.dataset.watts = option.watts.toFixed(2);
+      groups[option.height].appendChild(choice);
+    });
+
+    var selectedSize = result.radiator && result.radiator.selected
+      ? result.radiator.selected.size
+      : existingValue;
+    if (selectedSize && result.radiator.options.some(function (option) {
+      return option.size === selectedSize;
+    })) {
+      field.value = selectedSize;
+    }
+    field.title = 'Suitable Stelrad Elite radiators at the selected design temperature. ' +
+      'Choose another height, width or panel type where required.';
+    return field;
   }
 
   function renderRoomResult(result) {
@@ -1056,14 +1147,11 @@
       radKw.readOnly = true;
       radKw.title = 'Calculated from Heat loss details in this room.';
     }
-    var newSize = document.getElementById('rad_' + result.key + '_new_size');
+    var newSize = configureRadiatorSelect(result);
     var radOutput = document.getElementById('rad_' + result.key + '_output');
     if (result.radiator && result.radiator.selected) {
       if (newSize) {
         newSize.value = result.radiator.selected.size;
-        newSize.readOnly = true;
-        newSize.title = 'Smallest suitable 600mm-high Stelrad Elite ' +
-          result.radiator.selected.type + ' at the selected flow and return temperatures.';
       }
       if (radOutput) {
         radOutput.value = (result.radiator.selected.watts / 1000).toFixed(2);
@@ -1071,11 +1159,7 @@
         radOutput.title = 'Temperature-corrected Stelrad output.';
       }
     } else {
-      if (newSize) {
-        newSize.value = result.radiator && result.radiator.temperatureWarning
-          ? 'Review: design temperatures'
-          : 'Review: more than one unit';
-      }
+      if (newSize) newSize.value = '';
       if (radOutput) radOutput.value = '';
     }
     var radiatorHtml = '';
@@ -1085,10 +1169,13 @@
         result.radiator.returnTemperature.toFixed(0) + '°C:</b> ' +
         (result.radiator.temperatureWarning
           ? 'Enter valid temperatures with a ΔT from 20°C to 65°C.'
-          : result.radiator.options.map(function (option) {
-          if (!option.suitable) return option.type + ' needs more than ' + option.width + 'mm';
-          return option.size + ' gives ' + (option.watts / 1000).toFixed(2) + ' kW';
-        }).join(' &nbsp; | &nbsp; ')) +
+          : result.radiator.selected
+            ? result.radiator.selected.size + ' gives ' +
+              (result.radiator.selected.watts / 1000).toFixed(2) + ' kW. ' +
+              result.radiator.options.length + ' suitable size' +
+              (result.radiator.options.length === 1 ? '' : 's') +
+              ' available in the New Size dropdown.'
+            : 'No single radiator in the listed Elite range is large enough.') +
         (result.radiator.temperatureWarning ? '' :
           '<small>Published ΔT50 output × ' + result.radiator.correctionFactor.toFixed(3) +
           ' correction factor at ΔT' + result.radiator.deltaT.toFixed(1) + '.</small>') +
@@ -1230,7 +1317,7 @@
       escapeHtml(stringValue('hl_outdoor_temp')) + ' °C</td>' +
       '<td class="label">Thermal bridges</td><td class="input">' +
       escapeHtml(stringValue('hl_bridge_pct')) + '%</td>' +
-      '<td class="label">Radiator design</td><td colspan="3" class="input">Stelrad Elite 600mm at ' +
+      '<td class="label">Radiator design</td><td colspan="3" class="input">Stelrad Elite at ' +
       escapeHtml(stringValue('hl_radiator_temperature')) + '°C, nominal ΔT' +
       (Number(stringValue('hl_radiator_temperature')) - 25) + '</td></tr>' +
       '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
@@ -1247,7 +1334,7 @@
           room.ach.toFixed(2) + ' ACH</b></td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
       '<tr><td colspan="8" class="small">A heated internal wall uses the temperature difference between the two selected rooms for room radiator sizing. This transfer is excluded from the property total. An unheated space uses half the indoor-to-outdoor difference.</td></tr>' +
-      '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used at 600mm height: K1 1.000 kW/m, K2 1.778 kW/m, K3 2.514 kW/m. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
+      '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +
       '</table></div>';
   }
