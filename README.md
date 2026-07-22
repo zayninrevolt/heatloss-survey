@@ -9,7 +9,7 @@ Heat loss is built into the Rads page. Each room has a Heat loss details dropdow
 For each room, the app calculates:
 
 - Fabric loss from exposed walls, windows, doors, floors and roofs using `U-value × area × temperature difference`
-- Ventilation loss using `0.33 × air changes per hour × room volume × temperature difference`
+- Ventilation loss using `0.33 × heat-loss airflow in m³/h × temperature difference`
 - A configurable thermal-bridge allowance
 - Total watts, kilowatts and watts per square metre
 - Ground-floor loss using a separate ground temperature, rather than the outdoor air temperature
@@ -17,11 +17,13 @@ For each room, the app calculates:
 
 Calculated room loads feed the existing radiator schedule automatically. The Front, Rads and Heat Loss sheets can be printed together.
 
-The Heat Loss PDF includes a second assumptions page listing the selected wall, window, door, floor and loft construction for every completed room, together with each U-value and air-change rate used in the calculation.
+The Heat Loss PDF includes a second assumptions page listing the selected wall, window, door, floor and loft construction for every completed room, together with each U-value, ventilation device, air-change rate and property ventilation system used in the calculation.
+
+Room ventilation defaults follow the MCS/CIBSE minimum of 0.5 air changes per hour for a heated room with an external envelope and 0 ACH for a fully internal room. A room can instead use a manual ACH override. Extract fans, passive vents, fires, flues and chimneys add their published default airflow. The property can use natural ventilation, MEV, MV, MVHR or PIV; MVHR applies the entered heat-recovery efficiency and PIV distributes its 20 m³/h supply across entered rooms by volume.
 
 The property postcode automatically selects the nearest MCS/CIBSE reference weather station and its 99.6% outdoor design temperature. The same postcode coordinates are used to estimate property altitude through Elevation API EU and Copernicus terrain data. The app applies the MCS correction of 0.6°C per complete 100m above the design reference station. It also selects the MCS annual mean temperature from the nearest climate station as the ground temperature for solid floors. All three values remain editable. Postcode coordinates are retrieved from the public postcodes.io service; no other survey details are sent.
 
-Technical U-value entry is replaced with plain construction choices. These include single brick or stud and plasterboard internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice. Property-wide defaults apply external wall, internal wall, window and draught choices. Floor and ceiling or loft construction must be selected inside each room so ground-floor and first-floor rooms can be treated correctly.
+Technical U-value entry is replaced with plain construction choices. These include single brick or stud and plasterboard internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice. Property-wide defaults apply external wall, internal wall and window choices. Floor, ceiling or loft construction and ventilation devices must be selected inside each room so different floors and room conditions can be treated correctly.
 
 Internal walls can be marked as adjoining a heated room or an unheated space. A heated wall uses the difference between the current room and the selected adjoining room for radiator sizing, while that internal transfer is excluded from the whole-property heat loss. An unheated space uses half the indoor-to-outdoor temperature difference.
 
@@ -45,6 +47,7 @@ Technical references:
 - [Stelrad correction factors](https://www.stelrad.com/trade/stelrad-correction-factor/)
 - [MCS design conditions](https://heatloadcalculator.mcscertified.com/docs/reference-sources/design-conditions)
 - [MCS U-value reference](https://heatloadcalculator.mcscertified.com/docs/reference-sources/u-values)
+- [MCS ventilation-rate reference](https://heatloadcalculator.mcscertified.com/docs/reference-sources/ventilation-rates)
 - [Elevation API EU](https://www.elevation-api.eu/)
 - [Met Office weather-station locations](https://www.metoffice.gov.uk/research/climate/maps-and-data/uk-synoptic-and-climate-stations)
 

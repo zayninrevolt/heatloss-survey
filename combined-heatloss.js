@@ -116,8 +116,31 @@
       'Standard room': 0.5,
       'Draughty room': 1.0,
       'Very draughty room': 1.5
+    },
+    ventilationDevice: {
+      'No additional vent or flue': 0,
+      'Intermittent extract fan': 10,
+      'Passive wall or window vent': 10,
+      'Closed fireplace or chimney': 10,
+      'Blocked chimney': 20,
+      'Solid-fuel chimney': 20,
+      'Other open flue': 35,
+      'Flueless gas fire': 40,
+      'Open chimney': 80
     }
   };
+
+  var VENTILATION_SYSTEMS = [
+    { label: 'Natural ventilation', value: 'Natural ventilation' },
+    { label: 'Mechanical extract ventilation (MEV)', value: 'Mechanical extract ventilation (MEV)' },
+    { label: 'Mechanical ventilation (MV)', value: 'Mechanical ventilation (MV)' },
+    { label: 'Mechanical ventilation with heat recovery (MVHR)', value: 'Mechanical ventilation with heat recovery (MVHR)' },
+    { label: 'Positive input ventilation (PIV)', value: 'Positive input ventilation (PIV)' }
+  ];
+  var AIR_CHANGE_MODES = [
+    { label: 'Automatic, 0.5 ACH or 0 ACH if fully internal', value: 'Automatic' },
+    { label: 'Manual override', value: 'Manual override' }
+  ];
 
   var HEAT_LOSS_SUFFIXES = [
     'indoor_temp',
@@ -132,7 +155,9 @@
     'door_type',
     'floor_type',
     'loft_type',
-    'air_change'
+    'ventilation_mode',
+    'manual_ach',
+    'ventilation_device'
   ];
 
   function numberValue(id, fallback) {
@@ -179,6 +204,7 @@
     } else {
       control = '<input id="' + safeId + '" data-id="' + safeId +
         '" type="number" step="any" inputmode="decimal"' +
+        (id === 'hl_mvhr_efficiency' ? ' max="100"' : '') +
         (id === 'hl_outdoor_temp' || id === 'hl_property_altitude'
           ? ''
           : ' min="0"') + '>';
@@ -246,7 +272,9 @@
       fieldHtml('hl_' + key + '_door_type', 'External door', 'select', optionsFromMap(VALUES.door)) +
       fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
-      fieldHtml('hl_' + key + '_air_change', 'Draught level', 'select', optionsFromMap(VALUES.airChange)) +
+      fieldHtml('hl_' + key + '_ventilation_mode', 'Room air-change rate', 'select', AIR_CHANGE_MODES, 'Automatic uses the MCS/CIBSE 0.5 ACH room minimum, or 0 ACH where the room has no external envelope.') +
+      fieldHtml('hl_' + key + '_manual_ach', 'Manual ACH override', 'number', null, 'Only used when Manual override is selected.') +
+      fieldHtml('hl_' + key + '_ventilation_device', 'Additional vent, fan or flue', 'select', optionsFromMap(VALUES.ventilationDevice), 'Adds the published default airflow for this room. Select the closest item and use the ACH override where required.') +
       '</div>' +
       '<div class="hl-room-result" id="hl_' + escapeHtml(key) + '_result">' +
       '<div class="hl-result-main">Enter the room length and width</div>' +
@@ -274,14 +302,15 @@
       fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Estimated from postcode coordinates using Elevation API EU and Copernicus terrain data. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
       fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Uses the annual mean temperature from the nearest MCS reference station for solid ground floors.') +
       fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
+      fieldHtml('hl_ventilation_system', 'Property ventilation system', 'select', VENTILATION_SYSTEMS, 'The 0.5 ACH room minimum is retained. MVHR reduces the mechanical ventilation loss by its heat-recovery efficiency.') +
+      fieldHtml('hl_mvhr_efficiency', 'MVHR heat recovery (%)', 'number', null, 'Only used for MVHR. Enter the design efficiency, normally taken from the unit data.') +
       '</div>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
-      '<p class="hl-help">Applies external wall, internal wall, window and draught defaults only. Floor and loft must be selected inside each room.</p>' +
+      '<p class="hl-help">Applies external wall, internal wall and window defaults only. Floor, loft and room ventilation devices must be selected inside each room.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_default_wall', 'External wall', 'select', optionsFromMap(VALUES.externalWall)) +
       fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
-      fieldHtml('hl_default_air_change', 'Draught level', 'select', optionsFromMap(VALUES.airChange)) +
       '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
       '<div class="hl-postcode-lookup">' +
       '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
@@ -768,6 +797,22 @@
       if (data['hl_' + key + '_floor_type'] === 'Insulated ground floor') {
         setValue('hl_' + key + '_floor_type', 'Insulated solid ground floor');
       }
+      var ventilationModeId = 'hl_' + key + '_ventilation_mode';
+      var manualAchId = 'hl_' + key + '_manual_ach';
+      var oldAirChange = data['hl_' + key + '_air_change'];
+      if (!stringValue(ventilationModeId)) {
+        if (oldAirChange === 'Draughty room' || oldAirChange === 'Very draughty room') {
+          setValue(ventilationModeId, 'Manual override');
+          if (!stringValue(manualAchId)) {
+            setValue(manualAchId, VALUES.airChange[oldAirChange]);
+          }
+        } else {
+          setValue(ventilationModeId, 'Automatic');
+        }
+      }
+      if (!stringValue('hl_' + key + '_ventilation_device')) {
+        setValue('hl_' + key + '_ventilation_device', 'No additional vent or flue');
+      }
     });
   }
 
@@ -776,6 +821,10 @@
     if (!stringValue('hl_outdoor_temp')) setValue('hl_outdoor_temp', -3);
     if (!stringValue('hl_bridge_pct')) setValue('hl_bridge_pct', 10);
     if (!stringValue('hl_ground_temp')) setValue('hl_ground_temp', 10);
+    if (!stringValue('hl_ventilation_system')) {
+      setValue('hl_ventilation_system', 'Natural ventilation');
+    }
+    if (!stringValue('hl_mvhr_efficiency')) setValue('hl_mvhr_efficiency', 75);
     if (!['75', '65', '55'].includes(stringValue('hl_radiator_temperature'))) {
       setValue('hl_radiator_temperature', 75);
     }
@@ -783,8 +832,7 @@
     var propertyDefaults = {
       hl_default_wall: 'Cavity wall, insulated',
       hl_default_internal_wall: 'No internal wall included',
-      hl_default_window: 'Double glazing',
-      hl_default_air_change: 'Standard room'
+      hl_default_window: 'Double glazing'
     };
     Object.entries(propertyDefaults).forEach(function (entry) {
       if (!stringValue(entry[0])) setValue(entry[0], entry[1]);
@@ -805,7 +853,8 @@
         internal_wall_type: 'No internal wall included',
         window_type: 'Double glazing',
         door_type: 'No external door',
-        air_change: 'Standard room'
+        ventilation_mode: 'Automatic',
+        ventilation_device: 'No additional vent or flue'
       };
       Object.entries(defaults).forEach(function (entry) {
         var id = 'hl_' + key + '_' + entry[0];
@@ -819,8 +868,7 @@
     var defaults = {
       wall_type: stringValue('hl_default_wall'),
       internal_wall_type: stringValue('hl_default_internal_wall'),
-      window_type: stringValue('hl_default_window'),
-      air_change: stringValue('hl_default_air_change')
+      window_type: stringValue('hl_default_window')
     };
     allRoomNames().forEach(function (roomName) {
       var key = roomKeyFromName(roomName);
@@ -984,8 +1032,10 @@
       : Math.max(0, Number(input.floorDeltaT) || 0);
     var floorWatts = floorArea * Math.max(0, Number(input.floorU) || 0) * floorDeltaT;
     var roofWatts = floorArea * Math.max(0, Number(input.roofU) || 0) * deltaT;
-    var ventilationWatts = 0.33 * Math.max(0, Number(input.ach) || 0) *
-      volume * deltaT;
+    var ventilationFlowM3h = input.ventilationFlowM3h == null
+      ? Math.max(0, Number(input.ach) || 0) * volume
+      : Math.max(0, Number(input.ventilationFlowM3h) || 0);
+    var ventilationWatts = 0.33 * ventilationFlowM3h * deltaT;
     var externalFabric = wallWatts + windowWatts + doorWatts +
       floorWatts + roofWatts;
     var bridgeWatts = externalFabric *
@@ -998,6 +1048,7 @@
       doorWatts: doorWatts,
       floorWatts: floorWatts,
       roofWatts: roofWatts,
+      ventilationFlowM3h: ventilationFlowM3h,
       ventilationWatts: ventilationWatts,
       bridgeWatts: bridgeWatts,
       fabricWatts: fabricWatts,
@@ -1006,7 +1057,8 @@
   }
   window.computeHeatLossValuesV60 = computeHeatLossValues;
 
-  function calculateRoom(roomName) {
+  function calculateRoom(roomName, ventilationContext) {
+    ventilationContext = ventilationContext || {};
     var key = roomKeyFromName(roomName);
     var length = numberValue('rad_' + key + '_len', 0);
     var width = numberValue('rad_' + key + '_wid', 0);
@@ -1036,7 +1088,10 @@
     var doorType = stringValue('hl_' + key + '_door_type');
     var floorType = stringValue('hl_' + key + '_floor_type');
     var loftType = stringValue('hl_' + key + '_loft_type');
-    var airChangeType = stringValue('hl_' + key + '_air_change');
+    var ventilationMode = stringValue('hl_' + key + '_ventilation_mode') || 'Automatic';
+    var manualAchText = stringValue('hl_' + key + '_manual_ach');
+    var ventilationDevice = stringValue('hl_' + key + '_ventilation_device') ||
+      'No additional vent or flue';
     var wallU = mappedValue('externalWall', wallType);
     var internalWallU = mappedValue('internalWall', internalWallType);
     var internalWallFactor = internalWallTemperatureFactor(internalWallType);
@@ -1044,7 +1099,29 @@
     var doorU = mappedValue('door', doorType);
     var floorU = mappedValue('floor', floorType);
     var roofU = mappedValue('loft', loftType);
-    var ach = mappedValue('airChange', airChangeType);
+    var hasExternalEnvelope = wallLength > 0 || windowArea > 0 || doorArea > 0 ||
+      floorU > 0 || roofU > 0;
+    var manualAch = Number(manualAchText);
+    var manualAchValid = manualAchText !== '' && Number.isFinite(manualAch) && manualAch >= 0;
+    var baseAch = ventilationMode === 'Manual override' && manualAchValid
+      ? manualAch
+      : (hasExternalEnvelope ? 0.5 : 0);
+    var ventilationSystem = stringValue('hl_ventilation_system') || 'Natural ventilation';
+    var mvhrEfficiency = Math.max(0, Math.min(100,
+      numberValue('hl_mvhr_efficiency', 75)));
+    var heatRecoveryFactor = ventilationSystem ===
+      'Mechanical ventilation with heat recovery (MVHR)'
+      ? 1 - mvhrEfficiency / 100
+      : 1;
+    var baseVentilationFlowM3h = baseAch * volume;
+    var recoveredVentilationFlowM3h = baseVentilationFlowM3h * heatRecoveryFactor;
+    var deviceFlowM3h = mappedValue('ventilationDevice', ventilationDevice);
+    var pivFlowM3h = ventilationSystem === 'Positive input ventilation (PIV)' &&
+      Number(ventilationContext.propertyVolume) > 0
+      ? 20 * volume / Number(ventilationContext.propertyVolume)
+      : 0;
+    var ventilationFlowM3h = recoveredVentilationFlowM3h + deviceFlowM3h + pivFlowM3h;
+    var effectiveAch = volume > 0 ? ventilationFlowM3h / volume : 0;
     var missing = [];
     if (wallLength > 0 && !wallType) missing.push('external wall construction');
     if (internalWallLength > 0 && (!internalWallType || internalWallU === 0)) {
@@ -1054,7 +1131,10 @@
     if (doorArea > 0 && (!doorType || doorU === 0)) missing.push('external door construction');
     if (!floorType) missing.push('floor construction');
     if (!loftType) missing.push('ceiling or loft construction');
-    if (!airChangeType) missing.push('draught level');
+    if (!ventilationMode) missing.push('room air-change method');
+    if (ventilationMode === 'Manual override' && !manualAchValid) {
+      missing.push('manual air-change rate');
+    }
     var complete = dimensionsComplete && missing.length === 0;
     var adjacentKey = stringValue('hl_' + key + '_internal_adjacent_room');
     var adjacentName = allRoomNames().find(function (candidate) {
@@ -1088,7 +1168,8 @@
       doorU: doorU,
       floorU: floorU,
       roofU: roofU,
-      ach: ach,
+      ach: effectiveAch,
+      ventilationFlowM3h: ventilationFlowM3h,
       bridgePercent: numberValue('hl_bridge_pct', 10)
     }) : computeHeatLossValues({});
     var warnings = [];
@@ -1101,13 +1182,8 @@
     if (complete && windowArea + doorArea > grossWallArea && grossWallArea > 0) {
       warnings.push('Window and door areas exceed the exposed wall area');
     }
-    if (complete && wallLength === 0 &&
-        (internalWallLength === 0 || internalWallFactor === 0) &&
-        floorU === 0 && roofU === 0) {
-      warnings.push('No exposed wall, floor or loft has been recorded');
-    }
     var currentRadiatorSelection = stringValue('rad_' + key + '_new_size');
-    var radiator = complete
+    var radiator = complete && heat.totalWatts > 0
       ? recommendStelradElite(heat.totalWatts, indoor, currentRadiatorSelection)
       : null;
     if (radiator && radiator.temperatureWarning) {
@@ -1147,14 +1223,24 @@
       doorType: doorType,
       floorType: floorType,
       loftType: loftType,
-      airChangeType: airChangeType,
+      ventilationMode: ventilationMode,
+      manualAch: manualAchValid ? manualAch : null,
+      ventilationDevice: ventilationDevice,
+      ventilationSystem: ventilationSystem,
+      mvhrEfficiency: mvhrEfficiency,
+      hasExternalEnvelope: hasExternalEnvelope,
+      baseAch: baseAch,
+      baseVentilationFlowM3h: baseVentilationFlowM3h,
+      deviceFlowM3h: deviceFlowM3h,
+      pivFlowM3h: pivFlowM3h,
+      ventilationFlowM3h: heat.ventilationFlowM3h,
       wallU: wallU,
       internalWallU: internalWallU,
       windowU: windowU,
       doorU: doorU,
       floorU: floorU,
       roofU: roofU,
-      ach: ach,
+      ach: effectiveAch,
       floorDeltaT: floorDeltaT,
       internalWallWatts: heat.internalWallWatts,
       fabricWatts: heat.fabricWatts,
@@ -1216,7 +1302,9 @@
     field.innerHTML = '';
     var placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = result.radiator && result.radiator.temperatureWarning
+    placeholder.textContent = result.totalWatts <= 0
+      ? 'No radiator output required'
+      : result.radiator && result.radiator.temperatureWarning
       ? 'Review the radiator design temperature'
       : 'Choose a suitable Stelrad Elite';
     field.appendChild(placeholder);
@@ -1311,6 +1399,17 @@
     }
     if (summary) summary.textContent = Math.round(result.totalWatts) + ' W';
     if (resultBox) {
+      var ventilationDetails = result.baseAch.toFixed(2) + ' ACH base';
+      if (result.ventilationSystem === 'Mechanical ventilation with heat recovery (MVHR)') {
+        ventilationDetails += ', ' + result.mvhrEfficiency.toFixed(0) + '% heat recovery';
+      }
+      if (result.deviceFlowM3h > 0) {
+        ventilationDetails += ', +' + result.deviceFlowM3h.toFixed(0) + ' m³/h ' +
+          result.ventilationDevice.toLowerCase();
+      }
+      if (result.pivFlowM3h > 0) {
+        ventilationDetails += ', +' + result.pivFlowM3h.toFixed(1) + ' m³/h PIV share';
+      }
       resultBox.innerHTML =
         '<div class="hl-result-main"><strong>' + Math.round(result.totalWatts) +
         ' W</strong> (' + kw.toFixed(2) + ' kW)' +
@@ -1318,7 +1417,9 @@
         '</div><div class="hl-result-breakdown">Fabric: ' +
         Math.round(result.fabricWatts) + ' W &nbsp; Ventilation: ' +
         Math.round(result.ventilationWatts) + ' W &nbsp; Load density: ' +
-        result.wattsPerSquareMetre.toFixed(1) + ' W/m²</div>' + radiatorHtml +
+        result.wattsPerSquareMetre.toFixed(1) + ' W/m²<br><small>' +
+        escapeHtml(ventilationDetails) + '; effective heat-loss airflow ' +
+        result.ach.toFixed(2) + ' ACH.</small></div>' + radiatorHtml +
         (result.warnings.length
           ? '<div class="hl-warning">' + escapeHtml(result.warnings.join('. ')) + '</div>'
           : '');
@@ -1326,7 +1427,19 @@
   }
 
   function calculateHeatLoss() {
-    var results = allRoomNames().map(calculateRoom);
+    var roomNames = allRoomNames();
+    var ceilingHeight = numberValue('r_ceiling', 2.4);
+    var propertyVolume = roomNames.reduce(function (sum, roomName) {
+      var key = roomKeyFromName(roomName);
+      var length = numberValue('rad_' + key + '_len', 0);
+      var width = numberValue('rad_' + key + '_wid', 0);
+      return sum + (length > 0 && width > 0 && ceilingHeight > 0
+        ? length * width * ceilingHeight
+        : 0);
+    }, 0);
+    var results = roomNames.map(function (roomName) {
+      return calculateRoom(roomName, { propertyVolume: propertyVolume });
+    });
     var included = results.filter(function (result) {
       return result.started && result.complete;
     });
@@ -1383,6 +1496,28 @@
     if (typeof update === 'function') update();
   }
 
+  function refreshVentilationControls() {
+    allRoomNames().forEach(function (roomName) {
+      var key = roomKeyFromName(roomName);
+      var mode = stringValue('hl_' + key + '_ventilation_mode');
+      var manualField = document.getElementById('hl_' + key + '_manual_ach');
+      if (manualField) {
+        manualField.disabled = mode !== 'Manual override';
+        manualField.title = manualField.disabled
+          ? 'Select Manual override to enter a room air-change rate.'
+          : 'Overrides the automatic 0.5 or 0 ACH room minimum.';
+      }
+    });
+    var efficiency = document.getElementById('hl_mvhr_efficiency');
+    if (efficiency) {
+      efficiency.disabled = stringValue('hl_ventilation_system') !==
+        'Mechanical ventilation with heat recovery (MVHR)';
+      efficiency.title = efficiency.disabled
+        ? 'Only used when MVHR is selected.'
+        : 'Heat-recovery efficiency applied to the base mechanical airflow.';
+    }
+  }
+
   function wireHeatLossFields() {
     document.querySelectorAll('#radsForm [data-id]').forEach(function (field) {
       var id = field.dataset.id || '';
@@ -1393,8 +1528,14 @@
       if (field.dataset.hlWired === 'yes') return;
       field.dataset.hlWired = 'yes';
       if (isHeatLoss) {
-        field.addEventListener('input', inputChanged);
-        field.addEventListener('change', inputChanged);
+        field.addEventListener('input', function (event) {
+          refreshVentilationControls();
+          inputChanged(event);
+        });
+        field.addEventListener('change', function (event) {
+          refreshVentilationControls();
+          inputChanged(event);
+        });
       }
       field.addEventListener('input', persistCombinedData);
       field.addEventListener('change', persistCombinedData);
@@ -1462,6 +1603,13 @@
       escapeHtml(stringValue('hl_ground_temp')) + ' °C</td>' +
       '<td class="label">Ground reference</td><td colspan="3" class="input">' +
       escapeHtml(stringValue('hl_ground_station') || 'Manual value') + '</td></tr>' +
+      '<tr><td class="label">Ventilation system</td><td colspan="5" class="input">' +
+      escapeHtml(stringValue('hl_ventilation_system') || 'Natural ventilation') +
+      (stringValue('hl_ventilation_system') ===
+        'Mechanical ventilation with heat recovery (MVHR)'
+        ? ', ' + escapeHtml(stringValue('hl_mvhr_efficiency')) + '% heat recovery'
+        : '') +
+      '</td><td class="label">Room minimum</td><td class="input">0.5 ACH exposed / 0 ACH fully internal</td></tr>' +
       '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
       (rows.length ? rows.map(function (room) {
         return '<tr><td><b>' + escapeHtml(room.roomName) + '</b></td>' +
@@ -1472,12 +1620,21 @@
           '<td>' + uValueAssumption(room.doorType, room.doorU, room.doorArea > 0 && room.doorU > 0) + '</td>' +
           '<td>' + uValueAssumption(room.floorType, room.floorU, room.floorU > 0) + '</td>' +
           '<td>' + uValueAssumption(room.loftType, room.roofU, room.roofU > 0) + '</td>' +
-          '<td>' + escapeHtml(room.airChangeType || 'Unknown') + '<br><b>' +
-          room.ach.toFixed(2) + ' ACH</b></td></tr>';
+          '<td>' + escapeHtml(room.ventilationMode) + ': <b>' +
+          room.baseAch.toFixed(2) + ' ACH</b>' +
+          (room.ventilationDevice !== 'No additional vent or flue'
+            ? '<br>' + escapeHtml(room.ventilationDevice) + ': +' +
+              room.deviceFlowM3h.toFixed(0) + ' m³/h'
+            : '') +
+          (room.pivFlowM3h > 0
+            ? '<br>PIV share: +' + room.pivFlowM3h.toFixed(1) + ' m³/h'
+            : '') +
+          '<br>Heat-loss equivalent: <b>' + room.ach.toFixed(2) + ' ACH</b></td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
       '<tr><td colspan="8" class="small">A heated internal wall uses the temperature difference between the two selected rooms for room radiator sizing. This transfer is excluded from the property total. An unheated space uses half the indoor-to-outdoor difference.</td></tr>' +
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Radiator choices meet the calculated room requirement without exceeding it by more than 50%. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
+      '<tr><td colspan="8" class="small">Ventilation uses the MCS/CIBSE minimum of 0.5 ACH for heated rooms with an external envelope and 0 ACH for fully internal rooms. Room devices add their published default airflow. MVHR applies the entered heat-recovery efficiency to the base mechanical airflow. PIV adds 20 m³/h across the property, shared by entered room volume. A manual room ACH overrides the automatic room minimum.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +
       '</table></div>';
   }
@@ -1540,6 +1697,7 @@
     wireRadiatorTemperature();
     wirePostcodeLookup();
     wirePropertyDefaults();
+    refreshVentilationControls();
     calculateHeatLoss();
     return result;
   };
