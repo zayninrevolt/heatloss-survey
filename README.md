@@ -19,7 +19,7 @@ The Heat Loss PDF includes a second assumptions page listing the selected wall, 
 
 The property postcode can automatically select the nearest MCS/CIBSE reference weather station and its 99.6% outdoor design temperature. The result remains editable for manual site or altitude adjustments. Postcode coordinates are retrieved from the public postcodes.io service; no other survey details are sent.
 
-Technical U-value entry is replaced with plain construction choices. These include solid brick or stud internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice.
+Technical U-value entry is replaced with plain construction choices. These include single brick or stud and plasterboard internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice. Internal walls can be marked as adjoining a heated room, which records the construction but applies no heat loss, or an unheated space, which uses half the indoor-to-outdoor temperature difference.
 
 Construction choices are practical survey starting points and must be checked against the property. The app does not claim to be a certified MCS or BS EN 12831 design tool.
 

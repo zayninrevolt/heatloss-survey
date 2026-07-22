@@ -29,9 +29,11 @@
       'Modern insulated wall': 0.28
     },
     internalWall: {
-      'None': 0,
-      'Single brick wall': 2.05,
-      'Stud and plasterboard': 1.76
+      'No internal wall included': 0,
+      'Heated room, single brick': 2.05,
+      'Heated room, stud and plasterboard': 1.76,
+      'Unheated space, single brick': 2.05,
+      'Unheated space, stud and plasterboard': 1.76
     },
     window: {
       'No windows': 0,
@@ -169,8 +171,8 @@
       fieldHtml('hl_' + key + '_indoor_temp', 'Room design temperature', 'select', temperatures) +
       fieldHtml('hl_' + key + '_external_wall_length', 'Exposed wall length (m)', 'number', null, 'Leave blank to estimate it from the outside wall count above.') +
       fieldHtml('hl_' + key + '_wall_type', 'External wall construction', 'select', optionsFromMap(VALUES.externalWall)) +
-      fieldHtml('hl_' + key + '_internal_wall_length', 'Wall to unheated space (m)', 'number', null, 'Only include a garage, cupboard or other unheated space.') +
-      fieldHtml('hl_' + key + '_internal_wall_type', 'Unheated internal wall', 'select', optionsFromMap(VALUES.internalWall)) +
+      fieldHtml('hl_' + key + '_internal_wall_length', 'Internal wall length (m)', 'number', null, 'Heated choices record the wall but apply no heat loss. Unheated choices suit a garage, cupboard or similar space.') +
+      fieldHtml('hl_' + key + '_internal_wall_type', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_' + key + '_window_area', 'Window area (m²)', 'number') +
       fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       fieldHtml('hl_' + key + '_door_area', 'External door area (m²)', 'number') +
@@ -505,6 +507,15 @@
       var key = roomKeyFromName(roomName);
       var oldWall = data['hl_' + key + '_wall_preset'];
       var oldWindow = data['hl_' + key + '_window_preset'];
+      var oldInternalWall = data['hl_' + key + '_internal_wall_type'];
+      var internalWallMigration = {
+        'None': 'No internal wall included',
+        'Single brick wall': 'Unheated space, single brick',
+        'Stud and plasterboard': 'Unheated space, stud and plasterboard'
+      };
+      if (internalWallMigration[oldInternalWall]) {
+        setValue('hl_' + key + '_internal_wall_type', internalWallMigration[oldInternalWall]);
+      }
       if (!stringValue('hl_' + key + '_wall_type') && oldWall) {
         if (VALUES.externalWall[oldWall] != null) {
           setValue('hl_' + key + '_wall_type', oldWall);
@@ -545,7 +556,7 @@
       var defaults = {
         indoor_temp: newIndoorDefault,
         wall_type: 'Cavity wall, insulated',
-        internal_wall_type: 'None',
+        internal_wall_type: 'No internal wall included',
         window_type: 'Double glazing',
         door_type: 'No external door',
         floor_type: 'Heated room below',
@@ -573,6 +584,10 @@
   function mappedValue(group, selected) {
     var value = VALUES[group][selected];
     return Number.isFinite(value) ? value : 0;
+  }
+
+  function internalWallTemperatureFactor(selected) {
+    return String(selected || '').indexOf('Unheated space') === 0 ? 0.5 : 0;
   }
 
   function computeHeatLossValues(input) {
@@ -645,6 +660,7 @@
     var airChangeType = stringValue('hl_' + key + '_air_change');
     var wallU = mappedValue('externalWall', wallType);
     var internalWallU = mappedValue('internalWall', internalWallType);
+    var internalWallFactor = internalWallTemperatureFactor(internalWallType);
     var windowU = mappedValue('window', windowType);
     var doorU = mappedValue('door', doorType);
     var floorU = mappedValue('floor', floorType);
@@ -652,7 +668,7 @@
     var ach = mappedValue('airChange', airChangeType);
     var heat = complete ? computeHeatLossValues({
       deltaT: deltaT,
-      internalDeltaT: deltaT * 0.5,
+      internalDeltaT: deltaT * internalWallFactor,
       floorArea: floorArea,
       volume: volume,
       netWallArea: netWallArea,
@@ -673,7 +689,8 @@
     if (complete && windowArea + doorArea > grossWallArea && grossWallArea > 0) {
       warnings.push('Window and door areas exceed the exposed wall area');
     }
-    if (complete && wallLength === 0 && internalWallLength === 0 &&
+    if (complete && wallLength === 0 &&
+        (internalWallLength === 0 || internalWallFactor === 0) &&
         floorU === 0 && roofU === 0) {
       warnings.push('No exposed wall, floor or loft has been recorded');
     }
@@ -695,6 +712,7 @@
       doorArea: doorArea,
       wallType: wallType,
       internalWallType: internalWallType,
+      internalWallFactor: internalWallFactor,
       windowType: windowType,
       doorType: doorType,
       floorType: floorType,
@@ -851,7 +869,7 @@
       '<td class="label">Thermal bridges</td><td class="input">' +
       escapeHtml(stringValue('hl_bridge_pct')) + '%</td>' +
       '<td colspan="4" class="small">U-values are shown in W/m²K. Lower values indicate better insulation.</td></tr>' +
-      '<tr><th>Room</th><th>External wall</th><th>Unheated internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
+      '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
       (rows.length ? rows.map(function (room) {
         return '<tr><td><b>' + escapeHtml(room.roomName) + '</b></td>' +
           '<td>' + uValueAssumption(room.wallType, room.wallU, room.wallLength > 0) + '</td>' +
@@ -863,6 +881,7 @@
           '<td>' + escapeHtml(room.airChangeType || 'Unknown') + '<br><b>' +
           room.ach.toFixed(2) + ' ACH</b></td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
+      '<tr><td colspan="8" class="small">Walls adjoining a heated room retain their construction U-value in the survey but use a 0°C temperature difference, so no heat loss is applied. Walls adjoining an unheated space use half the indoor-to-outdoor temperature difference.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +
       '</table></div>';
   }
