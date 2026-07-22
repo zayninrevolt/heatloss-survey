@@ -6,21 +6,39 @@
   var postcodeLookupInProgress = false;
   var postcodeLookupActivePostcode = '';
   var DESIGN_STATIONS = [
-    { location: 'Belfast', station: 'Aldergrove', latitude: 54.6575, longitude: -6.2158, temperature: -3.2 },
-    { location: 'Birmingham', station: 'Coleshill', latitude: 52.4800, longitude: -1.6890, temperature: -5.1 },
-    { location: 'Cardiff', station: 'St Athan', latitude: 51.4050, longitude: -3.4400, temperature: -3.1 },
-    { location: 'Edinburgh', station: 'Gogarbank', latitude: 55.9290, longitude: -3.3430, temperature: -5.4 },
-    { location: 'Glasgow', station: 'Bishopton', latitude: 55.9070, longitude: -4.5330, temperature: -5.6 },
-    { location: 'Leeds', station: 'Church Fenton', latitude: 53.8340, longitude: -1.1950, temperature: -3.3 },
-    { location: 'London', station: 'Heathrow', latitude: 51.4790, longitude: -0.4490, temperature: -3.0 },
-    { location: 'Manchester', station: 'Woodford', latitude: 53.3380, longitude: -2.1490, temperature: -4.5 },
-    { location: 'Newcastle', station: 'Albemarle', latitude: 55.0190, longitude: -1.8800, temperature: -3.7 },
-    { location: 'Norwich', station: 'Marham', latitude: 52.6510, longitude: 0.5690, temperature: -4.6 },
-    { location: 'Nottingham', station: 'Watnall', latitude: 53.0050, longitude: -1.2500, temperature: -3.9 },
-    { location: 'Plymouth', station: 'Mountbatten', latitude: 50.3540, longitude: -4.1210, temperature: -1.5 },
-    { location: 'Southampton', station: 'Hurn', latitude: 50.7790, longitude: -1.8350, temperature: -4.8 },
-    { location: 'Swindon', station: 'Brize Norton', latitude: 51.7580, longitude: -1.5760, temperature: -4.6 }
+    { location: 'Belfast', station: 'Aldergrove', latitude: 54.6575, longitude: -6.2158, temperature: -3.2, altitude: 63 },
+    { location: 'Birmingham', station: 'Coleshill', latitude: 52.4800, longitude: -1.6890, temperature: -5.1, altitude: 96 },
+    { location: 'Cardiff', station: 'St Athan', latitude: 51.4050, longitude: -3.4400, temperature: -3.1, altitude: 49 },
+    { location: 'Edinburgh', station: 'Gogarbank', latitude: 55.9290, longitude: -3.3430, temperature: -5.4, altitude: 57 },
+    { location: 'Glasgow', station: 'Bishopton', latitude: 55.9070, longitude: -4.5330, temperature: -5.6, altitude: 59 },
+    { location: 'Leeds', station: 'Church Fenton', latitude: 53.8340, longitude: -1.1950, temperature: -3.3, altitude: 8 },
+    { location: 'London', station: 'Heathrow', latitude: 51.4790, longitude: -0.4490, temperature: -3.0, altitude: 25 },
+    { location: 'Manchester', station: 'Woodford', latitude: 53.3380, longitude: -2.1490, temperature: -4.5, altitude: 88 },
+    { location: 'Newcastle', station: 'Albemarle', latitude: 55.0190, longitude: -1.8800, temperature: -3.7, altitude: 142 },
+    { location: 'Norwich', station: 'Marham', latitude: 52.6510, longitude: 0.5690, temperature: -4.6, altitude: 21 },
+    { location: 'Nottingham', station: 'Watnall', latitude: 53.0050, longitude: -1.2500, temperature: -3.9, altitude: 117 },
+    { location: 'Plymouth', station: 'Mountbatten', latitude: 50.3540, longitude: -4.1210, temperature: -1.5, altitude: 50 },
+    { location: 'Southampton', station: 'Hurn', latitude: 50.7790, longitude: -1.8350, temperature: -4.8, altitude: 10 },
+    { location: 'Swindon', station: 'Brize Norton', latitude: 51.7580, longitude: -1.5760, temperature: -4.6, altitude: 82 }
   ];
+  var STELRAD_ELITE_WATTS_PER_METRE_600 = { K1: 1000, K2: 1778, K3: 2514 };
+  var STELRAD_WIDTHS = {
+    K1: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1500, 1600, 1800, 2000, 2200, 2400, 2500, 2600, 2800, 3000],
+    K2: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1500, 1600, 1800, 2000, 2200, 2400, 2500, 2600, 2800, 3000],
+    K3: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000, 2400]
+  };
+  var STELRAD_CORRECTION_FACTORS = {
+    20: 0.302, 21: 0.322, 22: 0.342, 23: 0.363, 24: 0.383,
+    25: 0.404, 26: 0.426, 27: 0.447, 28: 0.469, 29: 0.491,
+    30: 0.513, 31: 0.535, 32: 0.558, 33: 0.581, 34: 0.604,
+    35: 0.627, 36: 0.651, 37: 0.675, 38: 0.699, 39: 0.723,
+    40: 0.747, 41: 0.7714, 42: 0.796, 43: 0.821, 44: 0.846,
+    45: 0.871, 46: 0.897, 47: 0.922, 48: 0.948, 49: 0.974,
+    50: 1, 51: 1.026, 52: 1.052, 53: 1.079, 54: 1.105,
+    55: 1.132, 56: 1.159, 57: 1.186, 58: 1.213, 59: 1.241,
+    60: 1.268, 61: 1.296, 62: 1.324, 63: 1.352, 64: 1.38,
+    65: 1.408
+  };
   var VALUES = {
     externalWall: {
       'Solid brick, uninsulated': 2.1,
@@ -47,8 +65,10 @@
     },
     floor: {
       'Heated room below': 0,
-      'Uninsulated ground or exposed floor': 0.7,
-      'Insulated ground floor': 0.25
+      'Uninsulated solid ground floor': 0.7,
+      'Insulated solid ground floor': 0.25,
+      'Uninsulated exposed floor': 0.7,
+      'Insulated exposed floor': 0.25
     },
     loft: {
       'Heated room above': 0,
@@ -70,13 +90,15 @@
     'wall_type',
     'internal_wall_length',
     'internal_wall_type',
+    'internal_adjacent_room',
     'window_area',
     'window_type',
     'door_area',
     'door_type',
     'floor_type',
     'loft_type',
-    'air_change'
+    'air_change',
+    'radiator_type'
   ];
 
   function numberValue(id, fallback) {
@@ -122,7 +144,8 @@
         '</select>';
     } else {
       control = '<input id="' + safeId + '" data-id="' + safeId +
-        '" type="number" step="any" inputmode="decimal">';
+        '" type="number" step="any" inputmode="decimal"' +
+        (id === 'hl_outdoor_temp' ? '' : ' min="0"') + '>';
     }
     return '<div class="field"><label for="' + safeId + '">' +
       escapeHtml(label) + '</label>' + control +
@@ -161,6 +184,18 @@
       { label: '21°C, lounge or living room', value: '21' },
       { label: '22°C, bathroom or shower room', value: '22' }
     ];
+    var adjacentRooms = [{ label: 'Same design temperature', value: '' }].concat(
+      allRoomNames().filter(function (candidate) {
+        return roomKeyFromName(candidate) !== key;
+      }).map(function (candidate) {
+        return { label: candidate, value: roomKeyFromName(candidate) };
+      })
+    );
+    var radiatorTypes = [
+      { label: 'K1', value: 'K1' },
+      { label: 'K2, standard choice', value: 'K2' },
+      { label: 'K3', value: 'K3' }
+    ];
     return '<details class="hl-room-dropdown" data-hl-room="' +
       escapeHtml(key) + '">' +
       '<summary><span>Heat loss details</span><span id="hl_' +
@@ -171,8 +206,9 @@
       fieldHtml('hl_' + key + '_indoor_temp', 'Room design temperature', 'select', temperatures) +
       fieldHtml('hl_' + key + '_external_wall_length', 'Exposed wall length (m)', 'number', null, 'Leave blank to estimate it from the outside wall count above.') +
       fieldHtml('hl_' + key + '_wall_type', 'External wall construction', 'select', optionsFromMap(VALUES.externalWall)) +
-      fieldHtml('hl_' + key + '_internal_wall_length', 'Internal wall length (m)', 'number', null, 'Heated choices record the wall but apply no heat loss. Unheated choices suit a garage, cupboard or similar space.') +
+      fieldHtml('hl_' + key + '_internal_wall_length', 'Internal wall length (m)', 'number', null, 'For a heated adjoining room, select that room below so its design temperature is used.') +
       fieldHtml('hl_' + key + '_internal_wall_type', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
+      fieldHtml('hl_' + key + '_internal_adjacent_room', 'Heated room on other side', 'select', adjacentRooms, 'Only used when a heated internal wall is selected.') +
       fieldHtml('hl_' + key + '_window_area', 'Window area (m²)', 'number') +
       fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       fieldHtml('hl_' + key + '_door_area', 'External door area (m²)', 'number') +
@@ -180,6 +216,7 @@
       fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
       fieldHtml('hl_' + key + '_air_change', 'Draught level', 'select', optionsFromMap(VALUES.airChange)) +
+      fieldHtml('hl_' + key + '_radiator_type', 'Stelrad Elite panel type', 'select', radiatorTypes, 'K2 is used by default. The smallest suitable 600mm-high width is selected.') +
       '</div>' +
       '<div class="hl-room-result" id="hl_' + escapeHtml(key) + '_result">' +
       '<div class="hl-result-main">Enter the room length and width</div>' +
@@ -195,17 +232,32 @@
     ];
     return '<div class="card hl-summary-card" id="heatLossSummaryCard">' +
       '<h3>Heat loss summary</h3>' +
-      '<p>Open Heat loss details inside each room. The calculated room load is copied into kW required automatically.</p>' +
+      '<p>Open Heat loss details inside each room. The room load and a suitable 600mm-high Stelrad Elite are calculated automatically.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
       fieldHtml('hl_bridge_pct', 'Thermal bridge allowance', 'select', bridgeOptions) +
+      fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Optional. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
+      fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Used for solid ground floors instead of the outdoor design temperature.') +
+      fieldHtml('hl_flow_temp', 'Radiator flow temperature (°C)', 'number', null, 'Stelrad output is corrected from the published ΔT50 rating.') +
+      fieldHtml('hl_return_temp', 'Radiator return temperature (°C)', 'number', null, 'Design flow and return default to 75/65°C.') +
       '</div>' +
+      '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
+      '<p class="hl-help">Choose once, then apply to every visible room. Individual rooms can still be changed.</p>' +
+      '<div class="hl-summary-grid">' +
+      fieldHtml('hl_default_wall', 'External wall', 'select', optionsFromMap(VALUES.externalWall)) +
+      fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
+      fieldHtml('hl_default_floor', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
+      fieldHtml('hl_default_loft', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
+      fieldHtml('hl_default_air_change', 'Draught level', 'select', optionsFromMap(VALUES.airChange)) +
+      '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
       '<div class="hl-postcode-lookup">' +
       '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
       '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the outdoor design temperature.</div>' +
       '</div>' +
       '<input type="hidden" id="hl_design_postcode" data-id="hl_design_postcode">' +
       '<input type="hidden" id="hl_design_station" data-id="hl_design_station">' +
+      '<input type="hidden" id="hl_design_base_temp" data-id="hl_design_base_temp">' +
+      '<input type="hidden" id="hl_design_station_altitude" data-id="hl_design_station_altitude">' +
       '<input type="hidden" id="hl_design_manual" data-id="hl_design_manual">' +
       '<input type="hidden" id="hl_temperature_defaults_v62" data-id="hl_temperature_defaults_v62">' +
       '<div class="hl-property-result"><div class="hl-total-number" id="hl_property_total">0.00 kW</div>' +
@@ -313,7 +365,8 @@
         station: {
           location: 'Channel Islands',
           station: 'Maison St Louis Observatory',
-          temperature: 0.1
+          temperature: 0.1,
+          altitude: 0
         },
         distance: 0
       };
@@ -329,15 +382,26 @@
 
   function applyPostcodeDesignTemperature(postcode, match) {
     var station = match.station;
+    var propertyAltitudeText = stringValue('hl_property_altitude');
+    var propertyAltitude = propertyAltitudeText === '' ? null : Number(propertyAltitudeText);
+    var stationAltitude = Number(station.altitude) || 0;
+    var altitudeSteps = propertyAltitude == null || !Number.isFinite(propertyAltitude)
+      ? 0
+      : Math.max(0, Math.floor((propertyAltitude - stationAltitude) / 100));
+    var correctedTemperature = station.temperature - altitudeSteps * 0.6;
     postcodeLookupInProgress = true;
-    setValue('hl_outdoor_temp', station.temperature.toFixed(1));
+    setValue('hl_outdoor_temp', correctedTemperature.toFixed(1));
     setValue('hl_design_postcode', normalisePostcode(postcode));
     setValue('hl_design_station', station.location + ' (' + station.station + ')');
+    setValue('hl_design_base_temp', station.temperature.toFixed(1));
+    setValue('hl_design_station_altitude', stationAltitude);
     setValue('hl_design_manual', 'no');
     postcodeLookupInProgress = false;
     setPostcodeLookupStatus(
       'Using ' + station.location + ' (' + station.station + '), ' +
-      station.temperature.toFixed(1) + '°C. You can edit the temperature manually.',
+      correctedTemperature.toFixed(1) + '°C' +
+      (altitudeSteps ? ' after a ' + (altitudeSteps * 0.6).toFixed(1) +
+        '°C altitude correction.' : '. You can edit the temperature manually.'),
       'success'
     );
     calculateHeatLoss();
@@ -437,6 +501,28 @@
     performPostcodeLookup();
   }
 
+  function recalculateAltitudeCorrection() {
+    if (stringValue('hl_design_manual') === 'yes') return;
+    var baseTemperature = Number(stringValue('hl_design_base_temp'));
+    var stationAltitude = Number(stringValue('hl_design_station_altitude')) || 0;
+    var propertyAltitudeText = stringValue('hl_property_altitude');
+    if (!Number.isFinite(baseTemperature) || propertyAltitudeText === '') return;
+    var propertyAltitude = Number(propertyAltitudeText);
+    if (!Number.isFinite(propertyAltitude)) return;
+    var steps = Math.max(0, Math.floor((propertyAltitude - stationAltitude) / 100));
+    postcodeLookupInProgress = true;
+    setValue('hl_outdoor_temp', (baseTemperature - steps * 0.6).toFixed(1));
+    postcodeLookupInProgress = false;
+    setPostcodeLookupStatus(
+      'Using ' + stringValue('hl_design_station') + ', ' +
+      numberValue('hl_outdoor_temp', 0).toFixed(1) + '°C' +
+      (steps ? ' after a ' + (steps * 0.6).toFixed(1) + '°C altitude correction.' : '.'),
+      'success'
+    );
+    calculateHeatLoss();
+    persistCombinedData();
+  }
+
   function wirePostcodeLookup() {
     var postcodeField = document.getElementById('site_postcode');
     if (postcodeField && postcodeField.dataset.hlPostcodeWired !== 'yes') {
@@ -456,6 +542,12 @@
     if (outdoorTemperature && outdoorTemperature.dataset.hlManualWired !== 'yes') {
       outdoorTemperature.dataset.hlManualWired = 'yes';
       outdoorTemperature.addEventListener('input', markOutdoorTemperatureManual);
+    }
+    var altitude = document.getElementById('hl_property_altitude');
+    if (altitude && altitude.dataset.hlAltitudeWired !== 'yes') {
+      altitude.dataset.hlAltitudeWired = 'yes';
+      altitude.addEventListener('input', recalculateAltitudeCorrection);
+      altitude.addEventListener('change', recalculateAltitudeCorrection);
     }
     refreshPostcodeLookupStatus();
   }
@@ -534,7 +626,13 @@
       }
       if (data['hl_' + key + '_floor_exposed'] === 'Yes' &&
           !data['hl_' + key + '_floor_type']) {
-        setValue('hl_' + key + '_floor_type', 'Insulated ground floor');
+        setValue('hl_' + key + '_floor_type', 'Insulated solid ground floor');
+      }
+      if (data['hl_' + key + '_floor_type'] === 'Uninsulated ground or exposed floor') {
+        setValue('hl_' + key + '_floor_type', 'Uninsulated solid ground floor');
+      }
+      if (data['hl_' + key + '_floor_type'] === 'Insulated ground floor') {
+        setValue('hl_' + key + '_floor_type', 'Insulated solid ground floor');
       }
     });
   }
@@ -543,6 +641,19 @@
     if (!stringValue('r_ceiling')) setValue('r_ceiling', 2.4);
     if (!stringValue('hl_outdoor_temp')) setValue('hl_outdoor_temp', -3);
     if (!stringValue('hl_bridge_pct')) setValue('hl_bridge_pct', 10);
+    if (!stringValue('hl_ground_temp')) setValue('hl_ground_temp', 10);
+    if (!stringValue('hl_flow_temp')) setValue('hl_flow_temp', 75);
+    if (!stringValue('hl_return_temp')) setValue('hl_return_temp', 65);
+    var propertyDefaults = {
+      hl_default_wall: 'Cavity wall, insulated',
+      hl_default_window: 'Double glazing',
+      hl_default_floor: 'Heated room below',
+      hl_default_loft: 'Heated room above',
+      hl_default_air_change: 'Standard room'
+    };
+    Object.entries(propertyDefaults).forEach(function (entry) {
+      if (!stringValue(entry[0])) setValue(entry[0], entry[1]);
+    });
     var migrateTemperatureDefaults = stringValue('hl_temperature_defaults_v62') !== 'yes';
     allRoomNames().forEach(function (roomName) {
       var key = roomKeyFromName(roomName);
@@ -561,7 +672,8 @@
         door_type: 'No external door',
         floor_type: 'Heated room below',
         loft_type: 'Heated room above',
-        air_change: 'Standard room'
+        air_change: 'Standard room',
+        radiator_type: 'K2'
       };
       Object.entries(defaults).forEach(function (entry) {
         var id = 'hl_' + key + '_' + entry[0];
@@ -569,6 +681,33 @@
       });
     });
     setValue('hl_temperature_defaults_v62', 'yes');
+  }
+
+  function applyPropertyConstructionDefaults() {
+    var defaults = {
+      wall_type: stringValue('hl_default_wall'),
+      window_type: stringValue('hl_default_window'),
+      floor_type: stringValue('hl_default_floor'),
+      loft_type: stringValue('hl_default_loft'),
+      air_change: stringValue('hl_default_air_change')
+    };
+    allRoomNames().forEach(function (roomName) {
+      var key = roomKeyFromName(roomName);
+      Object.entries(defaults).forEach(function (entry) {
+        if (entry[1]) setValue('hl_' + key + '_' + entry[0], entry[1]);
+      });
+    });
+    calculateHeatLoss();
+    if (typeof update === 'function') update();
+    persistCombinedData();
+  }
+
+  function wirePropertyDefaults() {
+    var button = document.getElementById('hl_apply_defaults');
+    if (button && button.dataset.hlDefaultsWired !== 'yes') {
+      button.dataset.hlDefaultsWired = 'yes';
+      button.addEventListener('click', applyPropertyConstructionDefaults);
+    }
   }
 
   function estimatedWallLength(length, width, wallCount) {
@@ -590,6 +729,80 @@
     return String(selected || '').indexOf('Unheated space') === 0 ? 0.5 : 0;
   }
 
+  function isHeatedInternalWall(selected) {
+    return String(selected || '').indexOf('Heated room') === 0;
+  }
+
+  function floorTemperatureDifference(floorType, indoor, outdoor, ground) {
+    if (String(floorType || '').includes('solid ground')) {
+      return Math.max(0, indoor - ground);
+    }
+    if (String(floorType || '').includes('exposed floor')) {
+      return Math.max(0, indoor - outdoor);
+    }
+    return 0;
+  }
+
+  function stelradCorrectionFactor(deltaT) {
+    var value = Math.max(20, Math.min(65, Number(deltaT) || 0));
+    var lower = Math.floor(value);
+    var upper = Math.ceil(value);
+    if (lower === upper) return STELRAD_CORRECTION_FACTORS[lower];
+    var lowerFactor = STELRAD_CORRECTION_FACTORS[lower];
+    var upperFactor = STELRAD_CORRECTION_FACTORS[upper];
+    return lowerFactor + (upperFactor - lowerFactor) * (value - lower);
+  }
+
+  function stelradOutput(type, width, correctionFactor) {
+    return STELRAD_ELITE_WATTS_PER_METRE_600[type] * (width / 1000) * correctionFactor;
+  }
+
+  function stelradOption(type, requiredWatts, correctionFactor) {
+    var widths = STELRAD_WIDTHS[type];
+    var width = widths.find(function (candidate) {
+      return stelradOutput(type, candidate, correctionFactor) >= requiredWatts;
+    });
+    if (!width) return { type: type, suitable: false, width: widths[widths.length - 1] };
+    return {
+      type: type,
+      suitable: true,
+      width: width,
+      watts: stelradOutput(type, width, correctionFactor),
+      ratedWatts: stelradOutput(type, width, 1),
+      size: '600(h) x ' + width + '(w) ' + type
+    };
+  }
+
+  function recommendStelradElite(requiredWatts, indoor, preferredType) {
+    var flow = numberValue('hl_flow_temp', 75);
+    var returnTemperature = numberValue('hl_return_temp', 65);
+    var meanWater = (flow + returnTemperature) / 2;
+    var deltaT = meanWater - indoor;
+    var correctionFactor = stelradCorrectionFactor(deltaT);
+    var validTemperature = flow > returnTemperature && deltaT >= 20 && deltaT <= 65;
+    var options = validTemperature ? ['K1', 'K2', 'K3'].map(function (type) {
+      return stelradOption(type, requiredWatts, correctionFactor);
+    }) : [];
+    var selected = options.find(function (option) {
+      return option.type === preferredType && option.suitable;
+    }) || options.find(function (option) { return option.suitable; }) || null;
+    return {
+      flow: flow,
+      returnTemperature: returnTemperature,
+      meanWater: meanWater,
+      deltaT: deltaT,
+      correctionFactor: correctionFactor,
+      options: options,
+      selected: selected,
+      temperatureWarning: !validTemperature
+    };
+  }
+  window.stelradEliteSizingV63 = {
+    wattsPerMetre: STELRAD_ELITE_WATTS_PER_METRE_600,
+    correctionFactor: stelradCorrectionFactor,
+    output: stelradOutput
+  };
+
   function computeHeatLossValues(input) {
     var deltaT = Math.max(0, Number(input.deltaT) || 0);
     var internalDeltaT = Math.max(0, Number(input.internalDeltaT) || 0);
@@ -603,7 +816,10 @@
       Math.max(0, Number(input.windowU) || 0) * deltaT;
     var doorWatts = Math.max(0, Number(input.doorArea) || 0) *
       Math.max(0, Number(input.doorU) || 0) * deltaT;
-    var floorWatts = floorArea * Math.max(0, Number(input.floorU) || 0) * deltaT;
+    var floorDeltaT = input.floorDeltaT == null
+      ? deltaT
+      : Math.max(0, Number(input.floorDeltaT) || 0);
+    var floorWatts = floorArea * Math.max(0, Number(input.floorU) || 0) * floorDeltaT;
     var roofWatts = floorArea * Math.max(0, Number(input.roofU) || 0) * deltaT;
     var ventilationWatts = 0.33 * Math.max(0, Number(input.ach) || 0) *
       volume * deltaT;
@@ -650,7 +866,7 @@
     var netWallArea = Math.max(0, grossWallArea - windowArea - doorArea);
     var internalWallArea = internalWallLength * height;
     var started = length > 0 || width > 0;
-    var complete = length > 0 && width > 0 && height > 0;
+    var dimensionsComplete = length > 0 && width > 0 && height > 0;
     var wallType = stringValue('hl_' + key + '_wall_type');
     var internalWallType = stringValue('hl_' + key + '_internal_wall_type');
     var windowType = stringValue('hl_' + key + '_window_type');
@@ -666,9 +882,37 @@
     var floorU = mappedValue('floor', floorType);
     var roofU = mappedValue('loft', loftType);
     var ach = mappedValue('airChange', airChangeType);
+    var missing = [];
+    if (wallLength > 0 && !wallType) missing.push('external wall construction');
+    if (internalWallLength > 0 && (!internalWallType || internalWallU === 0)) {
+      missing.push('internal wall construction');
+    }
+    if (windowArea > 0 && (!windowType || windowU === 0)) missing.push('window construction');
+    if (doorArea > 0 && (!doorType || doorU === 0)) missing.push('external door construction');
+    if (!floorType) missing.push('floor construction');
+    if (!loftType) missing.push('ceiling or loft construction');
+    if (!airChangeType) missing.push('draught level');
+    var complete = dimensionsComplete && missing.length === 0;
+    var adjacentKey = stringValue('hl_' + key + '_internal_adjacent_room');
+    var adjacentName = allRoomNames().find(function (candidate) {
+      return roomKeyFromName(candidate) === adjacentKey;
+    }) || '';
+    var adjacentIndoor = adjacentName
+      ? numberValue('hl_' + adjacentKey + '_indoor_temp', targetTemperature(adjacentName))
+      : indoor;
+    var internalDeltaT = isHeatedInternalWall(internalWallType)
+      ? Math.max(0, indoor - adjacentIndoor)
+      : deltaT * internalWallFactor;
+    var floorDeltaT = floorTemperatureDifference(
+      floorType,
+      indoor,
+      outdoor,
+      numberValue('hl_ground_temp', 10)
+    );
     var heat = complete ? computeHeatLossValues({
       deltaT: deltaT,
-      internalDeltaT: deltaT * internalWallFactor,
+      internalDeltaT: internalDeltaT,
+      floorDeltaT: floorDeltaT,
       floorArea: floorArea,
       volume: volume,
       netWallArea: netWallArea,
@@ -685,7 +929,12 @@
       bridgePercent: numberValue('hl_bridge_pct', 10)
     }) : computeHeatLossValues({});
     var warnings = [];
-    if (started && !complete) warnings.push('Room length, width and ceiling height are required');
+    if (started && !dimensionsComplete) {
+      warnings.push('Room length, width and ceiling height are required');
+    }
+    if (started && missing.length) {
+      warnings.push('Select ' + missing.join(', '));
+    }
     if (complete && windowArea + doorArea > grossWallArea && grossWallArea > 0) {
       warnings.push('Window and door areas exceed the exposed wall area');
     }
@@ -694,6 +943,21 @@
         floorU === 0 && roofU === 0) {
       warnings.push('No exposed wall, floor or loft has been recorded');
     }
+    var preferredRadiatorType = stringValue('hl_' + key + '_radiator_type') || 'K2';
+    var radiator = complete
+      ? recommendStelradElite(heat.totalWatts, indoor, preferredRadiatorType)
+      : null;
+    if (radiator && radiator.temperatureWarning) {
+      warnings.push(radiator.flow <= radiator.returnTemperature
+        ? 'Radiator flow temperature must be higher than return temperature'
+        : 'Radiator ΔT is outside Stelrad’s published 20°C to 65°C correction table');
+    }
+    if (radiator && !radiator.temperatureWarning && !radiator.selected) {
+      warnings.push('One 600mm-high Elite is not large enough; use multiple radiators or review the design');
+    }
+    var heatedInternalWatts = isHeatedInternalWall(internalWallType)
+      ? heat.internalWallWatts
+      : 0;
     return {
       roomName: roomName,
       key: key,
@@ -713,6 +977,9 @@
       wallType: wallType,
       internalWallType: internalWallType,
       internalWallFactor: internalWallFactor,
+      internalDeltaT: internalDeltaT,
+      adjacentRoomName: adjacentName,
+      adjacentIndoor: adjacentIndoor,
       windowType: windowType,
       doorType: doorType,
       floorType: floorType,
@@ -725,12 +992,27 @@
       floorU: floorU,
       roofU: roofU,
       ach: ach,
+      floorDeltaT: floorDeltaT,
+      internalWallWatts: heat.internalWallWatts,
       fabricWatts: heat.fabricWatts,
       ventilationWatts: heat.ventilationWatts,
       totalWatts: heat.totalWatts,
+      propertyWatts: Math.max(0, heat.totalWatts - heatedInternalWatts),
       wattsPerSquareMetre: floorArea > 0 ? heat.totalWatts / floorArea : 0,
+      preferredRadiatorType: preferredRadiatorType,
+      radiator: radiator,
       warnings: warnings
     };
+  }
+
+  function clearCalculatedRadiatorFields(key) {
+    ['kw', 'new_size', 'output'].forEach(function (suffix) {
+      var field = document.getElementById('rad_' + key + '_' + suffix);
+      if (!field) return;
+      field.value = '';
+      field.readOnly = true;
+      field.removeAttribute('title');
+    });
   }
 
   function renderRoomResult(result) {
@@ -738,6 +1020,7 @@
     var summary = document.getElementById('hl_' + result.key + '_summary');
     var radKw = document.getElementById('rad_' + result.key + '_kw');
     if (!result.started) {
+      clearCalculatedRadiatorFields(result.key);
       if (resultBox) {
         resultBox.innerHTML = '<div class="hl-result-main">Enter the room length and width</div>';
       }
@@ -745,6 +1028,7 @@
       return;
     }
     if (!result.complete) {
+      clearCalculatedRadiatorFields(result.key);
       if (resultBox) {
         resultBox.innerHTML = '<div class="hl-result-main">Incomplete room</div>' +
           '<div class="hl-warning">' + escapeHtml(result.warnings.join('. ')) + '</div>';
@@ -758,6 +1042,44 @@
       radKw.readOnly = true;
       radKw.title = 'Calculated from Heat loss details in this room.';
     }
+    var newSize = document.getElementById('rad_' + result.key + '_new_size');
+    var radOutput = document.getElementById('rad_' + result.key + '_output');
+    if (result.radiator && result.radiator.selected) {
+      if (newSize) {
+        newSize.value = result.radiator.selected.size;
+        newSize.readOnly = true;
+        newSize.title = 'Smallest suitable 600mm-high Stelrad Elite ' +
+          result.radiator.selected.type + ' at the selected flow and return temperatures.';
+      }
+      if (radOutput) {
+        radOutput.value = (result.radiator.selected.watts / 1000).toFixed(2);
+        radOutput.readOnly = true;
+        radOutput.title = 'Temperature-corrected Stelrad output.';
+      }
+    } else {
+      if (newSize) {
+        newSize.value = result.radiator && result.radiator.temperatureWarning
+          ? 'Review: design temperatures'
+          : 'Review: more than one unit';
+      }
+      if (radOutput) radOutput.value = '';
+    }
+    var radiatorHtml = '';
+    if (result.radiator) {
+      radiatorHtml = '<div class="hl-radiator-result"><b>Stelrad Elite at ' +
+        result.radiator.flow.toFixed(0) + '/' +
+        result.radiator.returnTemperature.toFixed(0) + '°C:</b> ' +
+        (result.radiator.temperatureWarning
+          ? 'Enter valid temperatures with a ΔT from 20°C to 65°C.'
+          : result.radiator.options.map(function (option) {
+          if (!option.suitable) return option.type + ' needs more than ' + option.width + 'mm';
+          return option.size + ' gives ' + (option.watts / 1000).toFixed(2) + ' kW';
+        }).join(' &nbsp; | &nbsp; ')) +
+        (result.radiator.temperatureWarning ? '' :
+          '<small>Published ΔT50 output × ' + result.radiator.correctionFactor.toFixed(3) +
+          ' correction factor at ΔT' + result.radiator.deltaT.toFixed(1) + '.</small>') +
+        '</div>';
+    }
     if (summary) summary.textContent = Math.round(result.totalWatts) + ' W';
     if (resultBox) {
       resultBox.innerHTML =
@@ -767,7 +1089,7 @@
         '</div><div class="hl-result-breakdown">Fabric: ' +
         Math.round(result.fabricWatts) + ' W &nbsp; Ventilation: ' +
         Math.round(result.ventilationWatts) + ' W &nbsp; Load density: ' +
-        result.wattsPerSquareMetre.toFixed(1) + ' W/m²</div>' +
+        result.wattsPerSquareMetre.toFixed(1) + ' W/m²</div>' + radiatorHtml +
         (result.warnings.length
           ? '<div class="hl-warning">' + escapeHtml(result.warnings.join('. ')) + '</div>'
           : '');
@@ -781,7 +1103,7 @@
     });
     results.forEach(renderRoomResult);
     var totalWatts = included.reduce(function (sum, room) {
-      return sum + room.totalWatts;
+      return sum + room.propertyWatts;
     }, 0);
     var totalArea = included.reduce(function (sum, room) {
       return sum + room.floorArea;
@@ -805,13 +1127,17 @@
         : 'Enter at least one room to begin.';
     }
     var outputField = document.getElementById('r_output_temp');
-    if (outputField && totalWatts > 0) {
-      outputField.value = (totalWatts / 1000).toFixed(2);
+    if (outputField) {
+      outputField.value = totalWatts > 0 ? (totalWatts / 1000).toFixed(2) : '';
       outputField.readOnly = true;
       outputField.title = 'Calculated from the completed rooms on the Rads page.';
     }
     return window.heatLossResultsV60;
   }
+  window.hasCompletedHeatLossV63 = function () {
+    var calculation = window.heatLossResultsV60;
+    return Boolean(calculation && calculation.includedRooms.length && calculation.totalWatts > 0);
+  };
 
   function inputChanged(event) {
     if (!event.target || !event.target.dataset ||
@@ -868,12 +1194,14 @@
       escapeHtml(stringValue('hl_outdoor_temp')) + ' °C</td>' +
       '<td class="label">Thermal bridges</td><td class="input">' +
       escapeHtml(stringValue('hl_bridge_pct')) + '%</td>' +
-      '<td colspan="4" class="small">U-values are shown in W/m²K. Lower values indicate better insulation.</td></tr>' +
+      '<td class="label">Radiator design</td><td colspan="3" class="input">Stelrad Elite 600mm at ' +
+      escapeHtml(stringValue('hl_flow_temp')) + '/' + escapeHtml(stringValue('hl_return_temp')) + ' °C</td></tr>' +
       '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
       (rows.length ? rows.map(function (room) {
         return '<tr><td><b>' + escapeHtml(room.roomName) + '</b></td>' +
           '<td>' + uValueAssumption(room.wallType, room.wallU, room.wallLength > 0) + '</td>' +
-          '<td>' + uValueAssumption(room.internalWallType, room.internalWallU, room.internalWallLength > 0 && room.internalWallU > 0) + '</td>' +
+          '<td>' + uValueAssumption(room.internalWallType, room.internalWallU, room.internalWallLength > 0 && room.internalWallU > 0) +
+          (room.adjacentRoomName ? '<br>Adjacent: ' + escapeHtml(room.adjacentRoomName) + ' (' + room.adjacentIndoor.toFixed(0) + '°C)' : '') + '</td>' +
           '<td>' + uValueAssumption(room.windowType, room.windowU, room.windowArea > 0 && room.windowU > 0) + '</td>' +
           '<td>' + uValueAssumption(room.doorType, room.doorU, room.doorArea > 0 && room.doorU > 0) + '</td>' +
           '<td>' + uValueAssumption(room.floorType, room.floorU, room.floorU > 0) + '</td>' +
@@ -881,7 +1209,8 @@
           '<td>' + escapeHtml(room.airChangeType || 'Unknown') + '<br><b>' +
           room.ach.toFixed(2) + ' ACH</b></td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
-      '<tr><td colspan="8" class="small">Walls adjoining a heated room retain their construction U-value in the survey but use a 0°C temperature difference, so no heat loss is applied. Walls adjoining an unheated space use half the indoor-to-outdoor temperature difference.</td></tr>' +
+      '<tr><td colspan="8" class="small">A heated internal wall uses the temperature difference between the two selected rooms for room radiator sizing. This transfer is excluded from the property total. An unheated space uses half the indoor-to-outdoor difference.</td></tr>' +
+      '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used at 600mm height: K1 1.000 kW/m, K2 1.778 kW/m, K3 2.514 kW/m. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +
       '</table></div>';
   }
@@ -910,13 +1239,17 @@
           '</td><td>' + Math.round(room.fabricWatts) + ' W</td><td>' +
           Math.round(room.ventilationWatts) + ' W</td><td>' +
           room.wattsPerSquareMetre.toFixed(1) + '</td><td class="input"><b>' +
-          Math.round(room.totalWatts) + ' W</b></td></tr>';
+          Math.round(room.totalWatts) + ' W</b>' +
+          (room.radiator && room.radiator.selected
+            ? '<br><small>' + escapeHtml(room.radiator.selected.size) + ', ' +
+              (room.radiator.selected.watts / 1000).toFixed(2) + ' kW</small>'
+            : '') + '</td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No rooms entered</td></tr>') +
       '<tr><td colspan="6" class="label right">Property design heat loss</td>' +
       '<td class="input">' + calculation.wattsPerSquareMetre.toFixed(1) +
       ' W/m²</td><td class="input"><b>' +
       (calculation.totalWatts / 1000).toFixed(2) + ' kW</b></td></tr>' +
-      '<tr><td colspan="8" class="small">Calculation uses automatic standard construction values, fabric area and temperature difference, plus room volume and air changes. Confirm the survey assumptions before selecting equipment. This is not a certified MCS or BS EN 12831 design report.</td></tr>' +
+      '<tr><td colspan="8" class="small">Room totals include any transfer to a cooler heated adjoining room for radiator sizing. The property total excludes that internal transfer. Confirm the survey assumptions before selecting equipment. This is not a certified MCS or BS EN 12831 design report.</td></tr>' +
       '</table></div>';
     return resultsSheet + renderHeatLossAssumptionsSheet(calculation);
   }
@@ -938,6 +1271,7 @@
     applyDefaults();
     wireHeatLossFields();
     wirePostcodeLookup();
+    wirePropertyDefaults();
     calculateHeatLoss();
     return result;
   };
@@ -953,22 +1287,16 @@
     return result;
   };
 
-  var previousCalculateRecommendedOutput = calculateRecommendedOutput;
   calculateRecommendedOutput = function () {
     var calculation = window.heatLossResultsV60 || calculateHeatLoss();
-    if (calculation.totalWatts > 0) {
-      return Number((calculation.totalWatts / 1000).toFixed(2));
-    }
-    return previousCalculateRecommendedOutput.apply(this, arguments);
+    return calculation.totalWatts > 0
+      ? Number((calculation.totalWatts / 1000).toFixed(2))
+      : '';
   };
 
-  var previousCalcTotalKw = calcTotalKw;
   calcTotalKw = function () {
     var calculation = window.heatLossResultsV60 || calculateHeatLoss();
-    if (calculation.totalWatts > 0) {
-      return (calculation.totalWatts / 1000).toFixed(2);
-    }
-    return previousCalcTotalKw.apply(this, arguments);
+    return (calculation.totalWatts / 1000).toFixed(2);
   };
 
   var previousRenderProfile = renderProfile;

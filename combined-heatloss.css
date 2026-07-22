@@ -47,6 +47,30 @@
   padding: 8px 12px;
 }
 
+.hl-property-defaults {
+  margin-top: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.hl-property-defaults > summary {
+  min-height: 32px;
+  cursor: pointer;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+
+.hl-property-defaults .hl-summary-grid {
+  margin: 10px 0;
+}
+
+#hl_apply_defaults {
+  min-height: 44px;
+  padding: 9px 14px;
+}
+
 #hl_postcode_lookup_status {
   color: #475569;
   font-size: 12px;
@@ -123,6 +147,26 @@
   line-height: 1.5;
 }
 
+.hl-radiator-result {
+  margin-top: 9px;
+  border-top: 1px solid #bfdbfe;
+  padding-top: 9px;
+  color: #1e3a8a;
+  line-height: 1.5;
+}
+
+.hl-radiator-result small {
+  display: block;
+  margin-top: 3px;
+  color: #475569;
+}
+
+#radsForm .card > details > summary .sec-badge,
+#radsForm .hl-room-dropdown > summary .sec-badge,
+#radsForm details > summary .section-count-v58 {
+  display: none;
+}
+
 .hl-warning {
   margin-top: 6px;
   color: #92400e;
@@ -172,6 +216,20 @@ body.theme-dark .hl-postcode-lookup {
   border-color: #1d4ed8 !important;
 }
 
+body.theme-dark .hl-property-defaults {
+  background: #0f172a !important;
+  border-color: #1d4ed8 !important;
+}
+
+body.theme-dark .hl-property-defaults > summary,
+body.theme-dark .hl-radiator-result {
+  color: #bfdbfe !important;
+}
+
+body.theme-dark .hl-radiator-result small {
+  color: #cbd5e1 !important;
+}
+
 body.theme-dark #hl_postcode_lookup_status {
   color: #cbd5e1 !important;
 }
@@ -203,6 +261,14 @@ body.theme-dark .hl-result-breakdown {
   .hl-postcode-lookup {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  #radsForm input,
+  #radsForm select,
+  #radsForm button,
+  .room-actions-v50 button,
+  .extra-room-add button {
+    min-height: 44px;
   }
 }
 

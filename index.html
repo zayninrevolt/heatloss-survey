@@ -2159,9 +2159,9 @@
       ["wid", "Width (m)", "number"],
       [
         "outside",
-        "Outside / unheated walls",
+        "External wall count",
         "select",
-        ["", "0", "1", "2", "3"],
+        ["", "0", "1", "2", "3", "4"],
       ],
       ["ex_size", "Existing Size", "text"],
       ["ex_loc", "Existing Location", "text"],
@@ -2464,7 +2464,7 @@
   </th>
   <th>Length<br>(M)</th>
   <th>Width<br>(M)</th>
-  <th>Outside/<br>unheated walls</th>
+  <th>External<br>wall count</th>
   <th>Existing Size</th>
   <th>Location</th>
   <th>TRV</th>
@@ -2858,6 +2858,9 @@
       function clearForm() {
         if (confirm("Clear all entered data?")) {
           document.querySelectorAll("[data-id]").forEach((e) => (e.value = ""));
+          if (typeof window.resetRoomStructureV63 === "function") {
+            window.resetRoomStructureV63();
+          }
           setDefaults();
           update();
         }
@@ -2887,6 +2890,11 @@
             (field) => field.dataset.id,
           ),
         );
+        const backupCustomRoomKeys = new Set(
+          (Array.isArray(parsed._customRooms) ? parsed._customRooms : [])
+            .filter((value) => typeof value === "string")
+            .map((value) => roomKeyFromName(value)),
+        );
         const clean = {};
 
         Object.entries(parsed).forEach(([key, rawValue]) => {
@@ -2912,7 +2920,31 @@
             return;
           }
 
-          if (!allowedFields.has(key)) return;
+          if (key === "_hiddenRoomDataV63") {
+            if (!rawValue || Array.isArray(rawValue) || typeof rawValue !== "object") return;
+            const rooms = {};
+            Object.entries(rawValue).slice(0, 100).forEach(([roomKey, fields]) => {
+              if (!/^[a-z0-9_]{1,80}$/.test(roomKey) || !fields ||
+                  Array.isArray(fields) || typeof fields !== "object") return;
+              rooms[roomKey] = {};
+              Object.entries(fields).slice(0, 60).forEach(([fieldId, fieldValue]) => {
+                if ((fieldId.startsWith(`rad_${roomKey}_`) ||
+                     fieldId.startsWith(`hl_${roomKey}_`)) &&
+                    ["string", "number", "boolean"].includes(typeof fieldValue)) {
+                  rooms[roomKey][fieldId] = String(fieldValue).slice(0, 500);
+                }
+              });
+            });
+            clean[key] = rooms;
+            return;
+          }
+
+          const isCustomRoomField = Array.from(backupCustomRoomKeys).some(
+            (roomKey) =>
+              key.startsWith(`rad_${roomKey}_`) ||
+              key.startsWith(`hl_${roomKey}_`),
+          );
+          if (!allowedFields.has(key) && !isCustomRoomField) return;
           if (!["string", "number", "boolean"].includes(typeof rawValue)) {
             return;
           }
@@ -3901,9 +3933,9 @@
           ["wid", "Width (m)", "number"],
           [
             "outside",
-            "Outside / unheated walls",
+            "External wall count",
             "select",
-            ["", "0", "1", "2", "3"],
+            ["", "0", "1", "2", "3", "4"],
           ],
           ["ex_size", "Existing Size", "text"],
           ["ex_loc", "Existing Location", "text"],
@@ -3959,7 +3991,8 @@
       <h3>Extra rooms</h3>
       <p class="muted">Use this if the property has rooms not shown in the standard list, for example Utility, Conservatory, Office, En-suite, or Store.</p>
       <div class="extra-room-add">
-        <input id="newCustomRoomName" type="text" placeholder="Room name, e.g. Utility">
+        <label class="sr-only" for="newCustomRoomName">Extra room name</label>
+        <input id="newCustomRoomName" type="text" aria-label="Extra room name" placeholder="Room name, e.g. Utility">
         <button type="button" onclick="addCustomRoom()">Add room</button>
       </div>
       <div class="extra-room-list">${list}</div>
@@ -4055,11 +4088,11 @@
 
       const oldSetDataWithRooms = setData;
       setData = function (data) {
-        if (data && Array.isArray(data._customRooms)) {
-          customRooms = data._customRooms;
-          saveCustomRooms();
-          rebuildRadsForm();
-        }
+        customRooms = data && Array.isArray(data._customRooms)
+          ? data._customRooms
+          : [];
+        saveCustomRooms();
+        rebuildRadsForm();
 
         oldSetDataWithRooms(data);
       };
@@ -4505,7 +4538,7 @@
           <th></th>
           <th>Length<br>(M)</th>
           <th>Width<br>(M)</th>
-          <th>Outside/<br>unheated walls</th>
+          <th>External<br>wall count</th>
           <th>Existing Size</th>
           <th>Location</th>
           <th>TRV</th>
@@ -5931,6 +5964,7 @@
       (function () {
         let hiddenRoomKeysV50 = [];
         let roomOrderKeysV50 = [];
+        let hiddenRoomDataV63 = {};
 
         try {
           hiddenRoomKeysV50 = JSON.parse(
@@ -5948,6 +5982,14 @@
           roomOrderKeysV50 = [];
         }
 
+        try {
+          hiddenRoomDataV63 = JSON.parse(
+            localStorage.getItem("surveyHiddenRoomDataV63") || "{}",
+          );
+        } catch (error) {
+          hiddenRoomDataV63 = {};
+        }
+
         function saveRoomControlsV50() {
           localStorage.setItem(
             "surveyHiddenRoomsV50",
@@ -5956,6 +5998,10 @@
           localStorage.setItem(
             "surveyRoomOrderV50",
             JSON.stringify(roomOrderKeysV50),
+          );
+          localStorage.setItem(
+            "surveyHiddenRoomDataV63",
+            JSON.stringify(hiddenRoomDataV63),
           );
         }
 
@@ -6097,6 +6143,16 @@
         window.hideRoomV50 = function (roomKey) {
           const savedValues = typeof getData === "function" ? getData() : {};
 
+          hiddenRoomDataV63[roomKey] = {};
+          Object.entries(savedValues).forEach(function ([id, value]) {
+            if (
+              id.startsWith(`rad_${roomKey}_`) ||
+              id.startsWith(`hl_${roomKey}_`)
+            ) {
+              hiddenRoomDataV63[roomKey][id] = value;
+            }
+          });
+
           if (!hiddenRoomKeysV50.includes(roomKey)) {
             hiddenRoomKeysV50.push(roomKey);
           }
@@ -6107,9 +6163,11 @@
 
         window.unhideRoomV50 = function (roomKey) {
           const savedValues = typeof getData === "function" ? getData() : {};
+          Object.assign(savedValues, hiddenRoomDataV63[roomKey] || {});
           hiddenRoomKeysV50 = hiddenRoomKeysV50.filter(function (key) {
             return key !== roomKey;
           });
+          delete hiddenRoomDataV63[roomKey];
           saveRoomControlsV50();
           rebuildRadsKeepingValuesV50(savedValues);
         };
@@ -6198,22 +6256,39 @@
           const data = previousGetDataV50();
           data._hiddenRoomsV50 = hiddenRoomKeysV50;
           data._roomOrderV50 = roomOrderKeysV50;
+          data._hiddenRoomDataV63 = hiddenRoomDataV63;
           return data;
         };
 
         const previousSetDataV50 = setData;
         setData = function (data) {
-          if (data && Array.isArray(data._hiddenRoomsV50)) {
-            hiddenRoomKeysV50 = data._hiddenRoomsV50;
-          }
+          hiddenRoomKeysV50 = data && Array.isArray(data._hiddenRoomsV50)
+            ? data._hiddenRoomsV50
+            : [];
 
-          if (data && Array.isArray(data._roomOrderV50)) {
-            roomOrderKeysV50 = data._roomOrderV50;
-          }
+          roomOrderKeysV50 = data && Array.isArray(data._roomOrderV50)
+            ? data._roomOrderV50
+            : [];
+
+          hiddenRoomDataV63 = data && data._hiddenRoomDataV63 &&
+            typeof data._hiddenRoomDataV63 === "object" &&
+            !Array.isArray(data._hiddenRoomDataV63)
+            ? data._hiddenRoomDataV63
+            : {};
 
           previousSetDataV50(data);
           saveRoomControlsV50();
           rebuildRadsKeepingValuesV50(data || {});
+        };
+
+        window.resetRoomStructureV63 = function () {
+          customRooms = [];
+          hiddenRoomKeysV50 = [];
+          roomOrderKeysV50 = [];
+          hiddenRoomDataV63 = {};
+          saveCustomRooms();
+          saveRoomControlsV50();
+          rebuildRadsForm({});
         };
 
         normaliseRoomOrderV50();
@@ -6289,7 +6364,7 @@
           if (/\d+\s*[x×]\s*\d+/.test(text)) return true;
 
           // Fallback: count common radiator wording/type references.
-          if (/\bk[12]\b|\bp\+\b|radiator|\brad\b|type\s*\d/i.test(text))
+          if (/\bk[123]\b|\bp\+\b|radiator|\brad\b|type\s*\d/i.test(text))
             return true;
 
           // If something other than "okay" has been typed, treat it as intentional.
@@ -6365,7 +6440,9 @@
               label: "Survey date entered",
               done: hasValue("site_date") || hasValue("front_date"),
             },
-            { label: "Rads output calculated", done: radsOutput > 0 },
+            { label: "Heat loss calculated", done:
+              typeof window.hasCompletedHeatLossV63 === "function" &&
+              window.hasCompletedHeatLossV63() },
             {
               label: "Installation type selected",
               done: hasValue("mat_install_type"),
@@ -6575,7 +6652,9 @@
               label: "Warning code entered",
               done: hasValueV52("front_warning_codes"),
             },
-            { label: "Rads output calculated", done: radsOutput > 0 },
+            { label: "Heat loss calculated", done:
+              typeof window.hasCompletedHeatLossV63 === "function" &&
+              window.hasCompletedHeatLossV63() },
             {
               label: "Installation type selected",
               done: hasValueV52("mat_install_type"),
@@ -6677,7 +6756,9 @@
               label: "Warning code entered",
               done: hasValueV53("front_warning_codes"),
             },
-            { label: "Rads output calculated", done: radsOutput > 0 },
+            { label: "Heat loss calculated", done:
+              typeof window.hasCompletedHeatLossV63 === "function" &&
+              window.hasCompletedHeatLossV63() },
             {
               label: "Installation type selected",
               done: hasValueV53("mat_install_type"),
@@ -6996,7 +7077,8 @@
             hasVal("site_surveyor") || hasVal("front_surveyor"),
             hasVal("site_date") || hasVal("front_date"),
             hasVal("front_warning_codes"),
-            Number((document.getElementById("r_output_temp") || {}).value) > 0,
+            typeof window.hasCompletedHeatLossV63 === "function" &&
+              window.hasCompletedHeatLossV63(),
             hasVal("mat_install_type"),
             Number((document.getElementById("mat_total_rads") || {}).value) > 0,
             a12aComplete(),
@@ -7273,7 +7355,8 @@
             hv("site_surveyor") || hv("front_surveyor"),
             hv("site_date")     || hv("front_date"),
             hv("front_warning_codes"),
-            Number(val("r_output_temp")) > 0,
+            typeof window.hasCompletedHeatLossV63 === "function" &&
+              window.hasCompletedHeatLossV63(),
             hv("mat_install_type"),
             Number(val("mat_total_rads")) > 0,
             Array.isArray(risks) && risks.every(r => hv("a_"+r[0]+"_app") && hv("a_"+r[0]+"_haz")),
@@ -7354,6 +7437,9 @@
           }
           window._activeSurveyIdV57 = null;
           document.querySelectorAll("[data-id]").forEach(e => (e.value = ""));
+          if (typeof window.resetRoomStructureV63 === "function") {
+            window.resetRoomStructureV63();
+          }
           ["tenantSigPadV35","tenantSigPadV34","tenantSigPad",
            "surveyorSigPadV35","surveyorSigPadV34","surveyorSigPad"].forEach(cid => {
             const c = document.getElementById(cid);
@@ -8210,7 +8296,7 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css">
-    <script src="combined-heatloss.js"></script>
+    <link rel="stylesheet" href="combined-heatloss.css?v=63">
+    <script src="combined-heatloss.js?v=63"></script>
   </body>
 </html>
