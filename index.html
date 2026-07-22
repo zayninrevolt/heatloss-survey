@@ -1885,7 +1885,7 @@
         ["additional_info", "Any additional information", "No", "", ""],
       ];
       const frontFields = [
-        ["front_sys", "Range rate output / 50% value", "text"],
+        ["front_sys", "Range rate output (12 kW minimum)", "text"],
         [
           "front_boiler_temp",
           "Radiator temperature °C (75=ΔT50, 65=ΔT40, 55=ΔT30)",
@@ -2261,7 +2261,7 @@
   <table class="sheet front">
   <colgroup>${"<col>".repeat(16)}</colgroup>
   <tr>
-  <td colspan="13" class="red center">System designed to meet Building Regulation: Part L. Range rate boiler output to or 50% which ever is higher:</td>
+  <td colspan="13" class="red center">System designed to meet Building Regulation: Part L. Range rate output is 12 kW or the combined selected radiator output, whichever is higher:</td>
   <td colspan="2" class="input">${cell("front_sys")}</td>
   <td class="red center">KW</td>
   </tr>
@@ -4114,8 +4114,8 @@
    Total KW now adds up the room Output column.
    The calculated boiler/system output is:
      - minimum 12 KW
-     - otherwise room output total + 10%
-     - rounded to 0 decimal places
+     - otherwise the combined selected radiator output
+     - rounded to 2 decimal places
    ============================================================ */
 
       function calculateTotalRoomOutput() {
@@ -4130,7 +4130,7 @@
 
       function calculateRecommendedOutput() {
         const totalRoomOutput = calculateTotalRoomOutput();
-        return Math.max(12, Math.round(totalRoomOutput * 1.1));
+        return Number(Math.max(12, totalRoomOutput).toFixed(2));
       }
 
       function updateCalculatedOutputField() {
@@ -4140,7 +4140,7 @@
         outputField.value = calculateRecommendedOutput();
         outputField.readOnly = true;
         outputField.title =
-          "Auto calculated: minimum 12 KW, or total room output + 10%, rounded to 0 decimals.";
+          "Auto calculated: minimum 12 kW, or combined selected radiator output when higher.";
       }
 
       // Replace the previous Total KW calculation so it uses the room Output column.
@@ -8301,7 +8301,7 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=65">
-    <script src="combined-heatloss.js?v=65"></script>
+    <link rel="stylesheet" href="combined-heatloss.css?v=66">
+    <script src="combined-heatloss.js?v=66"></script>
   </body>
 </html>

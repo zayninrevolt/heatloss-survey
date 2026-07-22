@@ -253,9 +253,10 @@
       fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
       '</div>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
-      '<p class="hl-help">Applies external wall, window and draught defaults only. Floor and loft must be selected inside each room.</p>' +
+      '<p class="hl-help">Applies external wall, internal wall, window and draught defaults only. Floor and loft must be selected inside each room.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_default_wall', 'External wall', 'select', optionsFromMap(VALUES.externalWall)) +
+      fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       fieldHtml('hl_default_air_change', 'Draught level', 'select', optionsFromMap(VALUES.airChange)) +
       '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
@@ -664,6 +665,7 @@
     setValue('front_boiler_temp', stringValue('hl_radiator_temperature'));
     var propertyDefaults = {
       hl_default_wall: 'Cavity wall, insulated',
+      hl_default_internal_wall: 'No internal wall included',
       hl_default_window: 'Double glazing',
       hl_default_air_change: 'Standard room'
     };
@@ -699,6 +701,7 @@
   function applyPropertyConstructionDefaults() {
     var defaults = {
       wall_type: stringValue('hl_default_wall'),
+      internal_wall_type: stringValue('hl_default_internal_wall'),
       window_type: stringValue('hl_default_window'),
       air_change: stringValue('hl_default_air_change')
     };
@@ -779,10 +782,12 @@
 
   function suitableStelradOptions(requiredWatts, correctionFactor) {
     var options = [];
+    var maximumWatts = requiredWatts * 1.5;
+    if (requiredWatts <= 0) return options;
     STELRAD_ELITE_MODELS.forEach(function (model) {
       model.widths.forEach(function (width) {
         var watts = model.wattsPerMetre * (width / 1000) * correctionFactor;
-        if (watts < requiredWatts) return;
+        if (watts < requiredWatts || watts > maximumWatts + 0.01) return;
         options.push({
           type: model.type,
           height: model.height,
@@ -830,12 +835,18 @@
       temperatureWarning: !validTemperature
     };
   }
+
+  function recommendedSystemOutputKw(radiatorOutputWatts) {
+    var combinedOutputKw = Math.max(0, Number(radiatorOutputWatts) || 0) / 1000;
+    return Number(Math.max(12, combinedOutputKw).toFixed(2));
+  }
   window.stelradEliteSizingV63 = {
     wattsPerMetre: STELRAD_ELITE_WATTS_PER_METRE_600,
     models: STELRAD_ELITE_MODELS,
     correctionFactor: stelradCorrectionFactor,
     output: stelradOutput,
-    suitableOptions: suitableStelradOptions
+    suitableOptions: suitableStelradOptions,
+    recommendedSystemOutputKw: recommendedSystemOutputKw
   };
 
   function computeHeatLossValues(input) {
@@ -988,7 +999,7 @@
         : 'Radiator ΔT is outside Stelrad’s published 20°C to 65°C correction table');
     }
     if (radiator && !radiator.temperatureWarning && !radiator.selected) {
-      warnings.push('No single Elite in the listed range is large enough; use multiple radiators or review the design');
+      warnings.push('No single Elite falls between the required output and the 50% oversize limit; use multiple radiators or review the design');
     }
     var heatedInternalWatts = isHeatedInternalWall(internalWallType)
       ? heat.internalWallWatts
@@ -1174,8 +1185,8 @@
               (result.radiator.selected.watts / 1000).toFixed(2) + ' kW. ' +
               result.radiator.options.length + ' suitable size' +
               (result.radiator.options.length === 1 ? '' : 's') +
-              ' available in the New Size dropdown.'
-            : 'No single radiator in the listed Elite range is large enough.') +
+              ' within the 50% oversize limit are available in the New Size dropdown.'
+            : 'No single Elite falls between the required output and the 50% oversize limit.') +
         (result.radiator.temperatureWarning ? '' :
           '<small>Published ΔT50 output × ' + result.radiator.correctionFactor.toFixed(3) +
           ' correction factor at ΔT' + result.radiator.deltaT.toFixed(1) + '.</small>') +
@@ -1209,11 +1220,19 @@
     var totalArea = included.reduce(function (sum, room) {
       return sum + room.floorArea;
     }, 0);
+    var radiatorOutputWatts = included.reduce(function (sum, room) {
+      return sum + (room.radiator && room.radiator.selected
+        ? room.radiator.selected.watts
+        : 0);
+    }, 0);
+    var systemOutputKw = recommendedSystemOutputKw(radiatorOutputWatts);
     window.heatLossResultsV60 = {
       rooms: results,
       includedRooms: included,
       totalWatts: totalWatts,
       totalArea: totalArea,
+      radiatorOutputWatts: radiatorOutputWatts,
+      systemOutputKw: systemOutputKw,
       wattsPerSquareMetre: totalArea > 0 ? totalWatts / totalArea : 0
     };
     var total = document.getElementById('hl_property_total');
@@ -1229,9 +1248,9 @@
     }
     var outputField = document.getElementById('r_output_temp');
     if (outputField) {
-      outputField.value = totalWatts > 0 ? (totalWatts / 1000).toFixed(2) : '';
+      outputField.value = String(systemOutputKw);
       outputField.readOnly = true;
-      outputField.title = 'Calculated from the completed rooms on the Rads page.';
+      outputField.title = '12 kW minimum, or the combined selected radiator output when higher.';
     }
     return window.heatLossResultsV60;
   }
@@ -1335,6 +1354,7 @@
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
       '<tr><td colspan="8" class="small">A heated internal wall uses the temperature difference between the two selected rooms for room radiator sizing. This transfer is excluded from the property total. An unheated space uses half the indoor-to-outdoor difference.</td></tr>' +
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
+      '<tr><td colspan="8" class="small">Radiator choices meet the calculated room requirement without exceeding it by more than 50%. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +
       '</table></div>';
   }
@@ -1414,9 +1434,7 @@
 
   calculateRecommendedOutput = function () {
     var calculation = window.heatLossResultsV60 || calculateHeatLoss();
-    return calculation.totalWatts > 0
-      ? Number((calculation.totalWatts / 1000).toFixed(2))
-      : '';
+    return calculation.systemOutputKw;
   };
 
   calcTotalKw = function () {

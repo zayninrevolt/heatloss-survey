@@ -21,13 +21,15 @@ The Heat Loss PDF includes a second assumptions page listing the selected wall, 
 
 The property postcode can automatically select the nearest MCS/CIBSE reference weather station and its 99.6% outdoor design temperature. An optional property altitude applies the MCS correction of 0.6°C per complete 100m above the reference station. The result remains editable. Postcode coordinates are retrieved from the public postcodes.io service; no other survey details are sent.
 
-Technical U-value entry is replaced with plain construction choices. These include single brick or stud and plasterboard internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice. Property-wide defaults apply external wall, window and draught choices only. Floor and ceiling or loft construction must be selected inside each room so ground-floor and first-floor rooms can be treated correctly.
+Technical U-value entry is replaced with plain construction choices. These include single brick or stud and plasterboard internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice. Property-wide defaults apply external wall, internal wall, window and draught choices. Floor and ceiling or loft construction must be selected inside each room so ground-floor and first-floor rooms can be treated correctly.
 
 Internal walls can be marked as adjoining a heated room or an unheated space. A heated wall uses the difference between the current room and the selected adjoining room for radiator sizing, while that internal transfer is excluded from the whole-property heat loss. An unheated space uses half the indoor-to-outdoor temperature difference.
 
 ## Stelrad Elite sizing
 
-Every completed room provides a dropdown of suitable Stelrad Elite radiators. Sizes use the format `600(h) x 1200(w) K2`, with the smallest suitable 600mm-high K2 selected by default where available. The dropdown includes alternative widths, heights and K1, K2 or K3 panel types so an installer can match an existing radiator width or work around available wall space. The selected model and its temperature-corrected output are saved with the survey.
+Every completed room provides a dropdown of suitable Stelrad Elite radiators. Sizes use the format `600(h) x 1200(w) K2`, with the smallest suitable 600mm-high K2 selected by default where available. The dropdown includes alternative widths, heights and K1, K2 or K3 panel types so an installer can match an existing radiator width or work around available wall space. Each listed radiator meets the room requirement without exceeding it by more than 50%. The selected model and its temperature-corrected output are saved with the survey.
+
+The front-page range-rate output is a minimum of 12 kW. When the combined temperature-corrected output of the selected room radiators exceeds 12 kW, the higher combined figure is used instead.
 
 The listed Elite heights are:
 
