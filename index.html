@@ -6386,7 +6386,10 @@
             const newSizeField = document.getElementById(`rad_${key}_new_size`);
 
             if (newSizeField && isRadiatorEntry(newSizeField.value)) {
-              count += 1;
+              const quantityMatch = String(newSizeField.value).match(
+                /^(\d+)\s+x\s+\d+\(h\)/i,
+              );
+              count += quantityMatch ? Number(quantityMatch[1]) : 1;
             }
           });
 
@@ -6401,7 +6404,7 @@
           totalRadsField.value = String(count);
           totalRadsField.readOnly = true;
           totalRadsField.title =
-            "Auto-counted from rooms where New Size is not blank/okay.";
+            "Auto-counted from the selected radiator quantity in each room.";
         };
 
         function hasValue(id) {
@@ -8301,7 +8304,7 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=69">
-    <script src="combined-heatloss.js?v=69"></script>
+    <link rel="stylesheet" href="combined-heatloss.css?v=70">
+    <script src="combined-heatloss.js?v=70"></script>
   </body>
 </html>
