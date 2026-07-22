@@ -1680,8 +1680,19 @@
 
   var previousRoomFormHtml = roomFormHtml;
   roomFormHtml = function (roomName, index) {
+    var key = roomKeyFromName(roomName);
     var original = previousRoomFormHtml(roomName, index);
-    return original.replace(/<\/details>\s*$/, roomDropdownHtml(roomName) + '</details>');
+    var newSizePattern = new RegExp(
+      '<div class="field">\\s*<label for="rad_' + key +
+      '_new_size">[\\s\\S]*?<\\/div>'
+    );
+    var newSizeMatch = original.match(newSizePattern);
+    var newSizeField = newSizeMatch ? newSizeMatch[0] : '';
+    if (newSizeField) original = original.replace(newSizePattern, '');
+    return original.replace(
+      /<\/details>\s*$/,
+      roomDropdownHtml(roomName) + newSizeField + '</details>'
+    );
   };
 
   var previousRebuildRadsForm = rebuildRadsForm;
