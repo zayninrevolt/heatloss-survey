@@ -258,6 +258,7 @@
 
   function numberValue(id, fallback) {
     var field = document.getElementById(id);
+    if (!field || field.value === '') return Number(fallback || 0);
     var number = Number(field && field.value);
     return Number.isFinite(number) ? number : Number(fallback || 0);
   }
@@ -309,11 +310,6 @@
     return '<div class="field"><label for="' + safeId + '">' +
       escapeHtml(label) + '</label>' + control +
       (help ? '<small>' + escapeHtml(help) + '</small>' : '') + '</div>';
-  }
-
-  function detailedFieldHtml(id, label, type, options, help) {
-    return '<div class="hl-detailed-only">' +
-      fieldHtml(id, label, type, options, help) + '</div>';
   }
 
   function targetTemperature(roomName) {
@@ -375,37 +371,19 @@
       fieldHtml('hl_' + key + '_indoor_temp', 'Room design temperature', 'select', temperatures) +
       fieldHtml('hl_' + key + '_external_wall_length', 'Exposed wall length (m)', 'number', null, 'Leave blank to estimate it from the outside wall count above.') +
       fieldHtml('hl_' + key + '_wall_type', 'External wall construction', 'select', optionsFromMap(VALUES.externalWall)) +
-      detailedFieldHtml('hl_' + key + '_alternative_wall_length', 'Alternative wall length (m)', 'number', null, 'Optional second external-wall construction. Openings are apportioned between the two wall lengths.') +
-      detailedFieldHtml('hl_' + key + '_alternative_wall_type', 'Alternative wall construction', 'select', optionsFromMap(VALUES.externalWall)) +
       fieldHtml('hl_' + key + '_internal_wall_length', 'Internal wall length (m)', 'number', null, 'For a heated adjoining room, select that room below so its design temperature is used.') +
       fieldHtml('hl_' + key + '_internal_wall_type', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_' + key + '_internal_adjacent_room', 'Heated room on other side', 'select', adjacentRooms, 'Only used when a heated internal wall is selected.') +
-      detailedFieldHtml('hl_' + key + '_internal_adjacent_space', 'Unheated space on other side', 'select', ADJACENT_SPACES, 'Used for an unheated internal wall. Each category applies a different default temperature.') +
-      detailedFieldHtml('hl_' + key + '_internal_adjacent_temp', 'Known adjacent-space temperature (°C)', 'number', null, 'Optional measured or design value. Overrides the adjacent-space category.') +
       fieldHtml('hl_' + key + '_window_area', 'Window area (m²)', 'number') +
-      detailedFieldHtml('hl_' + key + '_window_width', 'Typical window width (m)', 'number') +
-      detailedFieldHtml('hl_' + key + '_window_height', 'Typical window height (m)', 'number') +
-      detailedFieldHtml('hl_' + key + '_window_count', 'Number of windows', 'number', null, 'Width × height × quantity overrides the manual window area when all three are entered.') +
       fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       fieldHtml('hl_' + key + '_door_area', 'External door area (m²)', 'number') +
-      detailedFieldHtml('hl_' + key + '_door_width', 'Typical external door width (m)', 'number') +
-      detailedFieldHtml('hl_' + key + '_door_height', 'Typical external door height (m)', 'number') +
-      detailedFieldHtml('hl_' + key + '_door_count', 'Number of external doors', 'number', null, 'Width × height × quantity overrides the manual door area.') +
       fieldHtml('hl_' + key + '_door_type', 'External door', 'select', optionsFromMap(VALUES.door)) +
       fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
-      detailedFieldHtml('hl_' + key + '_floor_exposed_perimeter', 'Ground-floor exposed perimeter (m)', 'number', null, 'Recorded for the detailed floor audit and future perimeter-based verification.') +
-      detailedFieldHtml('hl_' + key + '_floor_adjacent_temp', 'Known temperature below floor (°C)', 'number', null, 'Optional for a cellar, garage or partially heated premises.') +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
-      detailedFieldHtml('hl_' + key + '_building_part', 'Building part', 'select', ['Main dwelling', 'Extension', 'Loft conversion or room-in-roof']) +
-      detailedFieldHtml('hl_' + key + '_element_age_band', 'Room or extension age band', 'select', PROPERTY_AGE_BANDS, 'Leave as Unknown to use the main property age.') +
       fieldHtml('hl_' + key + '_assumption_quality', 'Construction evidence', 'select', ['Measured and confirmed', 'Visually estimated', 'Age-based assumption', 'General default']) +
       fieldHtml('hl_' + key + '_ventilation_mode', 'Room air-change rate', 'select', AIR_CHANGE_MODES, 'Automatic uses the MCS/CIBSE 0.5 ACH room minimum, or 0 ACH where the room has no external envelope.') +
       fieldHtml('hl_' + key + '_manual_ach', 'Manual ACH override', 'number', null, 'Only used when Manual override is selected.') +
       fieldHtml('hl_' + key + '_ventilation_device', 'Additional vent, fan or flue', 'select', optionsFromMap(VALUES.ventilationDevice), 'Adds the published default airflow for this room. Select the closest item and use the ACH override where required.') +
-      detailedFieldHtml('hl_' + key + '_rad_max_height', 'Maximum radiator height (mm)', 'select', ['Any', '300', '450', '500', '600', '700']) +
-      detailedFieldHtml('hl_' + key + '_rad_max_width', 'Maximum radiator width (mm)', 'number') +
-      detailedFieldHtml('hl_' + key + '_rad_preferred_width', 'Preferred existing width (mm)', 'number', null, 'Suitable choices nearest this width are shown first.') +
-      detailedFieldHtml('hl_' + key + '_rad_panel_type', 'Radiator panel preference', 'select', ['Any', 'K1', 'K2', 'K3']) +
       fieldHtml('hl_' + key + '_rad_quantity', 'Number of radiators', 'select', ['Automatic', '1', '2'], 'Automatic tries one radiator first, then two matching radiators if required.') +
       '</div>' +
       '<div class="hl-room-result" id="hl_' + escapeHtml(key) + '_result">' +
@@ -414,12 +392,6 @@
   }
 
   function propertySummaryHtml() {
-    var bridgeOptions = [
-      { label: 'Standard allowance, 10%', value: '10' },
-      { label: 'Low allowance, 5%', value: '5' },
-      { label: 'No allowance', value: '0' },
-      { label: 'High allowance, 15%', value: '15' }
-    ];
     var radiatorTemperatures = [
       { label: '75°C, nominal ΔT50', value: '75' },
       { label: '65°C, nominal ΔT40', value: '65' },
@@ -427,27 +399,22 @@
     ];
     var bridgeMethods = [
       { label: 'Age-based RdSAP factor', value: 'Age-based' },
-      { label: 'Percentage allowance, legacy surveys', value: 'Percentage' },
+      { label: 'Standard allowance, 10%', value: 'Percentage' },
       { label: 'No thermal-bridge allowance', value: 'None' }
     ];
     return '<div class="card hl-summary-card" id="heatLossSummaryCard">' +
       '<h3>Heat loss summary</h3>' +
       '<p>Open Heat loss details inside each room. The room load is calculated automatically, then suitable Stelrad Elite sizes can be selected in the radiator schedule.</p>' +
       '<div class="hl-summary-grid">' +
-      fieldHtml('hl_survey_mode', 'Survey detail level', 'select', ['Simple', 'Detailed'], 'Detailed mode adds extension ages, measured openings, alternative walls, floor perimeter, airtightness and radiator filters.') +
       fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The surveyor can verify the age separately before finalising the survey.') +
       fieldHtml('hl_property_age_source', 'Property age evidence', 'select', ['Title deeds or building-control record', 'Homeowner or landlord', 'Visual estimate', 'Unknown']) +
       fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
       fieldHtml('hl_bridge_method', 'Thermal bridge method', 'select', bridgeMethods) +
-      detailedFieldHtml('hl_bridge_pct', 'Percentage thermal bridge allowance', 'select', bridgeOptions, 'Only used for the legacy percentage method.') +
       fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Estimated from postcode coordinates using Elevation API EU and Copernicus terrain data. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
       fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Uses the annual mean temperature from the nearest MCS reference station for solid ground floors.') +
       fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
       fieldHtml('hl_ventilation_system', 'Property ventilation system', 'select', VENTILATION_SYSTEMS, 'The 0.5 ACH room minimum is retained. MVHR reduces the mechanical ventilation loss by its heat-recovery efficiency.') +
       fieldHtml('hl_mvhr_efficiency', 'MVHR heat recovery (%)', 'number', null, 'Only used for MVHR. Enter the design efficiency, normally taken from the unit data.') +
-      detailedFieldHtml('hl_air_permeability', 'Measured air permeability at 50 Pa', 'number', null, 'Recorded in m³/h.m². Use the manual design ACH where a verified conversion is available.') +
-      detailedFieldHtml('hl_air_permeability_source', 'Airtightness evidence', 'select', ['Measured pressure test', 'Design value', 'BS 12831 default', 'Unknown']) +
-      detailedFieldHtml('hl_design_ach', 'Whole-property design ACH override', 'number', null, 'Optional verified design infiltration rate. Exposed rooms use the greater of this value and the 0.5 ACH minimum.') +
       '</div>' +
       '<p class="hl-help hl-age-guidance">If the age is unknown, leave it as Unknown and search separately using reliable property records. Do not infer the age from neighbouring homes.</p>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
@@ -974,13 +941,9 @@
     if (!stringValue('hl_outdoor_temp')) setValue('hl_outdoor_temp', -3);
     if (!stringValue('hl_bridge_pct')) setValue('hl_bridge_pct', 10);
     if (!stringValue('hl_ground_temp')) setValue('hl_ground_temp', 10);
-    if (!stringValue('hl_survey_mode')) setValue('hl_survey_mode', 'Simple');
     if (!stringValue('hl_property_age_band')) setValue('hl_property_age_band', 'Unknown');
     if (!stringValue('hl_property_age_source')) setValue('hl_property_age_source', 'Unknown');
     if (!stringValue('hl_bridge_method')) setValue('hl_bridge_method', 'Percentage');
-    if (!stringValue('hl_air_permeability_source')) {
-      setValue('hl_air_permeability_source', 'Unknown');
-    }
     if (!stringValue('hl_ventilation_system')) {
       setValue('hl_ventilation_system', 'Natural ventilation');
     }
@@ -1058,17 +1021,6 @@
       button.dataset.hlDefaultsWired = 'yes';
       button.addEventListener('click', applyPropertyConstructionDefaults);
     }
-    var form = document.getElementById('radsForm');
-    var mode = document.getElementById('hl_survey_mode');
-    function refreshSurveyMode() {
-      if (form) form.classList.toggle('hl-detailed-mode', stringValue('hl_survey_mode') === 'Detailed');
-    }
-    if (mode && mode.dataset.hlModeWired !== 'yes') {
-      mode.dataset.hlModeWired = 'yes';
-      mode.addEventListener('change', refreshSurveyMode);
-    }
-    refreshSurveyMode();
-
     var ageField = document.getElementById('hl_property_age_band');
     if (ageField && ageField.dataset.hlAgeWired !== 'yes') {
       ageField.dataset.hlAgeWired = 'yes';
@@ -1905,8 +1857,7 @@
       ? 'Age-based RdSAP y-value by room age'
       : bridgeMethod === 'None'
         ? 'None'
-        : escapeHtml(stringValue('hl_bridge_pct')) + '% of external fabric loss';
-    var airtightness = stringValue('hl_air_permeability');
+        : numberValue('hl_bridge_pct', 10).toFixed(0) + '% of external fabric loss';
     return '<div class="sheet-wrap" id="heatLossAssumptionsSheetV61">' +
       '<div class="sheet-title"><h2>Heat Loss</h2><small>U-values and ventilation assumptions used</small></div>' +
       '<table class="sheet heatloss-sheet heatloss-assumptions-sheet">' +
@@ -1926,14 +1877,10 @@
       escapeHtml(stringValue('hl_ground_temp')) + ' °C</td>' +
       '<td class="label">Ground reference</td><td colspan="3" class="input">' +
       escapeHtml(stringValue('hl_ground_station') || 'Manual value') + '</td></tr>' +
-      '<tr><td class="label">Property age</td><td colspan="3" class="input">Band ' +
-      escapeHtml(stringValue('hl_property_age_band') || 'Unknown') + ', ' +
-      escapeHtml(stringValue('hl_property_age_source') || 'Unknown') + '</td>' +
-      '<td class="label">Survey detail</td><td class="input">' +
-      escapeHtml(stringValue('hl_survey_mode') || 'Simple') + '</td>' +
-      '<td class="label">Airtightness</td><td class="input">' +
-      (airtightness ? escapeHtml(airtightness) + ' m³/h.m² at 50 Pa, ' : 'Not entered, ') +
-      escapeHtml(stringValue('hl_air_permeability_source') || 'Unknown') + '</td></tr>' +
+      '<tr><td class="label">Property age</td><td class="input">Band ' +
+      escapeHtml(stringValue('hl_property_age_band') || 'Unknown') + '</td>' +
+      '<td class="label">Age evidence</td><td colspan="5" class="input">' +
+      escapeHtml(stringValue('hl_property_age_source') || 'Unknown') + '</td></tr>' +
       '<tr><td class="label">Ventilation system</td><td colspan="5" class="input">' +
       escapeHtml(stringValue('hl_ventilation_system') || 'Natural ventilation') +
       (stringValue('hl_ventilation_system') ===
@@ -1943,9 +1890,8 @@
       '</td><td class="label">Room minimum</td><td class="input">0.5 ACH exposed / 0 ACH fully internal</td></tr>' +
       '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
       (rows.length ? rows.map(function (room) {
-        return '<tr><td><b>' + escapeHtml(room.roomName) + '</b><br>' +
-          escapeHtml(room.buildingPart) + ', age ' + escapeHtml(room.roomAgeBand) +
-          '<br>Evidence: ' + escapeHtml(room.assumptionQuality) + '</td>' +
+        return '<tr><td><b>' + escapeHtml(room.roomName) + '</b><br>Evidence: ' +
+          escapeHtml(room.assumptionQuality) + '</td>' +
           '<td>' + uValueAssumption(room.wallType,
             room.alternativeWallLength > 0 ? room.primaryWallU : room.wallU,
             room.wallLength > 0) +

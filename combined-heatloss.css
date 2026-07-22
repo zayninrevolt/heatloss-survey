@@ -51,14 +51,6 @@
   margin-top: 12px;
 }
 
-.hl-detailed-only {
-  display: none;
-}
-
-#radsForm.hl-detailed-mode .hl-detailed-only {
-  display: block;
-}
-
 .hl-property-defaults {
   margin-top: 12px;
   border: 1px solid #bfdbfe;
