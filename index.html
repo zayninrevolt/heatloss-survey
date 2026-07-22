@@ -2178,7 +2178,7 @@
       ["kw", "kW required", "number"],
       ["tc", "T/C", "text"],
       ["laminate", "Laminate / vinyl / tiles", "select", yesNo],
-      ["output", "Output", "number"],
+      ["output", "Output (kW)", "number"],
     ]
       .map((x) =>
         makeField([`rad_${key}_${x[0]}`, `${room} - ${x[1]}`, x[2], x[3]]),
@@ -3952,7 +3952,7 @@
           ["kw", "kW required", "number"],
           ["tc", "T/C", "text"],
           ["laminate", "Laminate / vinyl / tiles", "select", yesNo],
-          ["output", "Output", "number"],
+          ["output", "Output (kW)", "number"],
         ];
       }
 
@@ -8304,7 +8304,7 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=73">
-    <script src="combined-heatloss.js?v=73"></script>
+    <link rel="stylesheet" href="combined-heatloss.css?v=74">
+    <script src="combined-heatloss.js?v=74"></script>
   </body>
 </html>

@@ -1991,9 +1991,16 @@
     var newSizeMatch = original.match(newSizePattern);
     var newSizeField = newSizeMatch ? newSizeMatch[0] : '';
     if (newSizeField) original = original.replace(newSizePattern, '');
+    var outputPattern = new RegExp(
+      '<div class="field">\\s*<label for="rad_' + key +
+      '_output">[\\s\\S]*?<\\/div>'
+    );
+    var outputMatch = original.match(outputPattern);
+    var outputField = outputMatch ? outputMatch[0] : '';
+    if (outputField) original = original.replace(outputPattern, '');
     return original.replace(
       /<\/details>\s*$/,
-      roomDropdownHtml(roomName) + newSizeField + '</details>'
+      roomDropdownHtml(roomName) + newSizeField + outputField + '</details>'
     );
   };
 
