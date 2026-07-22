@@ -131,6 +131,18 @@
     var name = String(roomName || '').toLowerCase();
     if (name.includes('bath') || name.includes('shower')) return 22;
     if (name.includes('lounge') || name.includes('living') ||
+        name.includes('dining') || name.includes('d room')) return 21;
+    if (name.includes('kitchen')) return 18;
+    if (name.includes('bed')) return 18;
+    if (name.includes('hall') || name.includes('landing') ||
+        name.includes('wc') || name.includes('toilet')) return 18;
+    return 18;
+  }
+
+  function previousTargetTemperature(roomName) {
+    var name = String(roomName || '').toLowerCase();
+    if (name.includes('bath') || name.includes('shower')) return 22;
+    if (name.includes('lounge') || name.includes('living') ||
         name.includes('dining')) return 21;
     if (name.includes('kitchen')) return 20;
     if (name.includes('bed')) return 18;
@@ -142,8 +154,8 @@
   function roomDropdownHtml(roomName) {
     var key = roomKeyFromName(roomName);
     var temperatures = [
-      { label: '18°C, bedroom or hallway', value: '18' },
-      { label: '20°C, kitchen or general room', value: '20' },
+      { label: '18°C, bedroom, kitchen or general room', value: '18' },
+      { label: '20°C, manual selection', value: '20' },
       { label: '21°C, lounge or living room', value: '21' },
       { label: '22°C, bathroom or shower room', value: '22' }
     ];
@@ -193,6 +205,7 @@
       '<input type="hidden" id="hl_design_postcode" data-id="hl_design_postcode">' +
       '<input type="hidden" id="hl_design_station" data-id="hl_design_station">' +
       '<input type="hidden" id="hl_design_manual" data-id="hl_design_manual">' +
+      '<input type="hidden" id="hl_temperature_defaults_v62" data-id="hl_temperature_defaults_v62">' +
       '<div class="hl-property-result"><div class="hl-total-number" id="hl_property_total">0.00 kW</div>' +
       '<div id="hl_property_detail">Enter at least one room to begin.</div></div>' +
       '<p class="hl-help">This is a practical survey estimate. Confirm the property construction and local design temperature before selecting equipment.</p>' +
@@ -519,10 +532,18 @@
     if (!stringValue('r_ceiling')) setValue('r_ceiling', 2.4);
     if (!stringValue('hl_outdoor_temp')) setValue('hl_outdoor_temp', -3);
     if (!stringValue('hl_bridge_pct')) setValue('hl_bridge_pct', 10);
+    var migrateTemperatureDefaults = stringValue('hl_temperature_defaults_v62') !== 'yes';
     allRoomNames().forEach(function (roomName) {
       var key = roomKeyFromName(roomName);
+      var newIndoorDefault = targetTemperature(roomName);
+      var currentIndoorTemperature = stringValue('hl_' + key + '_indoor_temp');
+      if (migrateTemperatureDefaults && currentIndoorTemperature === '20' &&
+          previousTargetTemperature(roomName) === 20 &&
+          newIndoorDefault !== 20) {
+        setValue('hl_' + key + '_indoor_temp', newIndoorDefault);
+      }
       var defaults = {
-        indoor_temp: targetTemperature(roomName),
+        indoor_temp: newIndoorDefault,
         wall_type: 'Cavity wall, insulated',
         internal_wall_type: 'None',
         window_type: 'Double glazing',
@@ -536,6 +557,7 @@
         if (!stringValue(id)) setValue(id, entry[1]);
       });
     });
+    setValue('hl_temperature_defaults_v62', 'yes');
   }
 
   function estimatedWallLength(length, width, wallCount) {
@@ -614,22 +636,36 @@
     var internalWallArea = internalWallLength * height;
     var started = length > 0 || width > 0;
     var complete = length > 0 && width > 0 && height > 0;
+    var wallType = stringValue('hl_' + key + '_wall_type');
+    var internalWallType = stringValue('hl_' + key + '_internal_wall_type');
+    var windowType = stringValue('hl_' + key + '_window_type');
+    var doorType = stringValue('hl_' + key + '_door_type');
+    var floorType = stringValue('hl_' + key + '_floor_type');
+    var loftType = stringValue('hl_' + key + '_loft_type');
+    var airChangeType = stringValue('hl_' + key + '_air_change');
+    var wallU = mappedValue('externalWall', wallType);
+    var internalWallU = mappedValue('internalWall', internalWallType);
+    var windowU = mappedValue('window', windowType);
+    var doorU = mappedValue('door', doorType);
+    var floorU = mappedValue('floor', floorType);
+    var roofU = mappedValue('loft', loftType);
+    var ach = mappedValue('airChange', airChangeType);
     var heat = complete ? computeHeatLossValues({
       deltaT: deltaT,
       internalDeltaT: deltaT * 0.5,
       floorArea: floorArea,
       volume: volume,
       netWallArea: netWallArea,
-      wallU: mappedValue('externalWall', stringValue('hl_' + key + '_wall_type')),
+      wallU: wallU,
       internalWallArea: internalWallArea,
-      internalWallU: mappedValue('internalWall', stringValue('hl_' + key + '_internal_wall_type')),
+      internalWallU: internalWallU,
       windowArea: windowArea,
-      windowU: mappedValue('window', stringValue('hl_' + key + '_window_type')),
+      windowU: windowU,
       doorArea: doorArea,
-      doorU: mappedValue('door', stringValue('hl_' + key + '_door_type')),
-      floorU: mappedValue('floor', stringValue('hl_' + key + '_floor_type')),
-      roofU: mappedValue('loft', stringValue('hl_' + key + '_loft_type')),
-      ach: mappedValue('airChange', stringValue('hl_' + key + '_air_change')),
+      doorU: doorU,
+      floorU: floorU,
+      roofU: roofU,
+      ach: ach,
       bridgePercent: numberValue('hl_bridge_pct', 10)
     }) : computeHeatLossValues({});
     var warnings = [];
@@ -638,8 +674,7 @@
       warnings.push('Window and door areas exceed the exposed wall area');
     }
     if (complete && wallLength === 0 && internalWallLength === 0 &&
-        mappedValue('floor', stringValue('hl_' + key + '_floor_type')) === 0 &&
-        mappedValue('loft', stringValue('hl_' + key + '_loft_type')) === 0) {
+        floorU === 0 && roofU === 0) {
       warnings.push('No exposed wall, floor or loft has been recorded');
     }
     return {
@@ -655,6 +690,23 @@
       floorArea: floorArea,
       wallLength: wallLength,
       assumedWall: assumedWall,
+      internalWallLength: internalWallLength,
+      windowArea: windowArea,
+      doorArea: doorArea,
+      wallType: wallType,
+      internalWallType: internalWallType,
+      windowType: windowType,
+      doorType: doorType,
+      floorType: floorType,
+      loftType: loftType,
+      airChangeType: airChangeType,
+      wallU: wallU,
+      internalWallU: internalWallU,
+      windowU: windowU,
+      doorU: doorU,
+      floorU: floorU,
+      roofU: roofU,
+      ach: ach,
       fabricWatts: heat.fabricWatts,
       ventilationWatts: heat.ventilationWatts,
       totalWatts: heat.totalWatts,
@@ -779,12 +831,48 @@
     }
   }
 
+  function uValueAssumption(label, value, included) {
+    if (!included) return 'Not included';
+    return escapeHtml(label || 'Unknown') + '<br><b>' +
+      Number(value || 0).toFixed(2) + ' W/m²K</b>';
+  }
+
+  function renderHeatLossAssumptionsSheet(calculation) {
+    var rows = calculation.includedRooms || [];
+    var station = stringValue('hl_design_station') || 'Manual value';
+    return '<div class="sheet-wrap" id="heatLossAssumptionsSheetV61">' +
+      '<div class="sheet-title"><h2>Heat Loss</h2><small>U-values and ventilation assumptions used</small></div>' +
+      '<table class="sheet heatloss-sheet heatloss-assumptions-sheet">' +
+      '<tr><td class="label">Address</td><td colspan="3" class="input">' +
+      cell('site_address') + '</td><td class="label">Reference station</td><td colspan="3" class="input">' +
+      escapeHtml(station) + '</td></tr>' +
+      '<tr><td class="label">Outdoor design</td><td class="input">' +
+      escapeHtml(stringValue('hl_outdoor_temp')) + ' °C</td>' +
+      '<td class="label">Thermal bridges</td><td class="input">' +
+      escapeHtml(stringValue('hl_bridge_pct')) + '%</td>' +
+      '<td colspan="4" class="small">U-values are shown in W/m²K. Lower values indicate better insulation.</td></tr>' +
+      '<tr><th>Room</th><th>External wall</th><th>Unheated internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
+      (rows.length ? rows.map(function (room) {
+        return '<tr><td><b>' + escapeHtml(room.roomName) + '</b></td>' +
+          '<td>' + uValueAssumption(room.wallType, room.wallU, room.wallLength > 0) + '</td>' +
+          '<td>' + uValueAssumption(room.internalWallType, room.internalWallU, room.internalWallLength > 0 && room.internalWallU > 0) + '</td>' +
+          '<td>' + uValueAssumption(room.windowType, room.windowU, room.windowArea > 0 && room.windowU > 0) + '</td>' +
+          '<td>' + uValueAssumption(room.doorType, room.doorU, room.doorArea > 0 && room.doorU > 0) + '</td>' +
+          '<td>' + uValueAssumption(room.floorType, room.floorU, room.floorU > 0) + '</td>' +
+          '<td>' + uValueAssumption(room.loftType, room.roofU, room.roofU > 0) + '</td>' +
+          '<td>' + escapeHtml(room.airChangeType || 'Unknown') + '<br><b>' +
+          room.ach.toFixed(2) + ' ACH</b></td></tr>';
+      }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
+      '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +
+      '</table></div>';
+  }
+
   function renderHeatLossSheet() {
     var calculation = window.heatLossResultsV60 || calculateHeatLoss();
     var rows = calculation.rooms.filter(function (room) {
       return room.started;
     });
-    return '<div class="sheet-wrap" id="heatLossSheetV60">' +
+    var resultsSheet = '<div class="sheet-wrap" id="heatLossSheetV60">' +
       '<div class="sheet-title"><h2>Heat Loss</h2><small>Combined radiator and room heat-loss survey</small></div>' +
       '<table class="sheet heatloss-sheet">' +
       '<tr><td class="label">Address</td><td colspan="5" class="input">' +
@@ -811,6 +899,7 @@
       (calculation.totalWatts / 1000).toFixed(2) + ' kW</b></td></tr>' +
       '<tr><td colspan="8" class="small">Calculation uses automatic standard construction values, fabric area and temperature difference, plus room volume and air changes. Confirm the survey assumptions before selecting equipment. This is not a certified MCS or BS EN 12831 design report.</td></tr>' +
       '</table></div>';
+    return resultsSheet + renderHeatLossAssumptionsSheet(calculation);
   }
 
   var previousRoomFormHtml = roomFormHtml;
