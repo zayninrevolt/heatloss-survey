@@ -2,6 +2,25 @@
 (function () {
   var STORAGE_KEY = 'heatLossDataV60';
   var persistenceReady = false;
+  var postcodeLookupTimer = null;
+  var postcodeLookupInProgress = false;
+  var postcodeLookupActivePostcode = '';
+  var DESIGN_STATIONS = [
+    { location: 'Belfast', station: 'Aldergrove', latitude: 54.6575, longitude: -6.2158, temperature: -3.2 },
+    { location: 'Birmingham', station: 'Coleshill', latitude: 52.4800, longitude: -1.6890, temperature: -5.1 },
+    { location: 'Cardiff', station: 'St Athan', latitude: 51.4050, longitude: -3.4400, temperature: -3.1 },
+    { location: 'Edinburgh', station: 'Gogarbank', latitude: 55.9290, longitude: -3.3430, temperature: -5.4 },
+    { location: 'Glasgow', station: 'Bishopton', latitude: 55.9070, longitude: -4.5330, temperature: -5.6 },
+    { location: 'Leeds', station: 'Church Fenton', latitude: 53.8340, longitude: -1.1950, temperature: -3.3 },
+    { location: 'London', station: 'Heathrow', latitude: 51.4790, longitude: -0.4490, temperature: -3.0 },
+    { location: 'Manchester', station: 'Woodford', latitude: 53.3380, longitude: -2.1490, temperature: -4.5 },
+    { location: 'Newcastle', station: 'Albemarle', latitude: 55.0190, longitude: -1.8800, temperature: -3.7 },
+    { location: 'Norwich', station: 'Marham', latitude: 52.6510, longitude: 0.5690, temperature: -4.6 },
+    { location: 'Nottingham', station: 'Watnall', latitude: 53.0050, longitude: -1.2500, temperature: -3.9 },
+    { location: 'Plymouth', station: 'Mountbatten', latitude: 50.3540, longitude: -4.1210, temperature: -1.5 },
+    { location: 'Southampton', station: 'Hurn', latitude: 50.7790, longitude: -1.8350, temperature: -4.8 },
+    { location: 'Swindon', station: 'Brize Norton', latitude: 51.7580, longitude: -1.5760, temperature: -4.6 }
+  ];
   var VALUES = {
     externalWall: {
       'Solid brick, uninsulated': 2.1,
@@ -164,14 +183,269 @@
       '<h3>Heat loss summary</h3>' +
       '<p>Open Heat loss details inside each room. The calculated room load is copied into kW required automatically.</p>' +
       '<div class="hl-summary-grid">' +
-      fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Use the local design temperature for the property postcode.') +
+      fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
       fieldHtml('hl_bridge_pct', 'Thermal bridge allowance', 'select', bridgeOptions) +
       '</div>' +
+      '<div class="hl-postcode-lookup">' +
+      '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
+      '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the outdoor design temperature.</div>' +
+      '</div>' +
+      '<input type="hidden" id="hl_design_postcode" data-id="hl_design_postcode">' +
+      '<input type="hidden" id="hl_design_station" data-id="hl_design_station">' +
+      '<input type="hidden" id="hl_design_manual" data-id="hl_design_manual">' +
       '<div class="hl-property-result"><div class="hl-total-number" id="hl_property_total">0.00 kW</div>' +
       '<div id="hl_property_detail">Enter at least one room to begin.</div></div>' +
       '<p class="hl-help">This is a practical survey estimate. Confirm the property construction and local design temperature before selecting equipment.</p>' +
       '</div>';
   }
+
+  function normalisePostcode(postcode) {
+    return String(postcode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function postcodeOutcode(postcode) {
+    var compact = normalisePostcode(postcode);
+    return compact.length > 3 ? compact.slice(0, -3) : compact;
+  }
+
+  function setPostcodeLookupStatus(message, state) {
+    var status = document.getElementById('hl_postcode_lookup_status');
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.state = state || '';
+  }
+
+  function degreesToRadians(value) {
+    return value * Math.PI / 180;
+  }
+
+  function distanceBetweenCoordinates(latitude1, longitude1, latitude2, longitude2) {
+    var earthRadiusKm = 6371;
+    var latitudeDifference = degreesToRadians(latitude2 - latitude1);
+    var longitudeDifference = degreesToRadians(longitude2 - longitude1);
+    var a = Math.sin(latitudeDifference / 2) * Math.sin(latitudeDifference / 2) +
+      Math.cos(degreesToRadians(latitude1)) * Math.cos(degreesToRadians(latitude2)) *
+      Math.sin(longitudeDifference / 2) * Math.sin(longitudeDifference / 2);
+    return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function nearestDesignStation(latitude, longitude) {
+    return DESIGN_STATIONS.reduce(function (nearest, station) {
+      var distance = distanceBetweenCoordinates(
+        latitude,
+        longitude,
+        station.latitude,
+        station.longitude
+      );
+      if (!nearest || distance < nearest.distance) {
+        return { station: station, distance: distance };
+      }
+      return nearest;
+    }, null);
+  }
+
+  async function fetchPostcodeResult(url) {
+    var controller = typeof AbortController === 'function'
+      ? new AbortController()
+      : null;
+    var timeout = controller
+      ? setTimeout(function () { controller.abort(); }, 7000)
+      : null;
+    try {
+      var response = await fetch(url, controller ? { signal: controller.signal } : {});
+      if (!response.ok) return null;
+      var body = await response.json();
+      return body && body.result ? body.result : null;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+
+  async function postcodeCoordinates(postcode) {
+    var compact = normalisePostcode(postcode);
+    var fullResult = await fetchPostcodeResult(
+      'https://api.postcodes.io/postcodes/' + encodeURIComponent(compact)
+    );
+    if (fullResult && Number.isFinite(fullResult.latitude) &&
+        Number.isFinite(fullResult.longitude)) {
+      return {
+        latitude: fullResult.latitude,
+        longitude: fullResult.longitude,
+        postcode: fullResult.postcode || postcode
+      };
+    }
+
+    var outcode = postcodeOutcode(compact);
+    if (!outcode) return null;
+    var outcodeResult = await fetchPostcodeResult(
+      'https://api.postcodes.io/outcodes/' + encodeURIComponent(outcode)
+    );
+    if (outcodeResult && Number.isFinite(outcodeResult.latitude) &&
+        Number.isFinite(outcodeResult.longitude)) {
+      return {
+        latitude: outcodeResult.latitude,
+        longitude: outcodeResult.longitude,
+        postcode: outcode
+      };
+    }
+    return null;
+  }
+
+  function specialPostcodeStation(postcode) {
+    var compact = normalisePostcode(postcode);
+    if (compact.startsWith('JE') || compact.startsWith('GY')) {
+      return {
+        station: {
+          location: 'Channel Islands',
+          station: 'Maison St Louis Observatory',
+          temperature: 0.1
+        },
+        distance: 0
+      };
+    }
+    if (compact.startsWith('IM')) {
+      return {
+        station: DESIGN_STATIONS[0],
+        distance: 0
+      };
+    }
+    return null;
+  }
+
+  function applyPostcodeDesignTemperature(postcode, match) {
+    var station = match.station;
+    postcodeLookupInProgress = true;
+    setValue('hl_outdoor_temp', station.temperature.toFixed(1));
+    setValue('hl_design_postcode', normalisePostcode(postcode));
+    setValue('hl_design_station', station.location + ' (' + station.station + ')');
+    setValue('hl_design_manual', 'no');
+    postcodeLookupInProgress = false;
+    setPostcodeLookupStatus(
+      'Using ' + station.location + ' (' + station.station + '), ' +
+      station.temperature.toFixed(1) + '°C. You can edit the temperature manually.',
+      'success'
+    );
+    calculateHeatLoss();
+    if (typeof update === 'function') update();
+    persistCombinedData();
+  }
+
+  async function performPostcodeLookup() {
+    if (postcodeLookupTimer) {
+      clearTimeout(postcodeLookupTimer);
+      postcodeLookupTimer = null;
+    }
+    var postcodeField = document.getElementById('site_postcode');
+    var postcode = postcodeField ? postcodeField.value : '';
+    var compact = normalisePostcode(postcode);
+    if (compact.length < 2) {
+      setPostcodeLookupStatus(
+        'Enter a property postcode above to set the outdoor design temperature.',
+        ''
+      );
+      return;
+    }
+    if (postcodeLookupActivePostcode === compact) return;
+
+    postcodeLookupActivePostcode = compact;
+    setPostcodeLookupStatus('Finding the local design temperature...', 'loading');
+    try {
+      var match = specialPostcodeStation(compact);
+      if (!match) {
+        var coordinates = await postcodeCoordinates(postcode);
+        if (normalisePostcode(postcodeField && postcodeField.value) !== compact) return;
+        if (!coordinates) {
+          setPostcodeLookupStatus(
+            'Postcode not recognised. Enter the outdoor design temperature manually.',
+            'error'
+          );
+          return;
+        }
+        match = nearestDesignStation(coordinates.latitude, coordinates.longitude);
+      }
+      applyPostcodeDesignTemperature(postcode, match);
+    } catch (error) {
+      setPostcodeLookupStatus(
+        'Postcode lookup is unavailable. Enter the outdoor design temperature manually.',
+        'error'
+      );
+    } finally {
+      if (postcodeLookupActivePostcode === compact) {
+        postcodeLookupActivePostcode = '';
+      }
+    }
+  }
+
+  function schedulePostcodeLookup() {
+    if (postcodeLookupTimer) clearTimeout(postcodeLookupTimer);
+    postcodeLookupTimer = setTimeout(performPostcodeLookup, 650);
+  }
+
+  function markOutdoorTemperatureManual() {
+    if (postcodeLookupInProgress) return;
+    setValue('hl_design_manual', 'yes');
+    var postcode = stringValue('site_postcode');
+    setValue('hl_design_postcode', normalisePostcode(postcode));
+    setPostcodeLookupStatus(
+      'Manual outdoor design temperature selected for this postcode.',
+      'manual'
+    );
+    persistCombinedData();
+  }
+
+  function refreshPostcodeLookupStatus() {
+    var postcode = normalisePostcode(stringValue('site_postcode'));
+    var matchedPostcode = stringValue('hl_design_postcode');
+    var station = stringValue('hl_design_station');
+    if (!postcode) {
+      setPostcodeLookupStatus(
+        'Enter a property postcode above to set the outdoor design temperature.',
+        ''
+      );
+      return;
+    }
+    if (postcode === matchedPostcode && stringValue('hl_design_manual') === 'yes') {
+      setPostcodeLookupStatus(
+        'Manual outdoor design temperature selected for this postcode.',
+        'manual'
+      );
+      return;
+    }
+    if (postcode === matchedPostcode && station) {
+      setPostcodeLookupStatus(
+        'Using ' + station + ', ' + numberValue('hl_outdoor_temp', 0).toFixed(1) +
+        '°C. You can edit the temperature manually.',
+        'success'
+      );
+      return;
+    }
+    performPostcodeLookup();
+  }
+
+  function wirePostcodeLookup() {
+    var postcodeField = document.getElementById('site_postcode');
+    if (postcodeField && postcodeField.dataset.hlPostcodeWired !== 'yes') {
+      postcodeField.dataset.hlPostcodeWired = 'yes';
+      postcodeField.addEventListener('input', schedulePostcodeLookup);
+      postcodeField.addEventListener('change', performPostcodeLookup);
+      postcodeField.addEventListener('blur', performPostcodeLookup);
+    }
+
+    var lookupButton = document.getElementById('hl_lookup_postcode');
+    if (lookupButton && lookupButton.dataset.hlPostcodeWired !== 'yes') {
+      lookupButton.dataset.hlPostcodeWired = 'yes';
+      lookupButton.addEventListener('click', performPostcodeLookup);
+    }
+
+    var outdoorTemperature = document.getElementById('hl_outdoor_temp');
+    if (outdoorTemperature && outdoorTemperature.dataset.hlManualWired !== 'yes') {
+      outdoorTemperature.dataset.hlManualWired = 'yes';
+      outdoorTemperature.addEventListener('input', markOutdoorTemperatureManual);
+    }
+    refreshPostcodeLookupStatus();
+  }
+
+  window.lookupOutdoorDesignTemperatureV61 = performPostcodeLookup;
 
   function storedSurveyData() {
     try {
@@ -555,6 +829,7 @@
     restoreValues(saved);
     applyDefaults();
     wireHeatLossFields();
+    wirePostcodeLookup();
     calculateHeatLoss();
     return result;
   };

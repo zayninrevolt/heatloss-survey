@@ -15,6 +15,8 @@ For each room, the app calculates:
 
 Calculated room loads feed the existing radiator schedule automatically. The Front, Rads and Heat Loss sheets can be printed together.
 
+The property postcode can automatically select the nearest MCS/CIBSE reference weather station and its 99.6% outdoor design temperature. The result remains editable for manual site or altitude adjustments. Postcode coordinates are retrieved from the public postcodes.io service; no other survey details are sent.
+
 Technical U-value entry is replaced with plain construction choices. These include solid brick or stud internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice.
 
 Construction choices are practical survey starting points and must be checked against the property. The app does not claim to be a certified MCS or BS EN 12831 design tool.

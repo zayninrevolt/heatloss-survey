@@ -30,6 +30,41 @@
   font-weight: 800;
 }
 
+.hl-postcode-lookup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.hl-postcode-lookup button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+#hl_postcode_lookup_status {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#hl_postcode_lookup_status[data-state="success"] {
+  color: #166534;
+}
+
+#hl_postcode_lookup_status[data-state="error"] {
+  color: #991b1b;
+}
+
+#hl_postcode_lookup_status[data-state="loading"] {
+  color: #1d4ed8;
+}
+
 .hl-room-dropdown {
   margin: 14px;
   border: 1px solid #93c5fd;
@@ -121,6 +156,15 @@ body.theme-dark .hl-room-result {
   color: #e5e7eb !important;
 }
 
+body.theme-dark .hl-postcode-lookup {
+  background: #0f172a !important;
+  border-color: #1d4ed8 !important;
+}
+
+body.theme-dark #hl_postcode_lookup_status {
+  color: #cbd5e1 !important;
+}
+
 body.theme-dark .hl-room-dropdown,
 body.theme-dark .hl-room-dropdown > summary {
   background: #111827 !important;
@@ -143,6 +187,11 @@ body.theme-dark .hl-result-breakdown {
 
   .hl-room-dropdown {
     margin: 12px 4px;
+  }
+
+  .hl-postcode-lookup {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
