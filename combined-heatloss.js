@@ -230,6 +230,11 @@
       { label: 'No allowance', value: '0' },
       { label: 'High allowance, 15%', value: '15' }
     ];
+    var radiatorTemperatures = [
+      { label: '75°C, nominal ΔT50', value: '75' },
+      { label: '65°C, nominal ΔT40', value: '65' },
+      { label: '55°C, nominal ΔT30', value: '55' }
+    ];
     return '<div class="card hl-summary-card" id="heatLossSummaryCard">' +
       '<h3>Heat loss summary</h3>' +
       '<p>Open Heat loss details inside each room. The room load and a suitable 600mm-high Stelrad Elite are calculated automatically.</p>' +
@@ -238,8 +243,7 @@
       fieldHtml('hl_bridge_pct', 'Thermal bridge allowance', 'select', bridgeOptions) +
       fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Optional. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
       fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Used for solid ground floors instead of the outdoor design temperature.') +
-      fieldHtml('hl_flow_temp', 'Radiator flow temperature (°C)', 'number', null, 'Stelrad output is corrected from the published ΔT50 rating.') +
-      fieldHtml('hl_return_temp', 'Radiator return temperature (°C)', 'number', null, 'Design flow and return default to 75/65°C.') +
+      fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
       '</div>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
       '<p class="hl-help">Choose once, then apply to every visible room. Individual rooms can still be changed.</p>' +
@@ -595,6 +599,13 @@
   }
 
   function migrateOldHeatLossValues(data) {
+    if (!stringValue('hl_radiator_temperature')) {
+      var oldTemperature = Number(data.hl_flow_temp || data.front_boiler_temp);
+      if (Number.isFinite(oldTemperature) && oldTemperature > 0) {
+        setValue('hl_radiator_temperature', oldTemperature <= 60 ? 55 :
+          (oldTemperature <= 70 ? 65 : 75));
+      }
+    }
     allRoomNames().forEach(function (roomName) {
       var key = roomKeyFromName(roomName);
       var oldWall = data['hl_' + key + '_wall_preset'];
@@ -642,8 +653,10 @@
     if (!stringValue('hl_outdoor_temp')) setValue('hl_outdoor_temp', -3);
     if (!stringValue('hl_bridge_pct')) setValue('hl_bridge_pct', 10);
     if (!stringValue('hl_ground_temp')) setValue('hl_ground_temp', 10);
-    if (!stringValue('hl_flow_temp')) setValue('hl_flow_temp', 75);
-    if (!stringValue('hl_return_temp')) setValue('hl_return_temp', 65);
+    if (!['75', '65', '55'].includes(stringValue('hl_radiator_temperature'))) {
+      setValue('hl_radiator_temperature', 75);
+    }
+    setValue('front_boiler_temp', stringValue('hl_radiator_temperature'));
     var propertyDefaults = {
       hl_default_wall: 'Cavity wall, insulated',
       hl_default_window: 'Double glazing',
@@ -774,8 +787,8 @@
   }
 
   function recommendStelradElite(requiredWatts, indoor, preferredType) {
-    var flow = numberValue('hl_flow_temp', 75);
-    var returnTemperature = numberValue('hl_return_temp', 65);
+    var flow = Number(stringValue('hl_radiator_temperature')) || 75;
+    var returnTemperature = flow - 10;
     var meanWater = (flow + returnTemperature) / 2;
     var deltaT = meanWater - indoor;
     var correctionFactor = stelradCorrectionFactor(deltaT);
@@ -790,6 +803,7 @@
       flow: flow,
       returnTemperature: returnTemperature,
       meanWater: meanWater,
+      nominalDeltaT: flow - 25,
       deltaT: deltaT,
       correctionFactor: correctionFactor,
       options: options,
@@ -1164,6 +1178,28 @@
     });
   }
 
+  function wireRadiatorTemperature() {
+    var designTemperature = document.getElementById('hl_radiator_temperature');
+    var frontTemperature = document.getElementById('front_boiler_temp');
+    if (designTemperature && designTemperature.dataset.hlTemperatureWired !== 'yes') {
+      designTemperature.dataset.hlTemperatureWired = 'yes';
+      designTemperature.addEventListener('change', function () {
+        setValue('front_boiler_temp', designTemperature.value);
+        if (typeof update === 'function') update();
+        persistCombinedData();
+      });
+    }
+    if (frontTemperature && frontTemperature.dataset.hlTemperatureWired !== 'yes') {
+      frontTemperature.dataset.hlTemperatureWired = 'yes';
+      frontTemperature.addEventListener('change', function () {
+        setValue('hl_radiator_temperature', frontTemperature.value || 75);
+        calculateHeatLoss();
+        if (typeof update === 'function') update();
+        persistCombinedData();
+      });
+    }
+  }
+
   function installSummaryCard() {
     var radsForm = document.getElementById('radsForm');
     if (!radsForm || document.getElementById('heatLossSummaryCard')) return;
@@ -1195,7 +1231,8 @@
       '<td class="label">Thermal bridges</td><td class="input">' +
       escapeHtml(stringValue('hl_bridge_pct')) + '%</td>' +
       '<td class="label">Radiator design</td><td colspan="3" class="input">Stelrad Elite 600mm at ' +
-      escapeHtml(stringValue('hl_flow_temp')) + '/' + escapeHtml(stringValue('hl_return_temp')) + ' °C</td></tr>' +
+      escapeHtml(stringValue('hl_radiator_temperature')) + '°C, nominal ΔT' +
+      (Number(stringValue('hl_radiator_temperature')) - 25) + '</td></tr>' +
       '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
       (rows.length ? rows.map(function (room) {
         return '<tr><td><b>' + escapeHtml(room.roomName) + '</b></td>' +
@@ -1270,6 +1307,7 @@
     restoreValues(saved);
     applyDefaults();
     wireHeatLossFields();
+    wireRadiatorTemperature();
     wirePostcodeLookup();
     wirePropertyDefaults();
     calculateHeatLoss();

@@ -35,7 +35,7 @@ Published outputs at 600mm height and ΔT50 are:
 - K2: 1.778 kW per metre
 - K3: 2.514 kW per metre
 
-At 1200mm wide this is 1.20 kW for K1, 2.13 kW for K2 and 3.02 kW for K3. The app multiplies these ratings by Stelrad's published correction factor using mean water temperature minus room temperature. Flow and return temperatures default to 75/65°C and can be changed for lower-temperature systems.
+At 1200mm wide this is 1.20 kW for K1, 2.13 kW for K2 and 3.02 kW for K3. The app multiplies these ratings by Stelrad's published correction factor using mean water temperature minus room temperature. The radiator temperature selector is limited to 75°C nominal ΔT50, 65°C nominal ΔT40 and 55°C nominal ΔT30. These use 75/65, 65/55 and 55/45°C flow and return pairs respectively.
 
 Technical references:
 

@@ -1886,7 +1886,12 @@
       ];
       const frontFields = [
         ["front_sys", "Range rate output / 50% value", "text"],
-        ["front_boiler_temp", "Boiler temperature °C", "text"],
+        [
+          "front_boiler_temp",
+          "Radiator temperature °C (75=ΔT50, 65=ΔT40, 55=ΔT30)",
+          "select",
+          ["", "75", "65", "55"],
+        ],
         ["front_warning_codes", "Warning codes", "text"],
         ["front_mcp", "MCP", "select", yesNo],
         ["front_pv", "PV", "select", yesNo],
@@ -2271,7 +2276,7 @@
   <td class="input">${cell("front_scaffolding")}</td>
   <td colspan="2" class="red center">Shower</td>
   <td class="input">${cell("front_shower")}</td>
-  <td class="red center">Heating Temp °C</td>
+  <td class="red center">Radiator Temp °C</td>
   <td class="input">${cell("front_boiler_temp")}</td>
   </tr>
   <tr>
@@ -8296,7 +8301,7 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=63">
-    <script src="combined-heatloss.js?v=63"></script>
+    <link rel="stylesheet" href="combined-heatloss.css?v=64">
+    <script src="combined-heatloss.js?v=64"></script>
   </body>
 </html>
