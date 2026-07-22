@@ -1,0 +1,155 @@
+.hl-summary-card {
+  border-left: 4px solid #2563eb;
+  background: #eff6ff;
+}
+
+.hl-summary-grid,
+.hl-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.hl-summary-card .field,
+.hl-fields-grid .field {
+  margin: 0;
+}
+
+.hl-property-result,
+.hl-room-result {
+  margin-top: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  padding: 12px;
+}
+
+.hl-total-number {
+  color: #1d4ed8;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.hl-room-dropdown {
+  margin: 14px;
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fbff;
+}
+
+.hl-room-dropdown > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px 14px;
+  cursor: pointer;
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+
+.hl-room-dropdown > summary::marker {
+  color: #2563eb;
+}
+
+.hl-room-body {
+  padding: 14px;
+}
+
+.hl-room-intro,
+.hl-help,
+.hl-fields-grid small {
+  display: block;
+  margin: 0 0 10px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.hl-fields-grid small {
+  margin: 4px 0 0;
+}
+
+.hl-result-main {
+  margin-bottom: 5px;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.hl-result-main strong {
+  color: #1d4ed8;
+}
+
+.hl-result-breakdown {
+  color: #374151;
+  line-height: 1.5;
+}
+
+.hl-warning {
+  margin-top: 6px;
+  color: #92400e;
+  font-weight: 700;
+}
+
+.hl-assumption {
+  display: inline-block;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+.heatloss-sheet {
+  width: 1180px;
+}
+
+.heatloss-sheet th,
+.heatloss-sheet td {
+  font-size: 11px;
+}
+
+body.theme-dark .hl-summary-card,
+body.theme-dark .hl-property-result,
+body.theme-dark .hl-room-result {
+  background: #172554 !important;
+  border-color: #1d4ed8 !important;
+  color: #e5e7eb !important;
+}
+
+body.theme-dark .hl-room-dropdown,
+body.theme-dark .hl-room-dropdown > summary {
+  background: #111827 !important;
+  border-color: #374151 !important;
+  color: #f9fafb !important;
+}
+
+body.theme-dark .hl-room-intro,
+body.theme-dark .hl-help,
+body.theme-dark .hl-fields-grid small,
+body.theme-dark .hl-result-breakdown {
+  color: #cbd5e1 !important;
+}
+
+@media (max-width: 700px) {
+  .hl-summary-grid,
+  .hl-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hl-room-dropdown {
+    margin: 12px 4px;
+  }
+}
+
+@media print {
+  .heatloss-sheet {
+    width: 100% !important;
+    max-width: 285mm !important;
+    min-width: 0 !important;
+  }
+}

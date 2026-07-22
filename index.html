@@ -1769,7 +1769,6 @@
         <div class="tabs" role="tablist" aria-label="Survey sections">
           <button id="frontTab" class="tab active" data-tab="frontForm" role="tab" aria-controls="frontForm" aria-selected="true">Front</button>
           <button id="radsTab" class="tab" data-tab="radsForm" role="tab" aria-controls="radsForm" aria-selected="false">Rads</button>
-          <button id="heatlossTab" class="tab" data-tab="heatlossForm" role="tab" aria-controls="heatlossForm" aria-selected="false">Heat Loss</button>
           <button id="a12aTab" class="tab" data-tab="a12aForm" role="tab" aria-controls="a12aForm" aria-selected="false">A12a</button>
           <button id="profileTab" class="tab" data-tab="profileForm" role="tab" aria-controls="profileForm" aria-selected="false">Profile</button>
         </div>
@@ -1809,7 +1808,6 @@
         <div id="commonForm"></div>
         <section class="section active" id="frontForm" role="tabpanel" aria-labelledby="frontTab" aria-hidden="false"></section>
         <section class="section" id="radsForm" role="tabpanel" aria-labelledby="radsTab" aria-hidden="true"></section>
-        <section class="section" id="heatlossForm" role="tabpanel" aria-labelledby="heatlossTab" aria-hidden="true"></section>
         <section class="section" id="a12aForm" role="tabpanel" aria-labelledby="a12aTab" aria-hidden="true"></section>
         <section class="section" id="profileForm" role="tabpanel" aria-labelledby="profileTab" aria-hidden="true"></section>
       </aside>
@@ -2146,7 +2144,7 @@
         let radsHtml = `<div class="card">
   <h3>Radiator Sheet</h3>
   <div class="row">${makeField(["r_address", "Address", "text"])}${makeField(["r_job", "Job Number", "text"])}</div>
-  <div class="row">${makeField(["r_ceiling", "Ceiling", "text"])}${makeField(["r_output_temp", "Calculated Output KW", "text"])}</div>
+  <div class="row">${makeField(["r_ceiling", "Ceiling height (m)", "number"])}${makeField(["r_output_temp", "Calculated Output KW", "text"])}</div>
   </div>
   <div class="card">
   <h3>Rooms</h3>`;
@@ -3981,7 +3979,7 @@
       </div>
       <div class="row">
         ${makeField(["r_job", "Job Number", "text"])}
-        ${makeField(["r_ceiling", "Ceiling", "text"])}
+        ${makeField(["r_ceiling", "Ceiling height (m)", "number"])}
       </div>
       <div class="field">
         ${makeField(["r_output_temp", "Calculated Output KW", "text"])}
@@ -6086,6 +6084,12 @@
             if (input) input.value = "";
           });
 
+          document
+            .querySelectorAll(`[data-id^="hl_${CSS.escape(roomKey)}_"]`)
+            .forEach(function (input) {
+              input.value = "";
+            });
+
           if (typeof update === "function") update();
         };
 
@@ -7728,6 +7732,7 @@
          presented as a certified BS EN 12831 or MCS design tool.
          ============================================================ */
       (function () {
+        return; // Replaced by the combined Rads and heat-loss room workflow.
         const WALL_PRESETS_V59 = {
           "Solid brick, uninsulated": 2.1,
           "Cavity wall, uninsulated": 1.6,
@@ -8204,5 +8209,7 @@
         update();
       })();
     </script>
+    <link rel="stylesheet" href="combined-heatloss.css">
+    <script src="combined-heatloss.js"></script>
   </body>
 </html>
