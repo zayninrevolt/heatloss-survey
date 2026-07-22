@@ -435,8 +435,8 @@
       '<p>Open Heat loss details inside each room. The room load is calculated automatically, then suitable Stelrad Elite sizes can be selected in the radiator schedule.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_survey_mode', 'Survey detail level', 'select', ['Simple', 'Detailed'], 'Detailed mode adds extension ages, measured openings, alternative walls, floor perimeter, airtightness and radiator filters.') +
-      fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The normal public EPC certificate does not display its stored construction-age field.') +
-      fieldHtml('hl_property_age_source', 'Property age evidence', 'select', ['EPC developer data', 'Title deeds or building-control record', 'Homeowner or landlord', 'Visual estimate', 'Unknown']) +
+      fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The surveyor can verify the age separately before finalising the survey.') +
+      fieldHtml('hl_property_age_source', 'Property age evidence', 'select', ['Title deeds or building-control record', 'Homeowner or landlord', 'Visual estimate', 'Unknown']) +
       fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
       fieldHtml('hl_bridge_method', 'Thermal bridge method', 'select', bridgeMethods) +
       detailedFieldHtml('hl_bridge_pct', 'Percentage thermal bridge allowance', 'select', bridgeOptions, 'Only used for the legacy percentage method.') +
@@ -449,8 +449,7 @@
       detailedFieldHtml('hl_air_permeability_source', 'Airtightness evidence', 'select', ['Measured pressure test', 'Design value', 'BS 12831 default', 'Unknown']) +
       detailedFieldHtml('hl_design_ach', 'Whole-property design ACH override', 'number', null, 'Optional verified design infiltration rate. Exposed rooms use the greater of this value and the 0.5 ACH minimum.') +
       '</div>' +
-      '<div class="hl-epc-lookup"><button type="button" id="hl_find_epc">Open GOV.UK EPC data service</button>' +
-      '<div>The public EPC certificate does not show property age. The separate government developer dataset contains a construction-age band, but requires a GOV.UK One Login and is not available directly to this static app. Otherwise use title deeds, council building-control records or Unknown. Do not infer age from neighbouring homes.</div></div>' +
+      '<p class="hl-help hl-age-guidance">If the age is unknown, leave it as Unknown and search separately using reliable property records. Do not infer the age from neighbouring homes.</p>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
       '<p class="hl-help">Applies external wall, internal wall and window defaults only. Floor, loft and room ventilation devices must be selected inside each room.</p>' +
       '<div class="hl-summary-grid">' +
@@ -898,8 +897,9 @@
   }
 
   function migrateOldHeatLossValues(data) {
-    if (data.hl_property_age_source === 'Official EPC') {
-      setValue('hl_property_age_source', 'EPC developer data');
+    if (data.hl_property_age_source === 'Official EPC' ||
+        data.hl_property_age_source === 'EPC developer data') {
+      setValue('hl_property_age_source', 'Unknown');
     }
     if (!stringValue('hl_radiator_temperature')) {
       var oldTemperature = Number(data.hl_flow_temp || data.front_boiler_temp);
@@ -1068,18 +1068,6 @@
       mode.addEventListener('change', refreshSurveyMode);
     }
     refreshSurveyMode();
-
-    var epcButton = document.getElementById('hl_find_epc');
-    if (epcButton && epcButton.dataset.hlEpcWired !== 'yes') {
-      epcButton.dataset.hlEpcWired = 'yes';
-      epcButton.addEventListener('click', function () {
-        window.open(
-          'https://get-energy-performance-data.epb-integration.digital.communities.gov.uk/',
-          '_blank',
-          'noopener'
-        );
-      });
-    }
 
     var ageField = document.getElementById('hl_property_age_band');
     if (ageField && ageField.dataset.hlAgeWired !== 'yes') {

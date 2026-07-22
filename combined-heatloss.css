@@ -30,8 +30,7 @@
   font-weight: 800;
 }
 
-.hl-postcode-lookup,
-.hl-epc-lookup {
+.hl-postcode-lookup {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -42,18 +41,14 @@
   background: #ffffff;
 }
 
-.hl-postcode-lookup button,
-.hl-epc-lookup button {
+.hl-postcode-lookup button {
   flex: 0 0 auto;
   min-height: 40px;
   padding: 8px 12px;
 }
 
-.hl-epc-lookup {
+.hl-age-guidance {
   margin-top: 12px;
-  color: #475569;
-  font-size: 12px;
-  line-height: 1.4;
 }
 
 .hl-detailed-only {
@@ -228,8 +223,7 @@ body.theme-dark .hl-room-result {
   color: #e5e7eb !important;
 }
 
-body.theme-dark .hl-postcode-lookup,
-body.theme-dark .hl-epc-lookup {
+body.theme-dark .hl-postcode-lookup {
   background: #0f172a !important;
   border-color: #1d4ed8 !important;
 }
@@ -276,8 +270,7 @@ body.theme-dark .hl-result-breakdown {
     margin: 12px 4px;
   }
 
-  .hl-postcode-lookup,
-  .hl-epc-lookup {
+  .hl-postcode-lookup {
     align-items: stretch;
     flex-direction: column;
   }
