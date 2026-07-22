@@ -19,7 +19,7 @@ Calculated room loads feed the existing radiator schedule automatically. The Fro
 
 The Heat Loss PDF includes a second assumptions page listing the selected wall, window, door, floor and loft construction for every completed room, together with each U-value and air-change rate used in the calculation.
 
-The property postcode can automatically select the nearest MCS/CIBSE reference weather station and its 99.6% outdoor design temperature. An optional property altitude applies the MCS correction of 0.6°C per complete 100m above the reference station. The result remains editable. Postcode coordinates are retrieved from the public postcodes.io service; no other survey details are sent.
+The property postcode automatically selects the nearest MCS/CIBSE reference weather station and its 99.6% outdoor design temperature. The same postcode coordinates are used to estimate property altitude through Elevation API EU and Copernicus terrain data. The app applies the MCS correction of 0.6°C per complete 100m above the design reference station. It also selects the MCS annual mean temperature from the nearest climate station as the ground temperature for solid floors. All three values remain editable. Postcode coordinates are retrieved from the public postcodes.io service; no other survey details are sent.
 
 Technical U-value entry is replaced with plain construction choices. These include single brick or stud and plasterboard internal walls, single or double glazing, and plasterboard loft ceilings with no insulation or 50mm, 100mm or 200mm insulation. The standard value is applied automatically behind each choice. Property-wide defaults apply external wall, internal wall, window and draught choices. Floor and ceiling or loft construction must be selected inside each room so ground-floor and first-floor rooms can be treated correctly.
 
@@ -45,6 +45,8 @@ Technical references:
 - [Stelrad correction factors](https://www.stelrad.com/trade/stelrad-correction-factor/)
 - [MCS design conditions](https://heatloadcalculator.mcscertified.com/docs/reference-sources/design-conditions)
 - [MCS U-value reference](https://heatloadcalculator.mcscertified.com/docs/reference-sources/u-values)
+- [Elevation API EU](https://www.elevation-api.eu/)
+- [Met Office weather-station locations](https://www.metoffice.gov.uk/research/climate/maps-and-data/uk-synoptic-and-climate-stations)
 
 Construction choices are practical survey starting points and must be checked against the property. The app does not claim to be a certified MCS or BS EN 12831 design tool.
 

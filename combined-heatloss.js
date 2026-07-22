@@ -21,6 +21,27 @@
     { location: 'Southampton', station: 'Hurn', latitude: 50.7790, longitude: -1.8350, temperature: -4.8, altitude: 10 },
     { location: 'Swindon', station: 'Brize Norton', latitude: 51.7580, longitude: -1.5760, temperature: -4.6, altitude: 82 }
   ];
+  var GROUND_TEMPERATURE_STATIONS = [
+    { region: 'Borders', station: 'Boulmer', latitude: 55.42085, longitude: -1.60126, temperature: 9.0 },
+    { region: 'East Pennines', station: 'Finningley', latitude: 53.4747, longitude: -0.9946, temperature: 10.0 },
+    { region: 'East Scotland', station: 'Leuchars', latitude: 56.37734, longitude: -2.8620, temperature: 8.8 },
+    { region: 'East Anglia', station: 'Honington', latitude: 52.3426, longitude: 0.7729, temperature: 10.1 },
+    { region: 'Midlands', station: 'Elmdon', latitude: 52.4539, longitude: -1.7480, temperature: 9.8 },
+    { region: 'North East England', station: 'Leeming', latitude: 54.29698, longitude: -1.53301, temperature: 9.4 },
+    { region: 'North East Scotland', station: 'Dyce', latitude: 57.20486, longitude: -2.20531, temperature: 8.5 },
+    { region: 'North West England', station: 'Carlisle', latitude: 54.93428, longitude: -2.96364, temperature: 9.4 },
+    { region: 'North West Scotland', station: 'Stornoway', latitude: 58.21345, longitude: -6.31882, temperature: 8.6 },
+    { region: 'Northern Ireland', station: 'Aldergrove', latitude: 54.66365, longitude: -6.22534, temperature: 9.4 },
+    { region: 'Severn Valley', station: 'Filton', latitude: 51.5194, longitude: -2.5908, temperature: 10.6 },
+    { region: 'South East England', station: 'Gatwick', latitude: 51.1481, longitude: -0.1903, temperature: 10.2 },
+    { region: 'South West England', station: 'Plymouth', latitude: 50.35493, longitude: -4.12097, temperature: 11.0 },
+    { region: 'Southern England', station: 'Hurn', latitude: 50.77946, longitude: -1.83622, temperature: 10.4 },
+    { region: 'Thames Valley', station: 'Heathrow', latitude: 51.47922, longitude: -0.45061, temperature: 11.3 },
+    { region: 'Wales', station: 'Aberporth', latitude: 52.13951, longitude: -4.57110, temperature: 9.9 },
+    { region: 'West Pennines', station: 'Ringway', latitude: 53.3537, longitude: -2.2749, temperature: 10.0 },
+    { region: 'West Scotland', station: 'Abbotsinch', latitude: 55.8719, longitude: -4.4331, temperature: 9.1 },
+    { region: 'Channel Islands', station: 'St Helier', latitude: 49.1860, longitude: -2.1070, temperature: 12.4 }
+  ];
   var STELRAD_ELITE_WATTS_PER_METRE_600 = { K1: 1000, K2: 1778, K3: 2514 };
   var STELRAD_STANDARD_WIDTHS = [
     400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600,
@@ -158,7 +179,9 @@
     } else {
       control = '<input id="' + safeId + '" data-id="' + safeId +
         '" type="number" step="any" inputmode="decimal"' +
-        (id === 'hl_outdoor_temp' ? '' : ' min="0"') + '>';
+        (id === 'hl_outdoor_temp' || id === 'hl_property_altitude'
+          ? ''
+          : ' min="0"') + '>';
     }
     return '<div class="field"><label for="' + safeId + '">' +
       escapeHtml(label) + '</label>' + control +
@@ -248,8 +271,8 @@
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
       fieldHtml('hl_bridge_pct', 'Thermal bridge allowance', 'select', bridgeOptions) +
-      fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Optional. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
-      fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Used for solid ground floors instead of the outdoor design temperature.') +
+      fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Estimated from postcode coordinates using Elevation API EU and Copernicus terrain data. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
+      fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Uses the annual mean temperature from the nearest MCS reference station for solid ground floors.') +
       fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
       '</div>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
@@ -262,17 +285,18 @@
       '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
       '<div class="hl-postcode-lookup">' +
       '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
-      '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the outdoor design temperature.</div>' +
+      '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the design temperature, altitude and ground temperature.</div>' +
       '</div>' +
       '<input type="hidden" id="hl_design_postcode" data-id="hl_design_postcode">' +
       '<input type="hidden" id="hl_design_station" data-id="hl_design_station">' +
       '<input type="hidden" id="hl_design_base_temp" data-id="hl_design_base_temp">' +
       '<input type="hidden" id="hl_design_station_altitude" data-id="hl_design_station_altitude">' +
+      '<input type="hidden" id="hl_ground_station" data-id="hl_ground_station">' +
       '<input type="hidden" id="hl_design_manual" data-id="hl_design_manual">' +
       '<input type="hidden" id="hl_temperature_defaults_v62" data-id="hl_temperature_defaults_v62">' +
       '<div class="hl-property-result"><div class="hl-total-number" id="hl_property_total">0.00 kW</div>' +
       '<div id="hl_property_detail">Enter at least one room to begin.</div></div>' +
-      '<p class="hl-help">This is a practical survey estimate. Confirm the property construction and local design temperature before selecting equipment.</p>' +
+      '<p class="hl-help">This is a practical survey estimate. Confirm the property construction and postcode-derived location assumptions before selecting equipment.</p>' +
       '</div>';
   }
 
@@ -308,6 +332,21 @@
 
   function nearestDesignStation(latitude, longitude) {
     return DESIGN_STATIONS.reduce(function (nearest, station) {
+      var distance = distanceBetweenCoordinates(
+        latitude,
+        longitude,
+        station.latitude,
+        station.longitude
+      );
+      if (!nearest || distance < nearest.distance) {
+        return { station: station, distance: distance };
+      }
+      return nearest;
+    }, null);
+  }
+
+  function nearestGroundTemperatureStation(latitude, longitude) {
+    return GROUND_TEMPERATURE_STATIONS.reduce(function (nearest, station) {
       var distance = distanceBetweenCoordinates(
         latitude,
         longitude,
@@ -368,6 +407,28 @@
     return null;
   }
 
+  async function propertyElevation(latitude, longitude) {
+    var controller = typeof AbortController === 'function'
+      ? new AbortController()
+      : null;
+    var timeout = controller
+      ? setTimeout(function () { controller.abort(); }, 7000)
+      : null;
+    var url = 'https://www.elevation-api.eu/v1/elevation/' +
+      encodeURIComponent(latitude) + '/' + encodeURIComponent(longitude) + '?json';
+    try {
+      var response = await fetch(url, controller ? { signal: controller.signal } : {});
+      if (!response.ok) return null;
+      var body = await response.json();
+      var elevation = body ? Number(body.elevation) : NaN;
+      return Number.isFinite(elevation) ? Math.round(elevation) : null;
+    } catch (error) {
+      return null;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+
   function specialPostcodeStation(postcode) {
     var compact = normalisePostcode(postcode);
     if (compact.startsWith('JE') || compact.startsWith('GY')) {
@@ -376,7 +437,7 @@
           location: 'Channel Islands',
           station: 'Maison St Louis Observatory',
           temperature: 0.1,
-          altitude: 0
+          altitude: 53
         },
         distance: 0
       };
@@ -390,8 +451,21 @@
     return null;
   }
 
-  function applyPostcodeDesignTemperature(postcode, match) {
+  function applyPostcodeDesignTemperature(postcode, match, locationDefaults) {
     var station = match.station;
+    var elevation = locationDefaults ? locationDefaults.elevation : null;
+    var groundMatch = locationDefaults ? locationDefaults.groundMatch : null;
+    postcodeLookupInProgress = true;
+    if (Number.isFinite(elevation)) {
+      setValue('hl_property_altitude', elevation);
+    } else {
+      setValue('hl_property_altitude', '');
+    }
+    if (groundMatch && groundMatch.station) {
+      setValue('hl_ground_temp', groundMatch.station.temperature.toFixed(1));
+      setValue('hl_ground_station', groundMatch.station.region +
+        ' (' + groundMatch.station.station + ')');
+    }
     var propertyAltitudeText = stringValue('hl_property_altitude');
     var propertyAltitude = propertyAltitudeText === '' ? null : Number(propertyAltitudeText);
     var stationAltitude = Number(station.altitude) || 0;
@@ -399,7 +473,6 @@
       ? 0
       : Math.max(0, Math.floor((propertyAltitude - stationAltitude) / 100));
     var correctedTemperature = station.temperature - altitudeSteps * 0.6;
-    postcodeLookupInProgress = true;
     setValue('hl_outdoor_temp', correctedTemperature.toFixed(1));
     setValue('hl_design_postcode', normalisePostcode(postcode));
     setValue('hl_design_station', station.location + ' (' + station.station + ')');
@@ -407,11 +480,20 @@
     setValue('hl_design_station_altitude', stationAltitude);
     setValue('hl_design_manual', 'no');
     postcodeLookupInProgress = false;
+    var locationMessage = Number.isFinite(elevation)
+      ? ' Altitude ' + elevation + 'm.'
+      : ' Altitude was unavailable and can be entered manually.';
+    if (groundMatch && groundMatch.station) {
+      locationMessage += ' Ground temperature ' +
+        groundMatch.station.temperature.toFixed(1) + '°C from ' +
+        groundMatch.station.region + ' (' + groundMatch.station.station + ').';
+    }
     setPostcodeLookupStatus(
       'Using ' + station.location + ' (' + station.station + '), ' +
       correctedTemperature.toFixed(1) + '°C' +
       (altitudeSteps ? ' after a ' + (altitudeSteps * 0.6).toFixed(1) +
-        '°C altitude correction.' : '. You can edit the temperature manually.'),
+        '°C altitude correction.' : '.') + locationMessage +
+        ' You can edit these values manually.',
       'success'
     );
     calculateHeatLoss();
@@ -429,7 +511,7 @@
     var compact = normalisePostcode(postcode);
     if (compact.length < 2) {
       setPostcodeLookupStatus(
-        'Enter a property postcode above to set the outdoor design temperature.',
+        'Enter a property postcode above to set the design temperature, altitude and ground temperature.',
         ''
       );
       return;
@@ -437,25 +519,35 @@
     if (postcodeLookupActivePostcode === compact) return;
 
     postcodeLookupActivePostcode = compact;
-    setPostcodeLookupStatus('Finding the local design temperature...', 'loading');
+    setPostcodeLookupStatus('Finding the local design temperature, altitude and ground temperature...', 'loading');
     try {
-      var match = specialPostcodeStation(compact);
-      if (!match) {
-        var coordinates = await postcodeCoordinates(postcode);
-        if (normalisePostcode(postcodeField && postcodeField.value) !== compact) return;
-        if (!coordinates) {
-          setPostcodeLookupStatus(
-            'Postcode not recognised. Enter the outdoor design temperature manually.',
-            'error'
-          );
-          return;
-        }
-        match = nearestDesignStation(coordinates.latitude, coordinates.longitude);
+      var coordinates = await postcodeCoordinates(postcode);
+      if (normalisePostcode(postcodeField && postcodeField.value) !== compact) return;
+      if (!coordinates) {
+        setPostcodeLookupStatus(
+          'Postcode not recognised. Enter the location values manually.',
+          'error'
+        );
+        return;
       }
-      applyPostcodeDesignTemperature(postcode, match);
+      var match = specialPostcodeStation(compact) ||
+        nearestDesignStation(coordinates.latitude, coordinates.longitude);
+      var groundMatch = nearestGroundTemperatureStation(
+        coordinates.latitude,
+        coordinates.longitude
+      );
+      var elevation = await propertyElevation(
+        coordinates.latitude,
+        coordinates.longitude
+      );
+      if (normalisePostcode(postcodeField && postcodeField.value) !== compact) return;
+      applyPostcodeDesignTemperature(postcode, match, {
+        elevation: elevation,
+        groundMatch: groundMatch
+      });
     } catch (error) {
       setPostcodeLookupStatus(
-        'Postcode lookup is unavailable. Enter the outdoor design temperature manually.',
+        'Postcode lookup is unavailable. Enter the location values manually.',
         'error'
       );
     } finally {
@@ -482,13 +574,21 @@
     persistCombinedData();
   }
 
+  function markGroundTemperatureManual() {
+    if (postcodeLookupInProgress) return;
+    setValue('hl_ground_station', 'Manual value');
+    persistCombinedData();
+  }
+
   function refreshPostcodeLookupStatus() {
     var postcode = normalisePostcode(stringValue('site_postcode'));
     var matchedPostcode = stringValue('hl_design_postcode');
     var station = stringValue('hl_design_station');
+    var groundStation = stringValue('hl_ground_station');
+    var altitudeText = stringValue('hl_property_altitude');
     if (!postcode) {
       setPostcodeLookupStatus(
-        'Enter a property postcode above to set the outdoor design temperature.',
+        'Enter a property postcode above to set the design temperature, altitude and ground temperature.',
         ''
       );
       return;
@@ -503,7 +603,14 @@
     if (postcode === matchedPostcode && station) {
       setPostcodeLookupStatus(
         'Using ' + station + ', ' + numberValue('hl_outdoor_temp', 0).toFixed(1) +
-        '°C. You can edit the temperature manually.',
+        '°C. Altitude ' + (altitudeText === ''
+          ? 'not set'
+          : Number(altitudeText).toFixed(0) + 'm') +
+        '. Ground temperature ' + numberValue('hl_ground_temp', 10).toFixed(1) +
+        '°C' + (groundStation === 'Manual value'
+          ? ' (manual)'
+          : groundStation ? ' from ' + groundStation : '') +
+        '. You can edit these values manually.',
         'success'
       );
       return;
@@ -519,6 +626,7 @@
     if (!Number.isFinite(baseTemperature) || propertyAltitudeText === '') return;
     var propertyAltitude = Number(propertyAltitudeText);
     if (!Number.isFinite(propertyAltitude)) return;
+    var groundStation = stringValue('hl_ground_station');
     var steps = Math.max(0, Math.floor((propertyAltitude - stationAltitude) / 100));
     postcodeLookupInProgress = true;
     setValue('hl_outdoor_temp', (baseTemperature - steps * 0.6).toFixed(1));
@@ -526,7 +634,11 @@
     setPostcodeLookupStatus(
       'Using ' + stringValue('hl_design_station') + ', ' +
       numberValue('hl_outdoor_temp', 0).toFixed(1) + '°C' +
-      (steps ? ' after a ' + (steps * 0.6).toFixed(1) + '°C altitude correction.' : '.'),
+      (steps ? ' after a ' + (steps * 0.6).toFixed(1) + '°C altitude correction.' : '.') +
+      ' Ground temperature ' + numberValue('hl_ground_temp', 10).toFixed(1) +
+      '°C' + (groundStation === 'Manual value'
+        ? ' (manual)'
+        : groundStation ? ' from ' + groundStation : '') + '.',
       'success'
     );
     calculateHeatLoss();
@@ -558,6 +670,11 @@
       altitude.dataset.hlAltitudeWired = 'yes';
       altitude.addEventListener('input', recalculateAltitudeCorrection);
       altitude.addEventListener('change', recalculateAltitudeCorrection);
+    }
+    var groundTemperature = document.getElementById('hl_ground_temp');
+    if (groundTemperature && groundTemperature.dataset.hlGroundWired !== 'yes') {
+      groundTemperature.dataset.hlGroundWired = 'yes';
+      groundTemperature.addEventListener('input', markGroundTemperatureManual);
     }
     refreshPostcodeLookupStatus();
   }
@@ -1339,6 +1456,12 @@
       '<td class="label">Radiator design</td><td colspan="3" class="input">Stelrad Elite at ' +
       escapeHtml(stringValue('hl_radiator_temperature')) + '°C, nominal ΔT' +
       (Number(stringValue('hl_radiator_temperature')) - 25) + '</td></tr>' +
+      '<tr><td class="label">Property altitude</td><td class="input">' +
+      escapeHtml(stringValue('hl_property_altitude')) + ' m</td>' +
+      '<td class="label">Ground temperature</td><td class="input">' +
+      escapeHtml(stringValue('hl_ground_temp')) + ' °C</td>' +
+      '<td class="label">Ground reference</td><td colspan="3" class="input">' +
+      escapeHtml(stringValue('hl_ground_station') || 'Manual value') + '</td></tr>' +
       '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
       (rows.length ? rows.map(function (room) {
         return '<tr><td><b>' + escapeHtml(room.roomName) + '</b></td>' +
