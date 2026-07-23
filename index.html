@@ -4989,6 +4989,13 @@
           let drawing = false;
           let lastPoint = null;
 
+          function drawSegment(ctx, from, to) {
+            ctx.beginPath();
+            ctx.moveTo(from.x, from.y);
+            ctx.lineTo(to.x, to.y);
+            ctx.stroke();
+          }
+
           function start(event) {
             event.preventDefault();
             if (!prepareCanvas(canvas, input)) return;
@@ -5003,21 +5010,25 @@
             event.preventDefault();
 
             const ctx = canvas.getContext("2d");
-            const nextPoint = getPoint(event, canvas);
-
-            ctx.beginPath();
-            ctx.moveTo(lastPoint.x, lastPoint.y);
-            ctx.lineTo(nextPoint.x, nextPoint.y);
-            ctx.stroke();
-
-            lastPoint = nextPoint;
-            input.value = canvas.toDataURL("image/png");
-            if (typeof update === "function") update();
+            // Mobile browsers can batch several touch positions into one
+            // pointer event. Draw every available point so fast signatures
+            // stay curved instead of becoming long straight lines.
+            const events = typeof event.getCoalescedEvents === "function"
+              ? event.getCoalescedEvents()
+              : [event];
+            events.forEach(function (sample) {
+              const nextPoint = getPoint(sample, canvas);
+              drawSegment(ctx, lastPoint, nextPoint);
+              lastPoint = nextPoint;
+            });
           }
 
           function stop(event) {
             if (!drawing) return;
             drawing = false;
+            // Converting the whole canvas to an image and refreshing the
+            // survey is expensive on phones. Do it once per completed stroke,
+            // not on every touch movement.
             input.value = canvas.toDataURL("image/png");
             if (canvas.releasePointerCapture)
               canvas.releasePointerCapture(event.pointerId);
