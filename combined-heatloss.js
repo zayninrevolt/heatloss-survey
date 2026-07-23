@@ -56,15 +56,24 @@
     1800, 2000, 2200, 2400, 2600, 2800, 3000
   ];
   var STELRAD_300_WIDTHS = [500, 1000, 1500, 2000, 2500, 3000];
+  var STELRAD_P_PLUS_300_WIDTHS = [500, 1000, 1500, 2000, 2500];
+  var STELRAD_P_PLUS_450_600_WIDTHS = [
+    400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600,
+    1800, 2000
+  ];
+  var STELRAD_P_PLUS_700_WIDTHS = [
+    400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600,
+    1800
+  ];
   var STELRAD_ELITE_MODELS = [
     { type: 'K1', height: 300, wattsPerMetre: 517, widths: STELRAD_300_WIDTHS },
     { type: 'K1', height: 450, wattsPerMetre: 768, widths: STELRAD_STANDARD_WIDTHS },
     { type: 'K1', height: 600, wattsPerMetre: 1000, widths: STELRAD_STANDARD_WIDTHS },
     { type: 'K1', height: 700, wattsPerMetre: 1142, widths: STELRAD_STANDARD_WIDTHS },
-    { type: 'P+', height: 300, wattsPerMetre: 776, widths: STELRAD_STANDARD_WIDTHS },
-    { type: 'P+', height: 450, wattsPerMetre: 1106, widths: STELRAD_STANDARD_WIDTHS },
-    { type: 'P+', height: 600, wattsPerMetre: 1409, widths: STELRAD_STANDARD_WIDTHS },
-    { type: 'P+', height: 700, wattsPerMetre: 1597, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'P+', height: 300, wattsPerMetre: 776, widths: STELRAD_P_PLUS_300_WIDTHS },
+    { type: 'P+', height: 450, wattsPerMetre: 1106, widths: STELRAD_P_PLUS_450_600_WIDTHS },
+    { type: 'P+', height: 600, wattsPerMetre: 1409, widths: STELRAD_P_PLUS_450_600_WIDTHS },
+    { type: 'P+', height: 700, wattsPerMetre: 1597, widths: STELRAD_P_PLUS_700_WIDTHS },
     { type: 'K2', height: 300, wattsPerMetre: 1012, widths: STELRAD_300_WIDTHS },
     { type: 'K2', height: 450, wattsPerMetre: 1409, widths: STELRAD_STANDARD_WIDTHS },
     { type: 'K2', height: 600, wattsPerMetre: 1778, widths: STELRAD_STANDARD_WIDTHS },
