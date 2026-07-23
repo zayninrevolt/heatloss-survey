@@ -410,6 +410,10 @@
     ];
     return '<div class="card hl-summary-card" id="heatLossSummaryCard">' +
       '<h3>Heat loss summary</h3>' +
+      '<div class="hl-postcode-lookup">' +
+      '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
+      '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the design temperature, altitude and ground temperature.</div>' +
+      '</div>' +
       '<p>Open Heat loss details inside each room. The room load is calculated automatically, then suitable Stelrad Elite sizes can be selected in the radiator schedule.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The surveyor can verify the age separately before finalising the survey.') +
@@ -434,10 +438,6 @@
       fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
-      '<div class="hl-postcode-lookup">' +
-      '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
-      '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the design temperature, altitude and ground temperature.</div>' +
-      '</div>' +
       '<input type="hidden" id="hl_design_postcode" data-id="hl_design_postcode">' +
       '<input type="hidden" id="hl_design_station" data-id="hl_design_station">' +
       '<input type="hidden" id="hl_design_base_temp" data-id="hl_design_base_temp">' +
