@@ -6370,6 +6370,8 @@
             "na",
             "none",
             "no",
+            "refused",
+            "no new radiator required",
           ]);
 
           if (notRadiatorValues.has(text)) return false;
@@ -6389,9 +6391,18 @@
           const names =
             typeof allRoomNames === "function" ? allRoomNames() : rooms;
           let count = 0;
+          const allRadiatorsRefused =
+            val("hl_radiator_plan") === "Customer refused all";
 
           names.forEach(function (roomName) {
             const key = roomKeyFromName(roomName);
+            const roomOutcome = val(`rad_${key}_outcome`);
+            if (
+              allRadiatorsRefused ||
+              roomOutcome === "Customer refused"
+            ) {
+              return;
+            }
             const newSizeField = document.getElementById(`rad_${key}_new_size`);
             const secondSizeField = document.getElementById(
               `rad_${key}_new_size_2`,
@@ -7341,6 +7352,7 @@
       (function () {
         const MANIFEST_KEY = "surveyManifestV57";
         const DATA_PREFIX  = "surveyDataV57_";
+        const ACTIVE_KEY   = "surveyActiveV76";
         let surveyPanelReturnFocusV57 = null;
 
         function getManifest() {
@@ -7349,9 +7361,66 @@
         }
         function saveManifest(m) { localStorage.setItem(MANIFEST_KEY, JSON.stringify(m)); }
 
+        function surveyNameFromData(data) {
+          const addr = String(
+            data?.site_address || data?.front_address || data?.r_address || ""
+          );
+          const job = String(data?.r_job || "").trim();
+          const firstLine = addr.split("\n")[0].trim().slice(0, 60);
+          return firstLine || (job ? "Job " + job : "Untitled survey");
+        }
+
         function surveyName() {
-          const addr = val("site_address") || val("front_address") || "";
-          return addr.split("\n")[0].trim().slice(0, 60) || "Untitled survey";
+          return surveyNameFromData(
+            typeof getData === "function" ? getData() : {}
+          );
+        }
+
+        function surveyIdentity(data) {
+          const job = String(data?.r_job || "").trim().toLowerCase();
+          if (job) return "job:" + job;
+          const address = String(
+            data?.site_address || data?.front_address || data?.r_address || ""
+          ).trim().toLowerCase().replace(/\s+/g, " ");
+          return address ? "address:" + address : "";
+        }
+
+        function storedSurveyIdentity(id) {
+          try {
+            return surveyIdentity(
+              JSON.parse(localStorage.getItem(DATA_PREFIX + id) || "{}")
+            );
+          } catch (e) {
+            return "";
+          }
+        }
+
+        function repairSurveyManifestV76() {
+          const manifest = getManifest();
+          const known = new Set(manifest.map(s => s.id));
+          let changed = false;
+          for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index) || "";
+            if (!key.startsWith(DATA_PREFIX)) continue;
+            const id = key.slice(DATA_PREFIX.length);
+            if (!id || known.has(id)) continue;
+            try {
+              const data = JSON.parse(localStorage.getItem(key) || "{}");
+              const timestamp = Number((id.match(/^sv_(\d+)/) || [])[1]);
+              manifest.push({
+                id,
+                name: surveyNameFromData(data),
+                date: Number.isFinite(timestamp)
+                  ? new Date(timestamp).toISOString()
+                  : new Date().toISOString(),
+                checks: 0
+              });
+              known.add(id);
+              changed = true;
+            } catch (e) {}
+          }
+          if (changed) saveManifest(manifest);
+          return manifest;
         }
 
         function liveCheckCount() {
@@ -7402,6 +7471,13 @@
           const manifest = getManifest();
 
           let id = window._activeSurveyIdV57;
+          const activeEntry = id && manifest.find(s => s.id === id);
+          const currentIdentity = surveyIdentity(data);
+          const activeIdentity = activeEntry ? storedSurveyIdentity(id) : "";
+          if (activeEntry && currentIdentity && activeIdentity &&
+              currentIdentity !== activeIdentity) {
+            id = null;
+          }
           if (id && manifest.find(s => s.id === id)) {
             const e = manifest.find(s => s.id === id);
             e.name = name; e.date = date; e.checks = checks;
@@ -7412,6 +7488,7 @@
           }
           try {
             localStorage.setItem(DATA_PREFIX + id, JSON.stringify(data));
+            localStorage.setItem(ACTIVE_KEY, id);
             saveManifest(manifest);
             renderSurveyListV57();
             hideSurveyPanelV57();
@@ -7421,11 +7498,18 @@
           }
         };
 
+        window.saveSurveyAsNewV76 = function () {
+          window._activeSurveyIdV57 = null;
+          localStorage.removeItem(ACTIVE_KEY);
+          window.saveSurveyToListV57();
+        };
+
         window.loadSurveyFromListV57 = function (id) {
           try {
             const raw = localStorage.getItem(DATA_PREFIX + id);
             if (!raw) { alert("Survey data not found."); return; }
             window._activeSurveyIdV57 = id;
+            localStorage.setItem(ACTIVE_KEY, id);
             // setData is wrapped to redraw signatures; call once here.
             if (typeof setData === "function") setData(JSON.parse(raw));
             // Belt-and-braces extra redraw passes for slow layouts.
@@ -7447,15 +7531,20 @@
           if (!confirm("Delete \"" + s.name + "\"?\n\nThis removes it from the browser. Use JSON export first if you need a backup.")) return;
           saveManifest(getManifest().filter(x => x.id !== id));
           localStorage.removeItem(DATA_PREFIX + id);
-          if (window._activeSurveyIdV57 === id) window._activeSurveyIdV57 = null;
+          if (window._activeSurveyIdV57 === id) {
+            window._activeSurveyIdV57 = null;
+            localStorage.removeItem(ACTIVE_KEY);
+          }
           renderSurveyListV57();
         };
 
         window.newSurveyV57 = function () {
           if (val("site_address") || val("front_address")) {
-            if (!confirm("Start a new survey? Save first if you need to keep the current one.")) return;
+            if (!confirm("Start a new survey? The current job will be saved to the survey list first.")) return;
+            window.saveSurveyToListV57();
           }
           window._activeSurveyIdV57 = null;
+          localStorage.removeItem(ACTIVE_KEY);
           document.querySelectorAll("[data-id]").forEach(e => (e.value = ""));
           if (typeof window.resetRoomStructureV63 === "function") {
             window.resetRoomStructureV63();
@@ -7474,7 +7563,7 @@
         function renderSurveyListV57() {
           const container = document.getElementById("surveyListContainerV57");
           if (!container) return;
-          const manifest = getManifest().slice().reverse();
+          const manifest = repairSurveyManifestV76().slice().reverse();
           if (manifest.length === 0) {
             container.innerHTML = "<p class=\"v57-empty\">No saved surveys yet. Fill in an address and click <b>Save to list</b>.</p>";
             return;
@@ -7537,6 +7626,7 @@
               </div>
               <div class="v57-panel-actions">
                 <button onclick="saveSurveyToListV57()">Save to list</button>
+                <button class="v57-secondary" onclick="saveSurveyAsNewV76()">Save as new job</button>
                 <button class="v57-secondary" onclick="newSurveyV57()">New survey</button>
               </div>
               <div id="surveyListContainerV57"></div>
@@ -7563,6 +7653,11 @@
           update._v57SurveyWrapped = true;
         }
 
+        const storedActiveSurveyV76 = localStorage.getItem(ACTIVE_KEY);
+        if (storedActiveSurveyV76 &&
+            getManifest().some(s => s.id === storedActiveSurveyV76)) {
+          window._activeSurveyIdV57 = storedActiveSurveyV76;
+        }
         installPanel();
         window.addEventListener("load", installPanel);
       })();
@@ -8316,7 +8411,7 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=75">
-    <script src="combined-heatloss.js?v=75"></script>
+    <link rel="stylesheet" href="combined-heatloss.css?v=78">
+    <script src="combined-heatloss.js?v=78"></script>
   </body>
 </html>

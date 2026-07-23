@@ -5,6 +5,12 @@
   var postcodeLookupTimer = null;
   var postcodeLookupInProgress = false;
   var postcodeLookupActivePostcode = '';
+  var RADIATOR_OUTCOMES = [
+    { label: 'Size a new radiator', value: 'New radiator required' },
+    { label: 'Assess the existing radiator', value: 'Assess existing radiator' },
+    { label: 'Replace the existing radiator with the same size', value: 'Replace existing radiator like for like' },
+    { label: 'Customer refused radiator work', value: 'Customer refused' }
+  ];
   var DESIGN_STATIONS = [
     { location: 'Belfast', station: 'Aldergrove', latitude: 54.6575, longitude: -6.2158, temperature: -3.2, altitude: 63 },
     { location: 'Birmingham', station: 'Coleshill', latitude: 52.4800, longitude: -1.6890, temperature: -5.1, altitude: 96 },
@@ -413,6 +419,10 @@
       fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Estimated from postcode coordinates using Elevation API EU and Copernicus terrain data. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
       fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Uses the annual mean temperature from the nearest MCS reference station for solid ground floors.') +
       fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
+      fieldHtml('hl_radiator_plan', 'Whole-property radiator outcome', 'select', [
+        { label: 'Survey radiators room by room', value: 'Room by room' },
+        { label: 'Customer refused all radiator work', value: 'Customer refused all' }
+      ], 'Refusal marks every room as Refused while leaving the boiler and materials choices available.') +
       fieldHtml('hl_ventilation_system', 'Property ventilation system', 'select', VENTILATION_SYSTEMS, 'The 0.5 ACH room minimum is retained. MVHR reduces the mechanical ventilation loss by its heat-recovery efficiency.') +
       fieldHtml('hl_mvhr_efficiency', 'MVHR heat recovery (%)', 'number', null, 'Only used for MVHR. Enter the design efficiency, normally taken from the unit data.') +
       '</div>' +
@@ -949,6 +959,9 @@
     if (!['75', '65', '55'].includes(stringValue('hl_radiator_temperature'))) {
       setValue('hl_radiator_temperature', 75);
     }
+    if (!stringValue('hl_radiator_plan')) {
+      setValue('hl_radiator_plan', 'Room by room');
+    }
     setValue('front_boiler_temp', stringValue('hl_radiator_temperature'));
     var propertyDefaults = {
       hl_default_wall: 'Cavity wall, insulated',
@@ -989,6 +1002,9 @@
         var id = 'hl_' + key + '_' + entry[0];
         if (!stringValue(id)) setValue(id, entry[1]);
       });
+      if (!stringValue('rad_' + key + '_outcome')) {
+        setValue('rad_' + key + '_outcome', 'New radiator required');
+      }
     });
     setValue('hl_temperature_defaults_v62', 'yes');
     if (!stringValue('hl_applied_age_band')) {
@@ -1344,6 +1360,26 @@
     recommendedSystemOutputKw: recommendedSystemOutputKw
   };
 
+  function radiatorOutcomeForRoom(key) {
+    if (stringValue('hl_radiator_plan') === 'Customer refused all') {
+      return 'Customer refused';
+    }
+    return stringValue('rad_' + key + '_outcome') || 'New radiator required';
+  }
+
+  function existingRadiatorForRoom(key, indoor) {
+    var size = stringValue('rad_' + key + '_ex_size');
+    if (!size) return null;
+    var flow = Number(stringValue('hl_radiator_temperature')) || 75;
+    var returnTemperature = flow - 10;
+    var deltaT = (flow + returnTemperature) / 2 - indoor;
+    if (deltaT < 20 || deltaT > 65) return null;
+    var correctionFactor = stelradCorrectionFactor(deltaT);
+    return stelradIndividualOptions(correctionFactor, {}).find(function (option) {
+      return option.size === size;
+    }) || null;
+  }
+
   function computeHeatLossValues(input) {
     var deltaT = Math.max(0, Number(input.deltaT) || 0);
     var internalDeltaT = Math.max(0, Number(input.internalDeltaT) || 0);
@@ -1563,10 +1599,38 @@
     if (complete && windowArea + doorArea > grossWallArea && grossWallArea > 0) {
       warnings.push('Window and door areas exceed the exposed wall area');
     }
+    var radiatorOutcome = radiatorOutcomeForRoom(key);
+    var existingRadiator = existingRadiatorForRoom(key, indoor);
+    var usesExistingAssessment = radiatorOutcome === 'Assess existing radiator';
+    var replacesLikeForLike = radiatorOutcome ===
+      'Replace existing radiator like for like';
+    var customerRefused = radiatorOutcome === 'Customer refused';
+    var existingRadiatorAdequate = Boolean(
+      complete && existingRadiator && existingRadiator.watts >= heat.totalWatts
+    );
     var currentRadiatorSelection = stringValue('rad_' + key + '_new_size');
-    var radiator = complete && heat.totalWatts > 0
+    var radiator = complete && heat.totalWatts > 0 && !customerRefused &&
+      !replacesLikeForLike && !(usesExistingAssessment && existingRadiatorAdequate)
       ? recommendStelradElite(heat.totalWatts, indoor, currentRadiatorSelection, key)
       : null;
+    var effectiveRadiator = customerRefused
+      ? null
+      : replacesLikeForLike
+        ? existingRadiator
+        : usesExistingAssessment && existingRadiatorAdequate
+          ? existingRadiator
+          : radiator && radiator.selected;
+    if ((usesExistingAssessment || replacesLikeForLike) && !existingRadiator) {
+      warnings.push('Select a recognised existing radiator size');
+    }
+    if (usesExistingAssessment && complete && existingRadiator &&
+        !existingRadiatorAdequate) {
+      warnings.push('Existing radiator output is below the calculated room requirement');
+    }
+    if (replacesLikeForLike && complete && existingRadiator &&
+        existingRadiator.watts < heat.totalWatts) {
+      warnings.push('Like-for-like replacement is below the calculated room requirement');
+    }
     if (radiator && radiator.temperatureWarning) {
       warnings.push(radiator.flow <= radiator.returnTemperature
         ? 'Radiator flow temperature must be higher than return temperature'
@@ -1651,6 +1715,11 @@
       totalWatts: heat.totalWatts,
       propertyWatts: Math.max(0, heat.totalWatts - heatedInternalWatts),
       wattsPerSquareMetre: floorArea > 0 ? heat.totalWatts / floorArea : 0,
+      radiatorOutcome: radiatorOutcome,
+      customerRefused: customerRefused,
+      existingRadiator: existingRadiator,
+      existingRadiatorAdequate: existingRadiatorAdequate,
+      effectiveRadiator: effectiveRadiator,
       radiator: radiator,
       warnings: warnings
     };
@@ -1714,9 +1783,78 @@
     }
   }
 
+  function configureExistingRadiatorSelect(result) {
+    var field = document.getElementById('rad_' + result.key + '_ex_size');
+    if (!field) return null;
+    var existingValue = field.value;
+    if (field.tagName !== 'SELECT') {
+      var select = document.createElement('select');
+      select.id = field.id;
+      select.dataset.id = field.dataset.id;
+      select.className = field.className;
+      select.setAttribute('aria-label', result.roomName + ' - Existing Size');
+      field.replaceWith(select);
+      field = select;
+    }
+    if (field.dataset.existingRadiatorWired !== 'yes') {
+      field.dataset.existingRadiatorWired = 'yes';
+      field.addEventListener('change', function () {
+        if (typeof update === 'function') update();
+        persistCombinedData();
+      });
+    }
+    var flow = Number(stringValue('hl_radiator_temperature')) || 75;
+    var returnTemperature = flow - 10;
+    var deltaT = (flow + returnTemperature) / 2 - result.indoor;
+    var correctionFactor = stelradCorrectionFactor(deltaT);
+    var options = deltaT >= 20 && deltaT <= 65
+      ? stelradIndividualOptions(correctionFactor, {})
+      : [];
+    field.innerHTML = '<option value="">Select existing radiator size</option>';
+    var groups = {};
+    options.forEach(function (option) {
+      var groupKey = option.height + '-' + option.type;
+      if (!groups[groupKey]) {
+        groups[groupKey] = document.createElement('optgroup');
+        groups[groupKey].label = option.height + 'mm high, ' + option.type;
+        field.appendChild(groups[groupKey]);
+      }
+      var choice = document.createElement('option');
+      choice.value = option.size;
+      choice.textContent = option.size + ' | ' +
+        (option.watts / 1000).toFixed(2) + ' kW';
+      choice.dataset.watts = option.watts.toFixed(2);
+      groups[groupKey].appendChild(choice);
+    });
+    if (existingValue && options.some(function (option) {
+      return option.size === existingValue;
+    })) {
+      field.value = existingValue;
+    } else if (existingValue) {
+      var legacy = document.createElement('option');
+      legacy.value = existingValue;
+      legacy.textContent = existingValue + ' | unrecognised size';
+      field.insertBefore(legacy, field.children[1] || null);
+      field.value = existingValue;
+    }
+    field.title = 'Select the installed radiator height, width and panel type so its output can be checked.';
+    return field;
+  }
+
+  function setSingleRadiatorChoice(field, value, label) {
+    if (!field) return;
+    field.innerHTML = '';
+    var choice = document.createElement('option');
+    choice.value = value;
+    choice.textContent = label;
+    field.appendChild(choice);
+    field.value = value;
+  }
+
   function configureRadiatorSelect(result) {
     var field = document.getElementById('rad_' + result.key + '_new_size');
     if (!field) return null;
+    configureExistingRadiatorSelect(result);
     var existingValue = field.value;
     if (field.tagName !== 'SELECT') {
       var select = document.createElement('select');
@@ -1746,6 +1884,41 @@
 
     var radiator = result.radiator;
     var usesTwo = radiator && radiator.usesTwo;
+    if (result.customerRefused) {
+      setSingleRadiatorChoice(field, 'Refused', 'Refused');
+      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - New Size');
+      field.title = 'The customer refused radiator work for this room.';
+      if (secondWrap) secondWrap.hidden = true;
+      if (secondField) secondField.value = '';
+      return { first: field, second: secondField };
+    }
+    if (result.radiatorOutcome === 'Assess existing radiator' &&
+        result.existingRadiatorAdequate) {
+      setSingleRadiatorChoice(
+        field,
+        'No new radiator required',
+        'No new radiator required'
+      );
+      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - New Size');
+      field.title = 'The existing radiator meets or exceeds the calculated room requirement.';
+      if (secondWrap) secondWrap.hidden = true;
+      if (secondField) secondField.value = '';
+      return { first: field, second: secondField };
+    }
+    if (result.radiatorOutcome === 'Replace existing radiator like for like') {
+      var sameSize = result.existingRadiator ? result.existingRadiator.size : '';
+      setSingleRadiatorChoice(
+        field,
+        sameSize,
+        sameSize ? 'Replace like for like: ' + sameSize :
+          'Select the existing radiator size first'
+      );
+      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - New Size');
+      field.title = 'The replacement is intentionally the same size as the existing radiator.';
+      if (secondWrap) secondWrap.hidden = true;
+      if (secondField) secondField.value = '';
+      return { first: field, second: secondField };
+    }
     var warningPlaceholder = radiator && radiator.temperatureWarning
       ? 'Review the radiator design temperature'
       : 'Choose a suitable Stelrad Elite';
@@ -1790,6 +1963,57 @@
     var resultBox = document.getElementById('hl_' + result.key + '_result');
     var summary = document.getElementById('hl_' + result.key + '_summary');
     var radKw = document.getElementById('rad_' + result.key + '_kw');
+    var radOutput = document.getElementById('rad_' + result.key + '_output');
+    if (result.customerRefused) {
+      configureRadiatorSelect(result);
+      if (radKw) {
+        radKw.value = '';
+        radKw.readOnly = true;
+      }
+      if (radOutput) {
+        radOutput.value = '';
+        radOutput.readOnly = true;
+        radOutput.title = 'No radiator output selected because the customer refused radiator work.';
+      }
+      if (summary) summary.textContent = 'Refused';
+      if (resultBox) {
+        resultBox.innerHTML =
+          '<div class="hl-result-main"><strong>Refused</strong></div>' +
+          '<div class="hl-result-breakdown">Customer refused radiator work for this room. Boiler and materials choices remain available.</div>';
+      }
+      return;
+    }
+    configureExistingRadiatorSelect(result);
+    if (result.radiatorOutcome === 'Replace existing radiator like for like' &&
+        !result.complete) {
+      configureRadiatorSelect(result);
+      if (radKw) {
+        radKw.value = '';
+        radKw.readOnly = true;
+      }
+      if (radOutput) {
+        radOutput.value = result.existingRadiator
+          ? (result.existingRadiator.watts / 1000).toFixed(2)
+          : '';
+        radOutput.readOnly = true;
+        radOutput.title = 'Temperature-corrected output of the selected existing-size radiator.';
+      }
+      if (summary) {
+        summary.textContent = result.existingRadiator
+          ? 'Replace like for like'
+          : 'Select existing size';
+      }
+      if (resultBox) {
+        resultBox.innerHTML =
+          '<div class="hl-result-main"><strong>Like-for-like replacement</strong></div>' +
+          '<div class="hl-result-breakdown">' +
+          (result.existingRadiator
+            ? escapeHtml(result.existingRadiator.size) + ' selected. The replacement can be recorded without completing the room heat loss.'
+            : 'Select the installed height, width and panel type in Existing Size.') +
+          '</div>';
+      }
+      return;
+    }
     if (!result.started) {
       clearCalculatedRadiatorFields(result.key);
       if (resultBox) {
@@ -1814,20 +2038,41 @@
       radKw.title = 'Calculated from Heat loss details in this room.';
     }
     var radiatorFields = configureRadiatorSelect(result);
-    var radOutput = document.getElementById('rad_' + result.key + '_output');
-    if (result.radiator && result.radiator.selected) {
+    if (result.effectiveRadiator) {
       if (radOutput) {
-        radOutput.value = (result.radiator.selected.watts / 1000).toFixed(2);
+        radOutput.value = (result.effectiveRadiator.watts / 1000).toFixed(2);
         radOutput.readOnly = true;
-        radOutput.title = 'Temperature-corrected Stelrad output.';
+        radOutput.title = result.radiatorOutcome === 'New radiator required'
+          ? 'Temperature-corrected Stelrad output.'
+          : 'Temperature-corrected output of the selected existing-size radiator.';
       }
     } else {
-      if (radiatorFields && radiatorFields.first) radiatorFields.first.value = '';
-      if (radiatorFields && radiatorFields.second) radiatorFields.second.value = '';
+      if (result.radiatorOutcome !== 'Replace existing radiator like for like') {
+        if (radiatorFields && radiatorFields.first) radiatorFields.first.value = '';
+        if (radiatorFields && radiatorFields.second) radiatorFields.second.value = '';
+      }
       if (radOutput) radOutput.value = '';
     }
     var radiatorHtml = '';
-    if (result.radiator) {
+    if (result.radiatorOutcome === 'Assess existing radiator') {
+      radiatorHtml = '<div class="hl-radiator-result"><b>Existing radiator:</b> ' +
+        (result.existingRadiator
+          ? escapeHtml(result.existingRadiator.size) + ' gives ' +
+            (result.existingRadiator.watts / 1000).toFixed(2) + ' kW. ' +
+            (result.existingRadiatorAdequate
+              ? '<strong>No new radiator is required.</strong>'
+              : 'It is below the room requirement, so a new size is shown above.')
+          : 'Select the installed height, width and panel type in Existing Size.') +
+        '</div>';
+    } else if (result.radiatorOutcome === 'Replace existing radiator like for like') {
+      radiatorHtml = '<div class="hl-radiator-result"><b>Like-for-like replacement:</b> ' +
+        (result.existingRadiator
+          ? escapeHtml(result.existingRadiator.size) + ' gives ' +
+            (result.existingRadiator.watts / 1000).toFixed(2) +
+            ' kW at the selected design temperature.'
+          : 'Select the installed height, width and panel type in Existing Size.') +
+        '</div>';
+    } else if (result.radiator) {
       radiatorHtml = '<div class="hl-radiator-result"><b>Stelrad Elite at ' +
         result.radiator.flow.toFixed(0) + '/' +
         result.radiator.returnTemperature.toFixed(0) + '°C:</b> ' +
@@ -1855,7 +2100,11 @@
           ' correction factor at ΔT' + result.radiator.deltaT.toFixed(1) + '.</small>') +
         '</div>';
     }
-    if (summary) summary.textContent = Math.round(result.totalWatts) + ' W';
+    if (summary) {
+      summary.textContent = result.existingRadiatorAdequate
+        ? 'Existing radiator adequate'
+        : Math.round(result.totalWatts) + ' W';
+    }
     if (resultBox) {
       var ventilationDetails = result.baseAch.toFixed(2) + ' ACH base';
       if (result.ventilationSystem === 'Mechanical ventilation with heat recovery (MVHR)') {
@@ -1908,9 +2157,9 @@
     var totalArea = included.reduce(function (sum, room) {
       return sum + room.floorArea;
     }, 0);
-    var radiatorOutputWatts = included.reduce(function (sum, room) {
-      return sum + (room.radiator && room.radiator.selected
-        ? room.radiator.selected.watts
+    var radiatorOutputWatts = results.reduce(function (sum, room) {
+      return sum + (room.effectiveRadiator
+        ? room.effectiveRadiator.watts
         : 0);
     }, 0);
     var systemOutputKw = recommendedSystemOutputKw(radiatorOutputWatts);
@@ -2156,10 +2405,20 @@
           Math.round(room.ventilationWatts) + ' W</td><td>' +
           room.wattsPerSquareMetre.toFixed(1) + '</td><td class="input"><b>' +
           Math.round(room.totalWatts) + ' W</b>' +
-          (room.radiator && room.radiator.selected
-            ? '<br><small>' + escapeHtml(room.radiator.selected.size) + ', ' +
-              (room.radiator.selected.watts / 1000).toFixed(2) + ' kW</small>'
-            : '') + '</td></tr>';
+          (room.customerRefused
+            ? '<br><small>Radiator work refused</small>'
+            : room.radiatorOutcome === 'Assess existing radiator' &&
+                room.existingRadiatorAdequate
+              ? '<br><small>' + escapeHtml(room.existingRadiator.size) +
+                ', existing radiator adequate</small>'
+              : room.radiatorOutcome === 'Replace existing radiator like for like' &&
+                  room.existingRadiator
+                ? '<br><small>' + escapeHtml(room.existingRadiator.size) +
+                  ', replace like for like</small>'
+                : room.effectiveRadiator
+                  ? '<br><small>' + escapeHtml(room.effectiveRadiator.size) + ', ' +
+                    (room.effectiveRadiator.watts / 1000).toFixed(2) + ' kW</small>'
+                  : '') + '</td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No rooms entered</td></tr>') +
       '<tr><td colspan="6" class="label right">Property design heat loss</td>' +
       '<td class="input">' + calculation.wattsPerSquareMetre.toFixed(1) +
@@ -2174,6 +2433,22 @@
   roomFormHtml = function (roomName, index) {
     var key = roomKeyFromName(roomName);
     var original = previousRoomFormHtml(roomName, index);
+    var outcomeOptions = RADIATOR_OUTCOMES.map(function (option) {
+      return '<option value="' + escapeHtml(option.value) + '">' +
+        escapeHtml(option.label) + '</option>';
+    }).join('');
+    var outcomeField =
+      '<div class="field hl-radiator-outcome">' +
+      '<label for="rad_' + escapeHtml(key) + '_outcome">' +
+      escapeHtml(roomName) + ' - Radiator outcome</label>' +
+      '<select id="rad_' + escapeHtml(key) + '_outcome" data-id="rad_' +
+      escapeHtml(key) + '_outcome">' + outcomeOptions + '</select>' +
+      '<small>Assess compares the installed size with the calculated room load. Like-for-like keeps the installed size for a rusty or damaged radiator.</small>' +
+      '</div>';
+    original = original.replace(
+      /(<summary>[\s\S]*?<\/summary>)/,
+      function (summaryHtml) { return summaryHtml + outcomeField; }
+    );
     var newSizePattern = new RegExp(
       '<div class="field">\\s*<label for="rad_' + key +
       '_new_size">[\\s\\S]*?<\\/div>'
