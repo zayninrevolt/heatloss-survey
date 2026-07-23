@@ -48,7 +48,9 @@
     { region: 'West Scotland', station: 'Abbotsinch', latitude: 55.8719, longitude: -4.4331, temperature: 9.1 },
     { region: 'Channel Islands', station: 'St Helier', latitude: 49.1860, longitude: -2.1070, temperature: 12.4 }
   ];
-  var STELRAD_ELITE_WATTS_PER_METRE_600 = { K1: 1000, K2: 1778, K3: 2514 };
+  var STELRAD_ELITE_WATTS_PER_METRE_600 = {
+    K1: 1000, 'P+': 1409, K2: 1778, K3: 2514
+  };
   var STELRAD_STANDARD_WIDTHS = [
     400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600,
     1800, 2000, 2200, 2400, 2600, 2800, 3000
@@ -59,6 +61,10 @@
     { type: 'K1', height: 450, wattsPerMetre: 768, widths: STELRAD_STANDARD_WIDTHS },
     { type: 'K1', height: 600, wattsPerMetre: 1000, widths: STELRAD_STANDARD_WIDTHS },
     { type: 'K1', height: 700, wattsPerMetre: 1142, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'P+', height: 300, wattsPerMetre: 776, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'P+', height: 450, wattsPerMetre: 1106, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'P+', height: 600, wattsPerMetre: 1409, widths: STELRAD_STANDARD_WIDTHS },
+    { type: 'P+', height: 700, wattsPerMetre: 1597, widths: STELRAD_STANDARD_WIDTHS },
     { type: 'K2', height: 300, wattsPerMetre: 1012, widths: STELRAD_300_WIDTHS },
     { type: 'K2', height: 450, wattsPerMetre: 1409, widths: STELRAD_STANDARD_WIDTHS },
     { type: 'K2', height: 600, wattsPerMetre: 1778, widths: STELRAD_STANDARD_WIDTHS },
@@ -2372,7 +2378,7 @@
           '<br>Heat-loss equivalent: <b>' + room.ach.toFixed(2) + ' ACH</b></td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
       '<tr><td colspan="8" class="small">A heated internal wall uses the temperature difference between the two selected rooms for radiator sizing. This transfer is excluded from the property total. An unheated space uses the selected adjacent-space factor or a known temperature.</td></tr>' +
-      '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
+      '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; P+ 300/450/600/700mm = 0.776/1.106/1.409/1.597; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Radiator choices meet the calculated room requirement without exceeding it by more than 50%. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
       '<tr><td colspan="8" class="small">Ventilation uses the MCS/CIBSE minimum of 0.5 ACH for heated rooms with an external envelope and 0 ACH for fully internal rooms. A whole-property design ACH can increase that minimum. Room devices add their default airflow. MVHR applies the entered heat-recovery efficiency. PIV adds 20 m³/h across the property, shared by entered room volume. A manual room ACH overrides the automatic value. Air permeability is reported separately unless a verified design ACH is entered.</td></tr>' +
       '<tr><td colspan="8" class="small">The detailed exposed floor perimeter is recorded for audit. The selected standard floor U-value is still used by this practical calculator. Use a certified BS EN 12831 or MCS tool where a full ISO 13370 ground-floor calculation is required.</td></tr>' +
