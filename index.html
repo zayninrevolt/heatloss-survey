@@ -4473,6 +4473,23 @@
   `;
       }
 
+      function radiatorScheduleNewSizeCell(key) {
+        const selection = val(`rad_${key}_new_size`);
+        if (selection !== "No new radiator selected") {
+          return cell(`rad_${key}_new_size`);
+        }
+
+        const existingSize = val(`rad_${key}_ex_size`);
+        const requiredOutput = Number(val(`rad_${key}_kw`)) || 0;
+        const retainedOutput = Number(val(`rad_${key}_output`)) || 0;
+        if (!existingSize) {
+          return "Radiator refused<br><small>Existing size not recorded</small>";
+        }
+        return retainedOutput < requiredOutput
+          ? "Radiator refused<br><small><em>undersized</em></small>"
+          : "Existing radiator retained";
+      }
+
       function renderRads() {
         const rows = allRoomNames()
           .map((roomName) => {
@@ -4500,7 +4517,7 @@
           .map((field) => {
             if (field === "new_size") {
               const secondSize = val(`rad_${key}_new_size_2`);
-              return `<td class="input">${cell(`rad_${key}_${field}`)}${secondSize ? `<br>+ ${cell(`rad_${key}_new_size_2`)}` : ""}</td>`;
+              return `<td class="input">${radiatorScheduleNewSizeCell(key)}${secondSize ? `<br>+ ${cell(`rad_${key}_new_size_2`)}` : ""}</td>`;
             }
             return `<td class="input">${cell(`rad_${key}_${field}`)}</td>`;
           })
@@ -6383,6 +6400,8 @@
             "no",
             "refused",
             "no new radiator required",
+            "no new radiator selected",
+            "shared radiator",
           ]);
 
           if (notRadiatorValues.has(text)) return false;
@@ -7565,6 +7584,13 @@
             const c = document.getElementById(cid);
             if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
           });
+          // resetRoomStructureV63 can trigger an update before the canvases
+          // are cleared. Zero the saved signature data afterwards so that a
+          // stale canvas image cannot be retained for the new survey.
+          ["p_tenant_sig", "p_surveyor_sig"].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) input.value = "";
+          });
           if (typeof setDefaults === "function") setDefaults();
           if (typeof update === "function") update();
           hideSurveyPanelV57();
@@ -8423,6 +8449,6 @@
       })();
     </script>
     <link rel="stylesheet" href="combined-heatloss.css?v=79">
-    <script src="combined-heatloss.js?v=80"></script>
+    <script src="combined-heatloss.js?v=86"></script>
   </body>
 </html>
