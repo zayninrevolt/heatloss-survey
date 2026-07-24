@@ -392,7 +392,7 @@
       fieldHtml('hl_' + key + '_indoor_temp', 'Room design temperature', 'select', temperatures) +
       fieldHtml('hl_' + key + '_external_wall_length', 'Exposed wall length (m)', 'number', null, 'Leave blank to estimate it from the outside wall count above.') +
       fieldHtml('hl_' + key + '_wall_type', 'External wall construction', 'select', optionsFromMap(VALUES.externalWall)) +
-      fieldHtml('hl_' + key + '_internal_wall_length', 'Internal wall length (m)', 'number', null, 'For a heated adjoining room, select that room below so its design temperature is used.') +
+      fieldHtml('hl_' + key + '_internal_wall_length', 'Internal wall length override (m)', 'number', null, 'When an exposed-wall length is entered, the remaining room perimeter is used automatically. Enter a value only to override that calculation for an irregular room.') +
       fieldHtml('hl_' + key + '_internal_wall_type', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_' + key + '_internal_adjacent_room', 'Heated room on other side', 'select', adjacentRooms, 'Only used when a heated internal wall is selected.') +
       fieldHtml('hl_' + key + '_window_area', 'Window area (m²)', 'number') +
@@ -1082,6 +1082,12 @@
     return 0;
   }
 
+  function remainingInternalWallLength(length, width, exposedWallLength) {
+    var perimeter = 2 * (Math.max(0, length) + Math.max(0, width));
+    if (perimeter <= 0 || exposedWallLength <= 0) return 0;
+    return Math.max(0, perimeter - Math.min(perimeter, exposedWallLength));
+  }
+
   function mappedValue(group, selected) {
     var value = VALUES[group][selected];
     return Number.isFinite(value) ? value : 0;
@@ -1457,7 +1463,15 @@
       ? enteredWallLength
       : estimatedWallLength(length, width, outsideWallCount);
     var assumedWall = enteredWallLength <= 0 && outsideWallCount > 0;
-    var internalWallLength = Math.max(0, numberValue('hl_' + key + '_internal_wall_length', 0));
+    var enteredInternalWallLength = Math.max(0,
+      numberValue('hl_' + key + '_internal_wall_length', 0));
+    var calculatedInternalWallLength = remainingInternalWallLength(length, width,
+      enteredWallLength);
+    var internalWallLength = enteredInternalWallLength > 0
+      ? enteredInternalWallLength
+      : calculatedInternalWallLength;
+    var assumedInternalWall = enteredInternalWallLength <= 0 &&
+      calculatedInternalWallLength > 0;
     var windowWidth = numberValue('hl_' + key + '_window_width', 0);
     var windowHeight = numberValue('hl_' + key + '_window_height', 0);
     var windowCount = numberValue('hl_' + key + '_window_count', 0);
@@ -1676,6 +1690,7 @@
       alternativeWallType: alternativeWallType,
       alternativeWallU: alternativeWallU,
       internalWallLength: internalWallLength,
+      assumedInternalWall: assumedInternalWall,
       windowArea: windowArea,
       doorArea: doorArea,
       wallType: wallType,

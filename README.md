@@ -27,6 +27,8 @@ Technical U-value entry is replaced with plain construction choices. These inclu
 
 The survey uses one streamlined flow without a separate detailed mode. Internal walls can be marked as adjoining a heated room or an unheated space. A heated wall uses the difference between the current room and the selected adjoining room for radiator sizing, while that internal transfer is excluded from the whole-property heat loss. An unheated space uses the standard temperature factor.
 
+When an exposed-wall length is entered for a rectangular room, the app calculates the remaining room perimeter as internal wall length. The internal-wall length field can override this for irregular room shapes.
+
 The property age uses the current England and Wales RdSAP age bands A to M. There is no property-age lookup in the app. The surveyor can search separately using title deeds, council building-control records, homeowner information or another reliable property record. Unknown remains valid when no reliable record is available. Age bands also apply the current MCS default room temperatures: bands A to J use room-specific 18°C, 21°C or 22°C values, while band K onwards uses 21°C throughout except bathrooms and shower rooms at 22°C.
 
 ## Stelrad Elite sizing
