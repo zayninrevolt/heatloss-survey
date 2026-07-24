@@ -136,6 +136,49 @@
   margin: 4px 0 0;
 }
 
+.hl-room-geometry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.hl-room-geometry strong {
+  color: #1e3a8a;
+}
+
+.hl-internal-wall {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #93c5fd;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.hl-internal-wall-heading {
+  margin-bottom: 10px;
+}
+
+.hl-internal-wall-heading h4 {
+  margin: 0 0 4px;
+  color: #1e3a8a;
+  font-size: 15px;
+}
+
+.hl-internal-wall-heading p {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .hl-result-main {
   margin-bottom: 5px;
   font-size: 19px;
@@ -218,6 +261,22 @@ body.theme-dark .hl-room-result {
 body.theme-dark .hl-postcode-lookup {
   background: #0f172a !important;
   border-color: #1d4ed8 !important;
+}
+
+body.theme-dark .hl-room-geometry,
+body.theme-dark .hl-internal-wall {
+  background: #0f172a !important;
+  border-color: #1d4ed8 !important;
+}
+
+body.theme-dark .hl-room-geometry,
+body.theme-dark .hl-internal-wall-heading p {
+  color: #cbd5e1 !important;
+}
+
+body.theme-dark .hl-room-geometry strong,
+body.theme-dark .hl-internal-wall-heading h4 {
+  color: #bfdbfe !important;
 }
 
 body.theme-dark .hl-property-defaults {

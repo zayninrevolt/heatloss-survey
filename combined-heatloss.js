@@ -333,6 +333,29 @@
       (help ? '<small>' + escapeHtml(help) + '</small>' : '') + '</div>';
   }
 
+  function internalWallFieldHtml(key) {
+    var id = 'hl_' + key + '_internal_wall_type';
+    var safeId = escapeHtml(id);
+    var heated = Object.keys(VALUES.internalWall).filter(function (option) {
+      return option.indexOf('Heated room') === 0;
+    });
+    var unheated = Object.keys(VALUES.internalWall).filter(function (option) {
+      return option.indexOf('Unheated space') === 0;
+    });
+    function optionHtml(option) {
+      return '<option value="' + escapeHtml(option) + '">' +
+        escapeHtml(option.replace(/^Heated room, |^Unheated space, /, '')) +
+        '</option>';
+    }
+    return '<div class="field"><label for="' + safeId +
+      '">What is on the other side?</label><select id="' + safeId +
+      '" data-id="' + safeId + '"><option value=""></option>' +
+      '<optgroup label="Heated room">' + heated.map(optionHtml).join('') +
+      '</optgroup><optgroup label="Unheated space">' +
+      unheated.map(optionHtml).join('') + '</optgroup></select>' +
+      '<small>Choose the room condition first, then the matching wall construction.</small></div>';
+  }
+
   function targetTemperature(roomName) {
     var name = String(roomName || '').toLowerCase();
     if (name.includes('bath') || name.includes('shower')) return 22;
@@ -388,13 +411,25 @@
       escapeHtml(key) + '_summary">Uses room dimensions</span></summary>' +
       '<div class="hl-room-body">' +
       '<p class="hl-room-intro">Length and width come from this room. Ceiling height comes from the top of the Rads page. Construction choices apply standard values automatically.</p>' +
+      '<div class="hl-room-geometry" id="hl_' + escapeHtml(key) +
+      '_geometry" aria-live="polite">Enter the room length and width to see its wall geometry.</div>' +
       '<div class="hl-fields-grid">' +
       fieldHtml('hl_' + key + '_indoor_temp', 'Room design temperature', 'select', temperatures) +
       fieldHtml('hl_' + key + '_external_wall_length', 'Exposed wall length (m)', 'number', null, 'Leave blank to estimate it from the outside wall count above.') +
       fieldHtml('hl_' + key + '_wall_type', 'External wall construction', 'select', optionsFromMap(VALUES.externalWall)) +
+      '</div>' +
+      '<section class="hl-internal-wall" id="hl_' + escapeHtml(key) +
+      '_internal_wall" hidden><div class="hl-internal-wall-heading"><h4>Internal wall details</h4><p id="hl_' +
+      escapeHtml(key) + '_internal_wall_help"></p></div><div class="hl-fields-grid">' +
       fieldHtml('hl_' + key + '_internal_wall_length', 'Internal wall length override (m)', 'number', null, 'When an exposed-wall length is entered, the remaining room perimeter is used automatically. Enter a value only to override that calculation for an irregular room.') +
-      fieldHtml('hl_' + key + '_internal_wall_type', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
-      fieldHtml('hl_' + key + '_internal_adjacent_room', 'Heated room on other side', 'select', adjacentRooms, 'Only used when a heated internal wall is selected.') +
+      internalWallFieldHtml(key) +
+      '<div id="hl_' + escapeHtml(key) + '_internal_adjacent_room_wrap" hidden>' +
+      fieldHtml('hl_' + key + '_internal_adjacent_room', 'Heated room on other side', 'select', adjacentRooms, 'Used to calculate the temperature difference through this internal wall.') +
+      '</div><div id="hl_' + escapeHtml(key) + '_internal_adjacent_space_wrap" hidden>' +
+      fieldHtml('hl_' + key + '_internal_adjacent_space', 'Unheated adjoining space', 'select', Object.keys(ADJACENT_SPACE_FACTORS), 'Used when no measured adjoining-space temperature is available.') +
+      '</div><div id="hl_' + escapeHtml(key) + '_internal_adjacent_temp_wrap" hidden>' +
+      fieldHtml('hl_' + key + '_internal_adjacent_temp', 'Unheated space temperature (°C)', 'number', null, 'Optional. Overrides the standard temperature factor for the selected unheated space.') +
+      '</div></div></section><div class="hl-fields-grid">' +
       fieldHtml('hl_' + key + '_window_area', 'Window area (m²)', 'number') +
       fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       fieldHtml('hl_' + key + '_door_area', 'External door area (m²)', 'number') +
@@ -1684,11 +1719,14 @@
       indoor: indoor,
       outdoor: outdoor,
       floorArea: floorArea,
+      perimeter: 2 * (length + width),
+      enteredWallLength: enteredWallLength,
       wallLength: wallLength,
       assumedWall: assumedWall,
       alternativeWallLength: alternativeWallLength,
       alternativeWallType: alternativeWallType,
       alternativeWallU: alternativeWallU,
+      calculatedInternalWallLength: calculatedInternalWallLength,
       internalWallLength: internalWallLength,
       assumedInternalWall: assumedInternalWall,
       windowArea: windowArea,
@@ -1989,7 +2027,56 @@
     return { first: field, second: secondField };
   }
 
+  function formatWallLength(length) {
+    return Math.max(0, Number(length) || 0).toFixed(2).replace(/\.00$/, '');
+  }
+
+  function renderRoomGeometry(result) {
+    var geometry = document.getElementById('hl_' + result.key + '_geometry');
+    var internalSection = document.getElementById('hl_' + result.key + '_internal_wall');
+    var internalHelp = document.getElementById('hl_' + result.key + '_internal_wall_help');
+    var heatedRoomWrap = document.getElementById(
+      'hl_' + result.key + '_internal_adjacent_room_wrap');
+    var unheatedSpaceWrap = document.getElementById(
+      'hl_' + result.key + '_internal_adjacent_space_wrap');
+    var unheatedTemperatureWrap = document.getElementById(
+      'hl_' + result.key + '_internal_adjacent_temp_wrap');
+    var hasDimensions = result.length > 0 && result.width > 0;
+    var hasInternalWall = result.internalWallLength > 0;
+    var internalType = result.internalWallType;
+    if (geometry) {
+      if (!hasDimensions) {
+        geometry.textContent = 'Enter the room length and width to see its wall geometry.';
+      } else if (result.enteredWallLength > 0) {
+        geometry.innerHTML = '<span>Room perimeter <strong>' +
+          formatWallLength(result.perimeter) + ' m</strong></span><span>Exposed <strong>' +
+          formatWallLength(result.enteredWallLength) + ' m</strong></span><span>Internal <strong>' +
+          formatWallLength(result.calculatedInternalWallLength) + ' m</strong></span>';
+      } else if (result.wallLength > 0) {
+        geometry.innerHTML = '<span>Room perimeter <strong>' +
+          formatWallLength(result.perimeter) + ' m</strong></span><span>Exposed estimate <strong>' +
+          formatWallLength(result.wallLength) + ' m</strong></span><span>Enter an exposed-wall measurement to calculate the remaining internal walls.</span>';
+      } else {
+        geometry.innerHTML = '<span>Room perimeter <strong>' +
+          formatWallLength(result.perimeter) + ' m</strong></span><span>Enter an exposed-wall measurement to calculate the remaining internal walls.</span>';
+      }
+    }
+    if (internalSection) internalSection.hidden = !hasInternalWall;
+    if (internalHelp && hasInternalWall) {
+      internalHelp.textContent = result.assumedInternalWall
+        ? formatWallLength(result.internalWallLength) +
+          ' m is the remaining perimeter after the exposed wall. Choose whether it adjoins a heated room or unheated space.'
+        : formatWallLength(result.internalWallLength) +
+          ' m is being used from the manual internal-wall override.';
+    }
+    if (heatedRoomWrap) heatedRoomWrap.hidden = !isHeatedInternalWall(internalType);
+    var isUnheated = String(internalType || '').indexOf('Unheated space') === 0;
+    if (unheatedSpaceWrap) unheatedSpaceWrap.hidden = !isUnheated;
+    if (unheatedTemperatureWrap) unheatedTemperatureWrap.hidden = !isUnheated;
+  }
+
   function renderRoomResult(result) {
+    renderRoomGeometry(result);
     var resultBox = document.getElementById('hl_' + result.key + '_result');
     var summary = document.getElementById('hl_' + result.key + '_summary');
     var radKw = document.getElementById('rad_' + result.key + '_kw');
