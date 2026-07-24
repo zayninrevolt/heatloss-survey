@@ -208,7 +208,11 @@
   color: #475569;
 }
 
-#radsForm .card > details > summary .sec-badge,
+#radsForm .card > details > summary .sec-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
 #radsForm .hl-room-dropdown > summary .sec-badge,
 #radsForm details > summary .section-count-v58 {
   display: none;
@@ -311,6 +315,57 @@ body.theme-dark .hl-result-breakdown {
   color: #cbd5e1 !important;
 }
 
+.extra-room-add {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(260px, 360px) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.extra-room-add label {
+  margin: 0;
+  font-weight: 700;
+}
+
+.extra-room-add input {
+  min-width: 0;
+}
+
+.extra-room-add button {
+  min-width: 140px;
+  margin: 0;
+}
+
+.room-completion-action {
+  display: flex;
+  justify-content: flex-end;
+  margin: 16px 12px 12px;
+  padding-top: 12px;
+  border-top: 1px solid #d1d5db;
+}
+
+.room-completion-action button {
+  min-width: 160px;
+  border: 0;
+  border-radius: 8px;
+  background: #4b5563;
+  color: #fff;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.room-completion-action button.is-complete {
+  background: #4b5563;
+}
+
+body.theme-dark .room-completion-action button {
+  background: #374151 !important;
+  color: #f9fafb !important;
+}
+
 @media (max-width: 700px) {
   .hl-summary-grid,
   .hl-fields-grid {
@@ -332,6 +387,19 @@ body.theme-dark .hl-result-breakdown {
   .room-actions-v50 button,
   .extra-room-add button {
     min-height: 44px;
+  }
+
+  .extra-room-add {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .extra-room-add button {
+    width: 100%;
+  }
+
+  .room-completion-action button {
+    width: 100%;
   }
 }
 

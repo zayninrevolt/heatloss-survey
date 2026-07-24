@@ -2156,7 +2156,7 @@
   <h3>Rooms</h3>`;
         rooms.forEach((room, i) => {
           let key = room.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-          radsHtml += `<details ${i < 2 ? "open" : ""}>
+          radsHtml += `<details>
     <summary>
     <b>${room}</b>
     </summary>${[
@@ -3961,7 +3961,7 @@
         const fields = roomFieldDefinitions(roomName);
 
         return `
-    <details ${index < 2 ? "open" : ""}>
+    <details>
       <summary><b>${escapeHtml(roomName)}</b></summary>
       ${fields
         .map((field) =>
@@ -3996,7 +3996,7 @@
       <h3>Extra rooms</h3>
       <p class="muted">Use this if the property has rooms not shown in the standard list, for example Utility, Conservatory, Office, En-suite, or Store.</p>
       <div class="extra-room-add">
-        <label class="sr-only" for="newCustomRoomName">Extra room name</label>
+        <label for="newCustomRoomName">Extra room name</label>
         <input id="newCustomRoomName" type="text" aria-label="Extra room name" placeholder="Room name, e.g. Utility">
         <button type="button" onclick="addCustomRoom()">Add room</button>
       </div>
@@ -6173,6 +6173,11 @@
           );
           if (secondRadiator) secondRadiator.value = "";
 
+          const completedRoom = document.getElementById(
+            `rad_${roomKey}_completed`,
+          );
+          if (completedRoom) completedRoom.value = "";
+
           document
             .querySelectorAll(`[data-id^="hl_${CSS.escape(roomKey)}_"]`)
             .forEach(function (input) {
@@ -7775,7 +7780,11 @@
             const total = counted.length;
             if (!total) return;
             const filled = counted.filter(isFilled).length;
-            const complete = filled === total;
+            const completedField = details.querySelector(
+              ':scope > input[data-id$="_completed"]',
+            );
+            const markedComplete = completedField && completedField.value === "yes";
+            const complete = markedComplete || filled === total;
 
             let badge = summary.querySelector(":scope > .sec-badge");
             if (!badge) {
@@ -7791,7 +7800,9 @@
             badge.textContent = complete ? "✓ Complete" : filled + "/" + total;
             badge.setAttribute(
               "aria-label",
-              complete
+              markedComplete
+                ? "Room marked complete"
+                : complete
                 ? "All fields completed"
                 : filled + " of " + total + " fields filled"
             );
@@ -8448,7 +8459,7 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=79">
-    <script src="combined-heatloss.js?v=86"></script>
+    <link rel="stylesheet" href="combined-heatloss.css?v=83">
+    <script src="combined-heatloss.js?v=87"></script>
   </body>
 </html>

@@ -84,6 +84,26 @@
     { type: 'K3', height: 600, wattsPerMetre: 2514, widths: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000, 2400] },
     { type: 'K3', height: 700, wattsPerMetre: 2841, widths: [500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000] }
   ];
+  // Rated at 75/65°C with a 20°C room temperature, on the normal fan speed.
+  // The Hi-Line LV is the bathroom-safe low-voltage model.
+  var MYSON_FAN_CONVECTOR_MODELS = [
+    { type: 'Myson Kickspace', height: 101, width: 496, wattsAtDt50: 755,
+      size: 'Myson Kickspace 500' },
+    { type: 'Myson Kickspace', height: 101, width: 560, wattsAtDt50: 1023,
+      size: 'Myson Kickspace 600' },
+    { type: 'Myson Kickspace', height: 101, width: 760, wattsAtDt50: 1707,
+      size: 'Myson Kickspace 800' },
+    { type: 'Myson Hi-Line RC', height: 277, width: 554, wattsAtDt50: 930,
+      size: 'Myson Hi-Line RC 7-4' },
+    { type: 'Myson Hi-Line RC', height: 277, width: 682, wattsAtDt50: 1610,
+      size: 'Myson Hi-Line RC 10-6' },
+    { type: 'Myson Hi-Line RC', height: 277, width: 887, wattsAtDt50: 2459,
+      size: 'Myson Hi-Line RC 15-10' },
+    { type: 'Myson Hi-Line RC', height: 277, width: 1171, wattsAtDt50: 3468,
+      size: 'Myson Hi-Line RC 20-14' },
+    { type: 'Myson Hi-Line LV', height: 277, width: 554, wattsAtDt50: 930,
+      bathroomOnly: true, size: 'Myson Hi-Line LV 7-4' }
+  ];
   var STELRAD_CORRECTION_FACTORS = {
     20: 0.302, 21: 0.322, 22: 0.342, 23: 0.363, 24: 0.383,
     25: 0.404, 26: 0.426, 27: 0.447, 28: 0.469, 29: 0.491,
@@ -373,7 +393,8 @@
 
   function targetTemperature(roomName) {
     var name = String(roomName || '').toLowerCase();
-    if (name.includes('bath') || name.includes('shower')) return 22;
+    if (name.includes('bath') || name.includes('shower') || name.includes('ensuite') ||
+        name.includes('en suite')) return 22;
     if (name.includes('lounge') || name.includes('living') ||
         name.includes('dining') || name.includes('d room') ||
         name.includes('study') || name.includes('breakfast') ||
@@ -388,7 +409,8 @@
 
   function previousTargetTemperature(roomName) {
     var name = String(roomName || '').toLowerCase();
-    if (name.includes('bath') || name.includes('shower')) return 22;
+    if (name.includes('bath') || name.includes('shower') || name.includes('ensuite') ||
+        name.includes('en suite')) return 22;
     if (name.includes('lounge') || name.includes('living') ||
         name.includes('dining')) return 21;
     if (name.includes('kitchen')) return 20;
@@ -400,7 +422,8 @@
 
   function targetTemperatureForAge(roomName, ageBand) {
     var name = String(roomName || '').toLowerCase();
-    if (name.includes('bath') || name.includes('shower')) return 22;
+    if (name.includes('bath') || name.includes('shower') || name.includes('ensuite') ||
+        name.includes('en suite')) return 22;
     if (['K', 'L', 'M'].includes(String(ageBand || 'Unknown'))) return 21;
     return targetTemperature(roomName);
   }
@@ -480,7 +503,7 @@
       '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
       '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the design temperature, altitude and ground temperature.</div>' +
       '</div>' +
-      '<p>Open Heat loss details inside each room. The room load is calculated automatically, then suitable Stelrad Elite sizes can be selected in the radiator schedule.</p>' +
+      '<p>Open Heat loss details inside each room. The room load is calculated automatically, then suitable Stelrad Elite or Myson fan-convector options can be selected in the radiator schedule.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The surveyor can verify the age separately before finalising the survey.') +
       fieldHtml('hl_property_age_source', 'Property age evidence', 'select', ['Title deeds or building-control record', 'Homeowner or landlord', 'Visual estimate', 'Unknown']) +
@@ -1220,60 +1243,57 @@
     };
   }
 
-  function suitableStelradOptions(requiredWatts, correctionFactor, filters, quantity) {
-    filters = filters || {};
-    quantity = Math.max(1, Math.round(Number(quantity) || 1));
-    var options = [];
-    var maximumWatts = requiredWatts * 1.5;
-    if (requiredWatts <= 0) return options;
-    STELRAD_ELITE_MODELS.forEach(function (model) {
-      // 500 mm high models can be recorded as existing radiators, but are not
-      // offered for new installations.
-      if (model.height === 500) return;
-      if (filters.maxHeight && model.height > filters.maxHeight) return;
-      if (filters.panelType && filters.panelType !== 'Any' &&
-          model.type !== filters.panelType) return;
-      model.widths.forEach(function (width) {
-        if (filters.maxWidth && width > filters.maxWidth) return;
-        var unitWatts = model.wattsPerMetre * (width / 1000) * correctionFactor;
-        var watts = unitWatts * quantity;
-        if (watts < requiredWatts || watts > maximumWatts + 0.01) return;
-        var baseSize = model.height + '(h) x ' + width + '(w) ' + model.type;
-        options.push({
-          type: model.type,
-          height: model.height,
-          width: width,
-          watts: watts,
-          unitWatts: unitWatts,
-          quantity: quantity,
-          ratedWatts: model.wattsPerMetre * (width / 1000) * quantity,
-          oversizePercent: requiredWatts > 0
-            ? Math.max(0, (watts - requiredWatts) / requiredWatts * 100)
-            : 0,
-          size: quantity > 1 ? quantity + ' x ' + baseSize : baseSize
-        });
-      });
-    });
-    var minimumFallback = quantity === 1
-      ? minimumStelradFallback(correctionFactor, filters)
-      : null;
-    if (!options.length && minimumFallback && requiredWatts < minimumFallback.watts) {
-      options.push(minimumFallback);
-    }
+  function roomIsBathroom(roomName) {
+    return /bath|shower|en\s*suite/i.test(String(roomName || ''));
+  }
+
+  function sortRadiatorOptions(options, filters) {
     return options.sort(function (a, b) {
       if (filters.preferredWidth) {
         var aDistance = Math.abs(a.width - filters.preferredWidth);
         var bDistance = Math.abs(b.width - filters.preferredWidth);
         if (aDistance !== bDistance) return aDistance - bDistance;
       }
-      return a.height - b.height || a.width - b.width || a.type.localeCompare(b.type);
+      return a.height - b.height || a.width - b.width || a.type.localeCompare(b.type) ||
+        a.size.localeCompare(b.size);
     });
   }
 
-  function stelradIndividualOptions(correctionFactor, filters) {
+  function mysonFanConvectorOptions(deltaT, filters, roomName) {
+    if (!Number.isFinite(Number(deltaT))) return [];
+    var bathroom = roomIsBathroom(roomName);
+    return MYSON_FAN_CONVECTOR_MODELS.filter(function (model) {
+      if (bathroom !== Boolean(model.bathroomOnly)) return false;
+      if (filters.maxHeight && model.height > filters.maxHeight) return false;
+      if (filters.maxWidth && model.width > filters.maxWidth) return false;
+      return !filters.panelType || filters.panelType === 'Any';
+    }).map(function (model) {
+      // Myson's published 75/65 and 90/70 data follows a 1.06 exponent.
+      var watts = model.wattsAtDt50 * Math.pow(Math.max(0, deltaT) / 50, 1.06);
+      return {
+        type: model.type,
+        height: model.height,
+        width: model.width,
+        watts: watts,
+        unitWatts: watts,
+        quantity: 1,
+        ratedWatts: model.wattsAtDt50,
+        manufacturer: 'Myson',
+        fanConvector: true,
+        bathroomOnly: Boolean(model.bathroomOnly),
+        size: model.size
+      };
+    });
+  }
+
+  function stelradIndividualOptions(correctionFactor, filters, roomName, deltaT,
+    newInstallation) {
     filters = filters || {};
     var options = [];
     STELRAD_ELITE_MODELS.forEach(function (model) {
+      // 500 mm high models are retained for an existing-radiator assessment,
+      // but cannot be selected for a new installation.
+      if (newInstallation && model.height === 500) return;
       if (filters.maxHeight && model.height > filters.maxHeight) return;
       if (filters.panelType && filters.panelType !== 'Any' &&
           model.type !== filters.panelType) return;
@@ -1288,18 +1308,49 @@
           unitWatts: watts,
           quantity: 1,
           ratedWatts: model.wattsPerMetre * (width / 1000),
+          manufacturer: 'Stelrad',
           size: model.height + '(h) x ' + width + '(w) ' + model.type
         });
       });
     });
-    return options.sort(function (a, b) {
-      return a.height - b.height || a.width - b.width || a.type.localeCompare(b.type);
-    });
+    options = options.concat(mysonFanConvectorOptions(deltaT, filters, roomName));
+    return sortRadiatorOptions(options, filters);
   }
 
-  function suitableStelradPairData(requiredWatts, correctionFactor, filters) {
+  function suitableStelradOptions(requiredWatts, correctionFactor, filters, quantity,
+    roomName, deltaT) {
+    filters = filters || {};
+    quantity = Math.max(1, Math.round(Number(quantity) || 1));
+    if (requiredWatts <= 0) return [];
     var maximumWatts = requiredWatts * 1.5;
-    var units = stelradIndividualOptions(correctionFactor, filters).filter(function (option) {
+    var options = stelradIndividualOptions(correctionFactor, filters, roomName,
+      deltaT, true).map(function (option) {
+      var watts = option.watts * quantity;
+      return Object.assign({}, option, {
+        watts: watts,
+        unitWatts: option.watts,
+        quantity: quantity,
+        ratedWatts: option.ratedWatts * quantity,
+        oversizePercent: Math.max(0, (watts - requiredWatts) / requiredWatts * 100),
+        size: quantity > 1 ? quantity + ' x ' + option.size : option.size
+      });
+    }).filter(function (option) {
+      return option.watts >= requiredWatts && option.watts <= maximumWatts + 0.01;
+    });
+    var minimumFallback = quantity === 1
+      ? minimumStelradFallback(correctionFactor, filters)
+      : null;
+    if (!options.length && minimumFallback && requiredWatts < minimumFallback.watts) {
+      options.push(minimumFallback);
+    }
+    return sortRadiatorOptions(options, filters);
+  }
+
+  function suitableStelradPairData(requiredWatts, correctionFactor, filters, roomName,
+    deltaT) {
+    var maximumWatts = requiredWatts * 1.5;
+    var units = stelradIndividualOptions(correctionFactor, filters, roomName,
+      deltaT, true).filter(function (option) {
       return option.watts < maximumWatts;
     });
     var pairs = [];
@@ -1335,7 +1386,7 @@
     return match ? match[1] : String(selection || '');
   }
 
-  function recommendStelradElite(requiredWatts, indoor, currentSelection, key) {
+  function recommendStelradElite(requiredWatts, indoor, currentSelection, key, roomName) {
     var flow = Number(stringValue('hl_radiator_temperature')) || 75;
     var returnTemperature = flow - 10;
     var meanWater = (flow + returnTemperature) / 2;
@@ -1365,7 +1416,7 @@
     var usesTwo = false;
     if (validTemperature) {
       var singleOptions = suitableStelradOptions(
-        requiredWatts, correctionFactor, filters, 1
+        requiredWatts, correctionFactor, filters, 1, roomName, deltaT
       );
       usesTwo = quantityChoice === '2' ||
         (quantityChoice === 'Automatic' && !singleOptions.length);
@@ -1380,7 +1431,8 @@
         }, null);
         selected = selectedFirst;
       } else {
-        var pairData = suitableStelradPairData(requiredWatts, correctionFactor, filters);
+        var pairData = suitableStelradPairData(requiredWatts, correctionFactor, filters,
+          roomName, deltaT);
         pairCount = pairData.pairs.length;
         options = pairData.units;
         var currentFirst = options.find(function (option) {
@@ -1474,7 +1526,7 @@
     return stringValue('rad_' + key + '_outcome') || 'New radiator required';
   }
 
-  function existingRadiatorForRoom(key, indoor) {
+  function existingRadiatorForRoom(key, indoor, roomName) {
     var size = stringValue('rad_' + key + '_ex_size');
     if (!size) return null;
     var flow = Number(stringValue('hl_radiator_temperature')) || 75;
@@ -1482,7 +1534,7 @@
     var deltaT = (flow + returnTemperature) / 2 - indoor;
     if (deltaT < 20 || deltaT > 65) return null;
     var correctionFactor = stelradCorrectionFactor(deltaT);
-    return stelradIndividualOptions(correctionFactor, {}).find(function (option) {
+    return stelradIndividualOptions(correctionFactor, {}, roomName, deltaT, false).find(function (option) {
       return option.size === size;
     }) || null;
   }
@@ -1715,7 +1767,7 @@
       warnings.push('Window and door areas exceed the exposed wall area');
     }
     var radiatorOutcome = radiatorOutcomeForRoom(key);
-    var existingRadiator = existingRadiatorForRoom(key, indoor);
+    var existingRadiator = existingRadiatorForRoom(key, indoor, roomName);
     var usesExistingAssessment = radiatorOutcome === 'Assess existing radiator';
     var replacesLikeForLike = radiatorOutcome ===
       'Replace existing radiator like for like';
@@ -1728,7 +1780,8 @@
       NO_NEW_RADIATOR_SELECTION;
     var radiator = complete && heat.totalWatts > 0 && !customerRefused &&
       !replacesLikeForLike && !(usesExistingAssessment && existingRadiatorAdequate)
-      ? recommendStelradElite(heat.totalWatts, indoor, currentRadiatorSelection, key)
+      ? recommendStelradElite(heat.totalWatts, indoor, currentRadiatorSelection, key,
+        roomName)
       : null;
     var effectiveRadiator = customerRefused
       ? null
@@ -1760,12 +1813,12 @@
     if (radiator && radiator.temperatureWarning) {
       warnings.push(radiator.flow <= radiator.returnTemperature
         ? 'Radiator flow temperature must be higher than return temperature'
-        : 'Radiator ΔT is outside Stelrad’s published 20°C to 65°C correction table');
+        : 'Radiator ΔT is outside the supported 20°C to 65°C temperature range');
     }
     if (radiator && !radiator.temperatureWarning && !radiator.selected) {
       warnings.push(radiator.usesTwo
-        ? 'No two-radiator Elite combination meets the room requirement within the 50% oversize limit'
-        : 'No single Elite radiator meets the room requirement within the 50% oversize limit');
+        ? 'No two-radiator combination meets the room requirement within the 50% oversize limit'
+        : 'No single radiator option meets the room requirement within the 50% oversize limit');
     }
     var heatedInternalWatts = isHeatedInternalWall(internalWallType)
       ? heat.internalWallWatts
@@ -1952,7 +2005,7 @@
     var deltaT = (flow + returnTemperature) / 2 - result.indoor;
     var correctionFactor = stelradCorrectionFactor(deltaT);
     var options = deltaT >= 20 && deltaT <= 65
-      ? stelradIndividualOptions(correctionFactor, {})
+      ? stelradIndividualOptions(correctionFactor, {}, result.roomName, deltaT, false)
       : [];
     field.innerHTML = '<option value="">Select existing radiator size</option>';
     var groups = {};
@@ -2075,7 +2128,7 @@
     }
     var warningPlaceholder = radiator && radiator.temperatureWarning
       ? 'Review the radiator design temperature'
-      : 'Choose a suitable Stelrad Elite';
+      : 'Choose a suitable radiator';
     populateRadiatorSelect(
       field,
       radiator ? radiator.options : [],
@@ -2115,8 +2168,8 @@
         delete secondField.dataset.restoredValue;
       }
     }
-    field.title = 'Suitable Stelrad Elite radiators at the selected design temperature. ' +
-      'Choose another height, width or panel type where required.';
+    field.title = 'Suitable Stelrad Elite and Myson fan-convector options at the selected design temperature. ' +
+      'Choose another size, position or panel type where required.';
     return { first: field, second: secondField };
   }
 
@@ -2318,7 +2371,12 @@
           : 'Select the installed height, width and panel type in Existing Size to record its output.') +
         '</div>';
     } else if (result.radiator) {
-      radiatorHtml += '<div class="hl-radiator-result"><b>Stelrad Elite at ' +
+      var selectedIsMyson = result.radiator.selected &&
+        (result.radiator.selected.manufacturer === 'Myson' ||
+          result.radiator.selectedFirst &&
+            result.radiator.selectedFirst.manufacturer === 'Myson');
+      radiatorHtml += '<div class="hl-radiator-result"><b>' +
+        (selectedIsMyson ? 'Myson fan convector' : 'Stelrad Elite') + ' at ' +
         result.radiator.flow.toFixed(0) + '/' +
         result.radiator.returnTemperature.toFixed(0) + '°C:</b> ' +
         (result.radiator.temperatureWarning
@@ -2338,11 +2396,11 @@
                 (result.radiator.options.length === 1 ? 'is' : 'are') +
                 ' available in the New Size dropdown.'
             : result.radiator.usesTwo
-              ? 'No pair of Elite radiators meets the room requirement within the 50% oversize limit.'
-              : 'No single Elite radiator meets the room requirement within the 50% oversize limit.') +
+              ? 'No two-radiator combination meets the room requirement within the 50% oversize limit.'
+              : 'No single radiator option meets the room requirement within the 50% oversize limit.') +
         (result.radiator.temperatureWarning ? '' :
-          '<small>Published ΔT50 output × ' + result.radiator.correctionFactor.toFixed(3) +
-          ' correction factor at ΔT' + result.radiator.deltaT.toFixed(1) + '.</small>') +
+          '<small>Output adjusted for the selected design temperature at ΔT' +
+          result.radiator.deltaT.toFixed(1) + '.</small>') +
         '</div>';
     }
     if (summary) {
@@ -2419,7 +2477,7 @@
       host.radiator = isAssessment && host.existingRadiatorAdequate
         ? null
         : recommendStelradElite(host.radiatorRequirementWatts, host.indoor,
-          stringValue('rad_' + host.key + '_new_size'), host.key);
+          stringValue('rad_' + host.key + '_new_size'), host.key, host.roomName);
       host.effectiveRadiator = host.newRadiatorDeclined
         ? host.existingRadiator
         : isAssessment && host.existingRadiatorAdequate
@@ -2427,8 +2485,8 @@
         : host.radiator && host.radiator.selected;
       host.warnings = host.warnings.filter(function (warning) {
         return warning.indexOf('Existing radiator output is below') !== 0 &&
-          warning.indexOf('No single Elite radiator') !== 0 &&
-          warning.indexOf('No two-radiator Elite combination') !== 0;
+          warning.indexOf('No single radiator option') !== 0 &&
+          warning.indexOf('No two-radiator combination') !== 0;
       });
       if (isAssessment && !host.existingRadiator) {
         host.warnings.push('Select a recognised existing radiator size');
@@ -2438,8 +2496,8 @@
       if (host.radiator && !host.radiator.temperatureWarning &&
           !host.radiator.selected) {
         host.warnings.push(host.radiator.usesTwo
-          ? 'No two-radiator Elite combination meets the combined room requirement within the 50% oversize limit'
-          : 'No single Elite radiator meets the combined room requirement within the 50% oversize limit');
+          ? 'No two-radiator combination meets the combined room requirement within the 50% oversize limit'
+          : 'No single radiator option meets the combined room requirement within the 50% oversize limit');
       }
     });
   }
@@ -2619,7 +2677,7 @@
       escapeHtml(stringValue('hl_outdoor_temp')) + ' °C</td>' +
       '<td class="label">Thermal bridges</td><td class="input">' +
       bridgeSummary + '</td>' +
-      '<td class="label">Radiator design</td><td colspan="3" class="input">Stelrad Elite at ' +
+      '<td class="label">Radiator design</td><td colspan="3" class="input">Radiator options at ' +
       escapeHtml(stringValue('hl_radiator_temperature')) + '°C, nominal ΔT' +
       (Number(stringValue('hl_radiator_temperature')) - 25) + '</td></tr>' +
       '<tr><td class="label">Property altitude</td><td class="input">' +
@@ -2685,6 +2743,7 @@
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
       '<tr><td colspan="8" class="small">A heated internal wall uses the temperature difference between the two selected rooms for radiator sizing. This transfer is excluded from the property total. An unheated space uses the selected adjacent-space factor or a known temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; P+ 300/450/600/700mm = 0.776/1.106/1.409/1.597; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
+      '<tr><td colspan="8" class="small">Myson fan-convector options use normal-fan 75/65°C outputs: Kickspace 500/600/800 = 0.755/1.023/1.707 kW; Hi-Line RC 7-4/10-6/15-10/20-14 = 0.930/1.610/2.459/3.468 kW; Hi-Line LV 7-4 = 0.930 kW. The LV is the only Myson option offered in bathroom and en-suite rooms.</td></tr>' +
       '<tr><td colspan="8" class="small">Radiator choices meet the calculated room requirement without exceeding it by more than 50%. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
       '<tr><td colspan="8" class="small">Ventilation uses the MCS/CIBSE minimum of 0.5 ACH for heated rooms with an external envelope and 0 ACH for fully internal rooms. A whole-property design ACH can increase that minimum. Room devices add their default airflow. MVHR applies the entered heat-recovery efficiency. PIV adds 20 m³/h across the property, shared by entered room volume. A manual room ACH overrides the automatic value. Air permeability is reported separately unless a verified design ACH is entered.</td></tr>' +
       '<tr><td colspan="8" class="small">The detailed exposed floor perimeter is recorded for audit. The selected standard floor U-value is still used by this practical calculator. Use a certified BS EN 12831 or MCS tool where a full ISO 13370 ground-floor calculation is required.</td></tr>' +
@@ -2814,10 +2873,45 @@
       original = original.replace(/<\/details>\s*$/, heatLossAndRadiatorFields +
         '</details>');
     }
+    var completionControl =
+      '<input type="hidden" id="rad_' + escapeHtml(key) + '_completed" data-id="rad_' +
+      escapeHtml(key) + '_completed">' +
+      '<div class="room-completion-action">' +
+      '<button type="button" data-room-completion-button="' + escapeHtml(key) +
+      '" onclick="completeRadiatorRoom(\'' + escapeHtml(key) + '\')">Completed room</button>' +
+      '</div>';
     return original.replace(
       /<\/details>\s*$/,
-      outputField + '</details>'
+      outputField + completionControl + '</details>'
     );
+  };
+
+  function refreshRoomCompletionControls() {
+    document.querySelectorAll('[data-room-completion-button]').forEach(function (button) {
+      var key = button.dataset.roomCompletionButton;
+      var field = document.getElementById('rad_' + key + '_completed');
+      var completed = field && field.value === 'yes';
+      button.textContent = completed ? 'Mark incomplete' : 'Completed room';
+      button.classList.toggle('is-complete', completed);
+      button.title = completed
+        ? 'Reopen this room and return it to the normal progress count.'
+        : 'Mark this room complete and collapse it.';
+    });
+  }
+
+  window.completeRadiatorRoom = function (key) {
+    var field = document.getElementById('rad_' + key + '_completed');
+    if (!field) return;
+    var completed = field.value === 'yes';
+    field.value = completed ? '' : 'yes';
+    var room = field.closest('details');
+    if (room) room.open = completed;
+    if (typeof update === 'function') update();
+    if (typeof window.updateSectionBadgesV58 === 'function') {
+      window.updateSectionBadgesV58();
+    }
+    refreshRoomCompletionControls();
+    persistCombinedData();
   };
 
   var previousRebuildRadsForm = rebuildRadsForm;
@@ -2835,6 +2929,7 @@
     wirePropertyDefaults();
     refreshVentilationControls();
     calculateHeatLoss();
+    refreshRoomCompletionControls();
     return result;
   };
 
@@ -2878,6 +2973,7 @@
   update = function () {
     calculateHeatLoss();
     var result = previousUpdate.apply(this, arguments);
+    refreshRoomCompletionControls();
     persistCombinedData();
     return result;
   };
