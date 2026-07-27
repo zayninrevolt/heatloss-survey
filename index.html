@@ -6481,7 +6481,9 @@
           if (!Array.isArray(risks)) return false;
 
           return risks.every(function (risk) {
-            return hasValue(`a_${risk[0]}_app`) && hasValue(`a_${risk[0]}_haz`);
+            const applicable = String(val(`a_${risk[0]}_app`) || "").trim();
+            return applicable === "No" ||
+              (Boolean(applicable) && hasValue(`a_${risk[0]}_haz`));
           });
         }
 
@@ -6682,9 +6684,9 @@
           if (!Array.isArray(risks)) return false;
 
           return risks.every(function (risk) {
-            return (
-              hasValueV52(`a_${risk[0]}_app`) && hasValueV52(`a_${risk[0]}_haz`)
-            );
+            const applicable = String(val(`a_${risk[0]}_app`) || "").trim();
+            return applicable === "No" ||
+              (Boolean(applicable) && hasValueV52(`a_${risk[0]}_haz`));
           });
         }
 
@@ -6789,9 +6791,9 @@
           if (!Array.isArray(risks)) return false;
 
           return risks.every(function (risk) {
-            return (
-              hasValueV53(`a_${risk[0]}_app`) && hasValueV53(`a_${risk[0]}_haz`)
-            );
+            const applicable = String(val(`a_${risk[0]}_app`) || "").trim();
+            return applicable === "No" ||
+              (Boolean(applicable) && hasValueV53(`a_${risk[0]}_haz`));
           });
         }
 
@@ -7134,7 +7136,11 @@
           function a12aComplete() {
             if (!Array.isArray(risks)) return false;
             return risks.every(function (risk) {
-              return hasVal("a_" + risk[0] + "_app") && hasVal("a_" + risk[0] + "_haz");
+              const applicable = String(
+                (document.getElementById("a_" + risk[0] + "_app") || {}).value || ""
+              ).trim();
+              return applicable === "No" ||
+                (Boolean(applicable) && hasVal("a_" + risk[0] + "_haz"));
             });
           }
           const checks = [
@@ -7483,7 +7489,11 @@
               window.hasCompletedHeatLossV63(),
             hv("mat_install_type"),
             Number(val("mat_total_rads")) > 0,
-            Array.isArray(risks) && risks.every(r => hv("a_"+r[0]+"_app") && hv("a_"+r[0]+"_haz")),
+            Array.isArray(risks) && risks.every(r => {
+              const applicable = String(val("a_" + r[0] + "_app") || "").trim();
+              return applicable === "No" ||
+                (Boolean(applicable) && hv("a_" + r[0] + "_haz"));
+            }),
             ink(["tenantSigPadV35","tenantSigPadV34","tenantSigPad"]),
             ink(["surveyorSigPadV35","surveyorSigPadV34","surveyorSigPad"]),
           ];
@@ -7784,7 +7794,11 @@
               ':scope > input[data-id$="_completed"]',
             );
             const markedComplete = completedField && completedField.value === "yes";
-            const complete = markedComplete || filled === total;
+            const applicableField = details.closest("#a12aForm")
+              ? details.querySelector('[data-id$="_app"]')
+              : null;
+            const notApplicable = applicableField && applicableField.value === "No";
+            const complete = markedComplete || notApplicable || filled === total;
 
             let badge = summary.querySelector(":scope > .sec-badge");
             if (!badge) {
@@ -7802,6 +7816,8 @@
               "aria-label",
               markedComplete
                 ? "Room marked complete"
+                : notApplicable
+                ? "Not applicable to site"
                 : complete
                 ? "All fields completed"
                 : filled + " of " + total + " fields filled"
