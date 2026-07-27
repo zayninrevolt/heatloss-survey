@@ -538,6 +538,7 @@
       '<input type="hidden" id="hl_applied_age_band" data-id="hl_applied_age_band">' +
       '<div class="hl-property-result"><div class="hl-total-number" id="hl_property_total">0.00 kW</div>' +
       '<div id="hl_property_detail">Enter at least one room to begin.</div></div>' +
+      '<p class="hl-help"><b>Survey disclaimer:</b> Some property construction materials, insulation levels and dimensions may be presumed from visible evidence or typical construction where they cannot be verified. Confirm them before equipment selection.</p>' +
       '<p class="hl-help">This is a practical survey estimate. Confirm the property construction and postcode-derived location assumptions before selecting equipment.</p>' +
       '</div>';
   }
@@ -2706,6 +2707,10 @@
   }
 
   function uValueAssumption(label, value, included) {
+    if (!included && (label === 'Heated room below' ||
+        label === 'Heated room above')) {
+      return escapeHtml(label) + '<br><b>No heat loss included</b>';
+    }
     if (!included) return 'Not included';
     return escapeHtml(label || 'Unknown') + '<br><b>' +
       Number(value || 0).toFixed(2) + ' W/m²K</b>';
@@ -2794,6 +2799,7 @@
             : '') +
           '<br>Heat-loss equivalent: <b>' + room.ach.toFixed(2) + ' ACH</b></td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
+      '<tr><td colspan="8" class="small"><b>Survey disclaimer:</b> Some property construction materials, insulation levels and dimensions may be presumed from visible evidence or typical construction where they cannot be verified. Confirm them before equipment selection.</td></tr>' +
       '<tr><td colspan="8" class="small">A heated internal wall uses the temperature difference between the two selected rooms for radiator sizing. This transfer is excluded from the property total. An unheated space uses the selected adjacent-space factor or a known temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; P+ 300/450/600/700mm = 0.776/1.106/1.409/1.597; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Myson fan-convector options use normal-fan 75/65°C outputs: Kickspace 500/600/800 = 0.755/1.023/1.707 kW; Hi-Line RC 7-4/10-6/15-10/20-14 = 0.930/1.610/2.459/3.468 kW; Hi-Line LV 7-4 = 0.930 kW. The LV is the only Myson option offered in bathroom and en-suite rooms.</td></tr>' +
