@@ -1509,7 +1509,7 @@
 
   function recommendedSystemOutputKw(radiatorOutputWatts) {
     var combinedOutputKw = Math.max(0, Number(radiatorOutputWatts) || 0) / 1000;
-    return Number(Math.max(12, combinedOutputKw).toFixed(2));
+    return Number(Math.max(12, combinedOutputKw * 1.1).toFixed(2));
   }
   window.stelradEliteSizingV63 = {
     wattsPerMetre: STELRAD_ELITE_WATTS_PER_METRE_600,
@@ -2610,7 +2610,7 @@
     if (outputField) {
       outputField.value = String(systemOutputKw);
       outputField.readOnly = true;
-      outputField.title = '12 kW minimum, or the combined selected radiator output when higher.';
+      outputField.title = '12 kW minimum, or 110% of the combined selected radiator output when higher.';
     }
     return window.heatLossResultsV60;
   }
@@ -3020,7 +3020,7 @@
 
   calcTotalKw = function () {
     var calculation = window.heatLossResultsV60 || calculateHeatLoss();
-    return (calculation.totalWatts / 1000).toFixed(2);
+    return (calculation.radiatorOutputWatts / 1000).toFixed(2);
   };
 
   var previousRenderProfile = renderProfile;

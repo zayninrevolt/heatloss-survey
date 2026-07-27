@@ -2261,7 +2261,7 @@
   <table class="sheet front">
   <colgroup>${"<col>".repeat(16)}</colgroup>
   <tr>
-  <td colspan="13" class="red center">System designed to meet Building Regulation: Part L. Range rate output is 12 kW or the combined selected radiator output, whichever is higher:</td>
+  <td colspan="13" class="red center">Part L range rate: 12 kW minimum or 110% of selected radiator output.</td>
   <td colspan="2" class="input">${cell("front_sys")}</td>
   <td class="red center">KW</td>
   </tr>
@@ -4114,7 +4114,7 @@
    Total KW now adds up the room Output column.
    The calculated boiler/system output is:
      - minimum 12 KW
-     - otherwise the combined selected radiator output
+     - otherwise 110% of the combined selected radiator output
      - rounded to 2 decimal places
    ============================================================ */
 
@@ -4130,7 +4130,7 @@
 
       function calculateRecommendedOutput() {
         const totalRoomOutput = calculateTotalRoomOutput();
-        return Number(Math.max(12, totalRoomOutput).toFixed(2));
+        return Number(Math.max(12, totalRoomOutput * 1.1).toFixed(2));
       }
 
       function updateCalculatedOutputField() {
@@ -4140,7 +4140,7 @@
         outputField.value = calculateRecommendedOutput();
         outputField.readOnly = true;
         outputField.title =
-          "Auto calculated: minimum 12 kW, or combined selected radiator output when higher.";
+          "Auto calculated: minimum 12 kW, or 110% of combined selected radiator output when higher.";
       }
 
       // Replace the previous Total KW calculation so it uses the room Output column.
@@ -8407,8 +8407,6 @@
 
         const previousRecommendedOutputV59 = calculateRecommendedOutput;
         calculateRecommendedOutput = function () {
-          const calculation = window.heatLossResultsV59 || calculateHeatLossV59();
-          if (calculation.totalWatts > 0) return Number((calculation.totalWatts / 1000).toFixed(2));
           return previousRecommendedOutputV59.apply(this, arguments);
         };
 
@@ -8425,7 +8423,7 @@
           const calculation = window.heatLossResultsV59;
           const field = document.getElementById("r_output_temp");
           if (field && calculation && calculation.totalWatts > 0) {
-            field.title = "Calculated from the completed rooms on the Heat Loss tab.";
+            field.title = "12 kW minimum, or 110% of the combined selected radiator output when higher.";
           }
           return result;
         };
@@ -8460,6 +8458,6 @@
       })();
     </script>
     <link rel="stylesheet" href="combined-heatloss.css?v=83">
-    <script src="combined-heatloss.js?v=88"></script>
+    <script src="combined-heatloss.js?v=89"></script>
   </body>
 </html>
