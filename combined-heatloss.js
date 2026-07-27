@@ -2,6 +2,7 @@
 (function () {
   var STORAGE_KEY = 'heatLossDataV60';
   var NO_NEW_RADIATOR_SELECTION = 'No new radiator selected';
+  var CUSTOM_EXISTING_RADIATOR_SELECTION = 'Custom radiator or towel rail';
   var persistenceReady = false;
   var postcodeLookupTimer = null;
   var postcodeLookupInProgress = false;
@@ -1529,6 +1530,19 @@
   function existingRadiatorForRoom(key, indoor, roomName) {
     var size = stringValue('rad_' + key + '_ex_size');
     if (!size) return null;
+    if (size === CUSTOM_EXISTING_RADIATOR_SELECTION) {
+      var customKw = numberValue('rad_' + key + '_ex_custom_kw', 0);
+      if (customKw <= 0) return null;
+      return {
+        type: 'Custom radiator or towel rail',
+        size: CUSTOM_EXISTING_RADIATOR_SELECTION,
+        watts: customKw * 1000,
+        unitWatts: customKw * 1000,
+        quantity: 1,
+        ratedWatts: customKw * 1000,
+        customOutput: true
+      };
+    }
     var flow = Number(stringValue('hl_radiator_temperature')) || 75;
     var returnTemperature = flow - 10;
     var deltaT = (flow + returnTemperature) / 2 - indoor;
@@ -1537,6 +1551,19 @@
     return stelradIndividualOptions(correctionFactor, {}, roomName, deltaT, false).find(function (option) {
       return option.size === size;
     }) || null;
+  }
+
+  function existingRadiatorGuidance(key) {
+    return stringValue('rad_' + key + '_ex_size') ===
+      CUSTOM_EXISTING_RADIATOR_SELECTION
+      ? 'Enter the custom radiator or towel rail output in kW'
+      : 'Select a recognised existing radiator size';
+  }
+
+  function existingRadiatorOutputDescription(existingRadiator) {
+    return existingRadiator && existingRadiator.customOutput
+      ? 'Custom output entered for the retained radiator or towel rail.'
+      : 'Temperature-corrected output of the selected existing-size radiator.';
   }
 
   function computeHeatLossValues(input) {
@@ -1793,10 +1820,13 @@
           ? existingRadiator
           : radiator && radiator.selected;
     if ((usesExistingAssessment || replacesLikeForLike) && !existingRadiator) {
-      warnings.push('Select a recognised existing radiator size');
+      warnings.push(existingRadiatorGuidance(key));
     }
     if (newRadiatorDeclined && !existingRadiator) {
-      warnings.push('Select the existing radiator size to record its retained output');
+      warnings.push(stringValue('rad_' + key + '_ex_size') ===
+        CUSTOM_EXISTING_RADIATOR_SELECTION
+        ? 'Enter the custom radiator or towel rail output in kW'
+        : 'Select the existing radiator size to record its retained output');
     }
     if (newRadiatorDeclined && existingRadiator &&
         existingRadiator.watts < heat.totalWatts) {
@@ -1982,6 +2012,10 @@
 
   function configureExistingRadiatorSelect(result) {
     var field = document.getElementById('rad_' + result.key + '_ex_size');
+    var customOutputField = document.getElementById('rad_' + result.key +
+      '_ex_custom_kw');
+    var customOutputWrap = document.getElementById('rad_' + result.key +
+      '_ex_custom_kw_wrap');
     if (!field) return null;
     var existingValue = field.value;
     if (field.tagName !== 'SELECT') {
@@ -1996,6 +2030,12 @@
     if (field.dataset.existingRadiatorWired !== 'yes') {
       field.dataset.existingRadiatorWired = 'yes';
       field.addEventListener('change', function () {
+        var customSelected = field.value === CUSTOM_EXISTING_RADIATOR_SELECTION;
+        if (customOutputWrap) customOutputWrap.hidden = !customSelected;
+        if (customOutputField) {
+          customOutputField.disabled = !customSelected;
+          customOutputField.required = customSelected;
+        }
         if (typeof update === 'function') update();
         persistCombinedData();
       });
@@ -2023,9 +2063,13 @@
       choice.dataset.watts = option.watts.toFixed(2);
       groups[groupKey].appendChild(choice);
     });
+    var customChoice = document.createElement('option');
+    customChoice.value = CUSTOM_EXISTING_RADIATOR_SELECTION;
+    customChoice.textContent = 'Custom radiator or towel rail | enter kW';
+    field.appendChild(customChoice);
     if (existingValue && options.some(function (option) {
       return option.size === existingValue;
-    })) {
+    }) || existingValue === CUSTOM_EXISTING_RADIATOR_SELECTION) {
       field.value = existingValue;
     } else if (existingValue) {
       var legacy = document.createElement('option');
@@ -2034,7 +2078,16 @@
       field.insertBefore(legacy, field.children[1] || null);
       field.value = existingValue;
     }
-    field.title = 'Select the installed radiator height, width and panel type so its output can be checked.';
+    var customSelected = field.value === CUSTOM_EXISTING_RADIATOR_SELECTION;
+    if (customOutputWrap) customOutputWrap.hidden = !customSelected;
+    if (customOutputField) {
+      customOutputField.disabled = !customSelected;
+      customOutputField.required = customSelected;
+      customOutputField.title = customSelected
+        ? 'Required. Enter the known output in kW at the selected design temperature.'
+        : '';
+    }
+    field.title = 'Select the installed radiator size, or choose Custom radiator or towel rail and enter its known output in kW.';
     return field;
   }
 
@@ -2259,7 +2312,7 @@
           ? (result.existingRadiator.watts / 1000).toFixed(2)
           : '';
         radOutput.readOnly = true;
-        radOutput.title = 'Temperature-corrected output of the selected existing-size radiator.';
+        radOutput.title = existingRadiatorOutputDescription(result.existingRadiator);
       }
       if (summary) {
         summary.textContent = result.existingRadiator
@@ -2310,7 +2363,7 @@
         radOutput.value = (result.effectiveRadiator.watts / 1000).toFixed(2);
         radOutput.readOnly = true;
         radOutput.title = result.newRadiatorDeclined
-          ? 'Temperature-corrected output of the retained existing radiator.'
+          ? existingRadiatorOutputDescription(result.existingRadiator)
           : result.radiatorOutcome === 'New radiator required'
           ? 'Temperature-corrected Stelrad output.'
           : 'Temperature-corrected output of the selected existing-size radiator.';
@@ -2489,7 +2542,7 @@
           warning.indexOf('No two-radiator combination') !== 0;
       });
       if (isAssessment && !host.existingRadiator) {
-        host.warnings.push('Select a recognised existing radiator size');
+        host.warnings.push(existingRadiatorGuidance(host.key));
       } else if (isAssessment && !host.existingRadiatorAdequate) {
         host.warnings.push('Existing radiator output is below the combined room requirement');
       }
@@ -2838,6 +2891,22 @@
       /(<summary>[\s\S]*?<\/summary>)/,
       function (summaryHtml) { return summaryHtml + outcomeField; }
     );
+    var existingSizePattern = new RegExp(
+      '(<div class="field">\\s*<label for="rad_' + key +
+      '_ex_size">[\\s\\S]*?<\\/div>)'
+    );
+    original = original.replace(existingSizePattern, function (existingSizeField) {
+      return existingSizeField +
+        '<div class="field hl-custom-existing-output" id="rad_' +
+        escapeHtml(key) + '_ex_custom_kw_wrap" hidden>' +
+        '<label for="rad_' + escapeHtml(key) + '_ex_custom_kw">' +
+        escapeHtml(roomName) + ' - Custom existing output (kW)</label>' +
+        '<input id="rad_' + escapeHtml(key) + '_ex_custom_kw" data-id="rad_' +
+        escapeHtml(key) + '_ex_custom_kw" type="number" min="0" step="0.01" ' +
+        'inputmode="decimal" disabled>' +
+        '<small>Required for a custom radiator or towel rail. Enter its known output at the selected design temperature.</small>' +
+        '</div>';
+    });
     var newSizePattern = new RegExp(
       '<div class="field">\\s*<label for="rad_' + key +
       '_new_size">[\\s\\S]*?<\\/div>'

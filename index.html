@@ -1936,12 +1936,12 @@
         ["front_electric_meter", "Electric meter position", "text"],
         ["front_isolator", "Isolator fitted", "select", yesNo],
         ["front_isolator_location", "Isolator location", "text"],
-        ["front_radiator", "Existing pipe size - Radiator", "text"],
-        ["front_gas_meter_pipe", "Existing pipe size - Gas meter", "text"],
-        ["front_boiler_pipe", "Existing pipe size - Boiler", "text"],
+        ["front_radiator", "Existing pipe size - Radiator", "select", ["", "10mm", "15mm", "22mm", "28mm", "35mm"]],
+        ["front_gas_meter_pipe", "Existing pipe size - Gas meter", "select", ["", "10mm", "15mm", "22mm", "28mm", "35mm"]],
+        ["front_boiler_pipe", "Existing pipe size - Boiler", "select", ["", "10mm", "15mm", "22mm", "28mm", "35mm"]],
+        ["front_recarcass", "Re-carcass gas", "select", yesNo],
         ["front_asbestos_req", "Asbestos survey requested", "select", yesNo],
         ["front_asbestos", "Asbestos", "textarea"],
-        ["front_recarcass", "Re-carcass gas", "text"],
         ["front_condense", "Route of condense", "textarea"],
         ["front_fit_tee", "Fit tee into condense / vent", "textarea"],
         ["front_brick_lounge", "Brick up lounge through vent", "select", yesNo],
@@ -2364,7 +2364,7 @@
   <tr>
   <td colspan="4" class="label">Brick Up builders Opening</td>
   <td colspan="4" class="input">${cell("front_builders_opening")}</td>
-  <td rowspan="3" class="label center">Existing<br>Pipe Size:</td>
+  <td rowspan="4" class="label center">Existing<br>Pipe Size:</td>
   <td colspan="2" class="label center">Radiator</td>
   <td colspan="4" class="input">${cell("front_radiator")}</td>
   </tr>
@@ -8460,6 +8460,6 @@
       })();
     </script>
     <link rel="stylesheet" href="combined-heatloss.css?v=83">
-    <script src="combined-heatloss.js?v=87"></script>
+    <script src="combined-heatloss.js?v=88"></script>
   </body>
 </html>
