@@ -495,34 +495,38 @@
       escapeHtml(key) + '_window_width"><input type="hidden" id="hl_' +
       escapeHtml(key) + '_window_height" data-id="hl_' + escapeHtml(key) +
       '_window_height">' +
+      fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
+      '<div id="hl_' + escapeHtml(key) + '_window_count_wrap" hidden>' +
       fieldHtml('hl_' + key + '_window_count', 'Number of windows', 'select', ['0', '1', '2', '3'], 'Choose the number first. Each window can be measured separately.') +
+      '</div>' +
       '<div class="hl-opening-measurements" id="hl_' + escapeHtml(key) +
       '_window_measurements_wrap" hidden>' +
       openingMeasurementFieldsHtml(key, 'window', 1, 'Window 1') +
       openingMeasurementFieldsHtml(key, 'window', 2, 'Window 2') +
       openingMeasurementFieldsHtml(key, 'window', 3, 'Window 3') +
       '</div>' +
-      fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_door_area" data-id="hl_' +
       escapeHtml(key) + '_door_area">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_door_width" data-id="hl_' +
       escapeHtml(key) + '_door_width"><input type="hidden" id="hl_' +
       escapeHtml(key) + '_door_height" data-id="hl_' + escapeHtml(key) +
       '_door_height">' +
+      fieldHtml('hl_' + key + '_door_type', 'External door', 'select', optionsFromMap(VALUES.door)) +
+      '<div id="hl_' + escapeHtml(key) + '_door_count_wrap" hidden>' +
       fieldHtml('hl_' + key + '_door_count', 'Number of doors', 'select', ['0', '1', '2'], 'Choose the number first. Each door can be measured separately.') +
+      '</div>' +
       '<div class="hl-opening-measurements" id="hl_' + escapeHtml(key) +
       '_door_measurements_wrap" hidden>' +
       openingMeasurementFieldsHtml(key, 'door', 1, 'Door 1') +
       openingMeasurementFieldsHtml(key, 'door', 2, 'Door 2') +
       '</div>' +
-      fieldHtml('hl_' + key + '_door_type', 'External door', 'select', optionsFromMap(VALUES.door)) +
       fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
       fieldHtml('hl_' + key + '_assumption_quality', 'Construction evidence', 'select', ['Measured and confirmed', 'Visually estimated', 'Age-based assumption', 'General default']) +
       fieldHtml('hl_' + key + '_ventilation_mode', 'Room air-change rate', 'select', AIR_CHANGE_MODES, 'Automatic uses the MCS/CIBSE 0.5 ACH room minimum, or 0 ACH where the room has no external envelope.') +
       fieldHtml('hl_' + key + '_manual_ach', 'Manual ACH override', 'number', null, 'Only used when Manual override is selected.') +
       fieldHtml('hl_' + key + '_ventilation_device', 'Additional vent, fan or flue', 'select', optionsFromMap(VALUES.ventilationDevice), 'Adds the published default airflow for this room. Select the closest item and use the ACH override where required.') +
-      fieldHtml('hl_' + key + '_rad_quantity', 'Number of radiators', 'select', ['Automatic', '1', '2'], 'Automatic tries one radiator first, then two independently sized radiators if required.') +
+      fieldHtml('hl_' + key + '_rad_quantity', 'Number of new radiators', 'select', ['Automatic', '1', '2'], 'Automatic tries one radiator first, then two independently sized radiators if required.') +
       '</div>' +
       '<div class="hl-room-result" id="hl_' + escapeHtml(key) + '_result">' +
       '<div class="hl-result-main">Enter the room length and width</div>' +
@@ -1130,8 +1134,7 @@
         ventilation_mode: 'Automatic',
         ventilation_device: 'No additional vent or flue',
         rad_max_height: 'Any',
-        rad_panel_type: 'Any',
-        rad_quantity: 'Automatic'
+        rad_panel_type: 'Any'
       };
       if (!stringValue('hl_' + key + '_window_count') &&
           numberValue('hl_' + key + '_window_area', 0) > 0) {
@@ -1145,6 +1148,13 @@
         var id = 'hl_' + key + '_' + entry[0];
         if (!stringValue(id)) setValue(id, entry[1]);
       });
+      if (!stringValue('rad_' + key + '_ex_quantity')) {
+        setValue('rad_' + key + '_ex_quantity', '1');
+      }
+      if (!stringValue('hl_' + key + '_rad_quantity')) {
+        setValue('hl_' + key + '_rad_quantity', String(Math.max(1,
+          Math.min(2, Math.round(numberValue('rad_' + key + '_ex_quantity', 1)) || 1))));
+      }
       if (!stringValue('rad_' + key + '_outcome')) {
         setValue('rad_' + key + '_outcome', 'New radiator required');
       }
@@ -1580,15 +1590,17 @@
     return stringValue('rad_' + key + '_outcome') || 'New radiator required';
   }
 
-  function existingRadiatorForRoom(key, indoor, roomName) {
-    var size = stringValue('rad_' + key + '_ex_size');
+  function existingRadiatorUnitForRoom(key, indoor, roomName, index) {
+    var suffix = index > 1 ? '_' + index : '';
+    var size = stringValue('rad_' + key + '_ex_size' + suffix);
     if (!size) return null;
     if (size === CUSTOM_EXISTING_RADIATOR_SELECTION) {
-      var customKw = numberValue('rad_' + key + '_ex_custom_kw', 0);
+      var customKw = numberValue('rad_' + key + '_ex_custom_kw' + suffix, 0);
       if (customKw <= 0) return null;
       return {
         type: 'Custom radiator or towel rail',
         size: CUSTOM_EXISTING_RADIATOR_SELECTION,
+        unitSize: CUSTOM_EXISTING_RADIATOR_SELECTION,
         watts: customKw * 1000,
         unitWatts: customKw * 1000,
         quantity: 1,
@@ -1601,22 +1613,73 @@
     var deltaT = (flow + returnTemperature) / 2 - indoor;
     if (deltaT < 20 || deltaT > 65) return null;
     var correctionFactor = stelradCorrectionFactor(deltaT);
-    return stelradIndividualOptions(correctionFactor, {}, roomName, deltaT, false).find(function (option) {
+    var option = stelradIndividualOptions(correctionFactor, {}, roomName, deltaT, false).find(function (option) {
       return option.size === size;
-    }) || null;
+    });
+    if (!option) return null;
+    return Object.assign({}, option, {
+      unitSize: option.size,
+      unitWatts: option.watts,
+      quantity: 1
+    });
+  }
+
+  function existingRadiatorForRoom(key, indoor, roomName) {
+    var quantity = Math.max(1, Math.min(2,
+      Math.round(numberValue('rad_' + key + '_ex_quantity', 1)) || 1));
+    var radiators = [];
+    for (var index = 1; index <= quantity; index += 1) {
+      var radiator = existingRadiatorUnitForRoom(key, indoor, roomName, index);
+      if (radiator) radiators.push(radiator);
+    }
+    if (!radiators.length) return null;
+    return {
+      type: radiators.length === 1 ? radiators[0].type : 'Existing radiators',
+      size: radiators.map(function (radiator) { return radiator.size; }).join(' + '),
+      unitSize: radiators[0].unitSize,
+      watts: radiators.reduce(function (sum, radiator) {
+        return sum + radiator.watts;
+      }, 0),
+      unitWatts: radiators[0].unitWatts,
+      quantity: radiators.length,
+      expectedQuantity: quantity,
+      complete: radiators.length === quantity,
+      ratedWatts: radiators.reduce(function (sum, radiator) {
+        return sum + radiator.ratedWatts;
+      }, 0),
+      customOutput: radiators.some(function (radiator) {
+        return radiator.customOutput;
+      })
+    };
   }
 
   function existingRadiatorGuidance(key) {
-    return stringValue('rad_' + key + '_ex_size') ===
-      CUSTOM_EXISTING_RADIATOR_SELECTION
-      ? 'Enter the custom radiator or towel rail output in kW'
-      : 'Select a recognised existing radiator size';
+    var quantity = Math.max(1, Math.min(2,
+      Math.round(numberValue('rad_' + key + '_ex_quantity', 1)) || 1));
+    var missing = [];
+    for (var index = 1; index <= quantity; index += 1) {
+      var suffix = index > 1 ? '_' + index : '';
+      var size = stringValue('rad_' + key + '_ex_size' + suffix);
+      var label = index === 1 ? 'existing radiator size' :
+        'existing radiator ' + index + ' size';
+      if (!size) {
+        missing.push('Select the ' + label);
+      } else if (size === CUSTOM_EXISTING_RADIATOR_SELECTION &&
+          numberValue('rad_' + key + '_ex_custom_kw' + suffix, 0) <= 0) {
+        missing.push('Enter the custom output for existing radiator ' + index);
+      }
+    }
+    return missing.join('. ') || 'Select a recognised existing radiator size';
   }
 
   function existingRadiatorOutputDescription(existingRadiator) {
-    return existingRadiator && existingRadiator.customOutput
+    var prefix = existingRadiator && existingRadiator.expectedQuantity > 1
+      ? 'Combined output of ' + existingRadiator.quantity + ' of ' +
+        existingRadiator.expectedQuantity + ' existing radiators. '
+      : '';
+    return prefix + (existingRadiator && existingRadiator.customOutput
       ? 'Custom output entered for the retained radiator or towel rail.'
-      : 'Temperature-corrected output of the selected existing-size radiator.';
+      : 'Temperature-corrected output of the selected existing-size radiator.');
   }
 
   function computeHeatLossValues(input) {
@@ -1665,6 +1728,11 @@
   window.computeHeatLossValuesV60 = computeHeatLossValues;
 
   function openingMeasurements(key, opening, maximumCount) {
+    var type = stringValue('hl_' + key + '_' + opening + '_type');
+    var noOpening = !type || (opening === 'window'
+      ? type === 'No windows'
+      : type === 'No external door');
+    if (noOpening) return { area: 0, count: 0, complete: true, measured: true };
     var count = Math.max(0, Math.min(maximumCount, Math.round(numberValue(
       'hl_' + key + '_' + opening + '_count', 0))));
     var area = 0;
@@ -1901,7 +1969,8 @@
       'Replace existing radiator like for like';
     var customerRefused = radiatorOutcome === 'Customer refused';
     var existingRadiatorAdequate = Boolean(
-      complete && existingRadiator && existingRadiator.watts >= heat.totalWatts
+      complete && existingRadiator && existingRadiator.complete !== false &&
+      existingRadiator.watts >= heat.totalWatts
     );
     var currentRadiatorSelection = stringValue('rad_' + key + '_new_size');
     var newRadiatorDeclined = currentRadiatorSelection ===
@@ -1920,20 +1989,19 @@
         : usesExistingAssessment && existingRadiatorAdequate
           ? existingRadiator
           : radiator && radiator.selected;
-    if ((usesExistingAssessment || replacesLikeForLike) && !existingRadiator) {
+    if ((usesExistingAssessment || replacesLikeForLike) &&
+        (!existingRadiator || existingRadiator.complete === false)) {
       warnings.push(existingRadiatorGuidance(key));
     }
-    if (customerRefused && !existingRadiator) {
+    if (customerRefused && (!existingRadiator || existingRadiator.complete === false)) {
       warnings.push('Customer refused radiator work; select the existing radiator size to record its retained output');
     }
     if (customerRefused && existingRadiator && existingRadiator.watts < heat.totalWatts) {
       warnings.push('Retained radiator output is below the calculated room requirement');
     }
-    if (newRadiatorDeclined && !existingRadiator) {
-      warnings.push(stringValue('rad_' + key + '_ex_size') ===
-        CUSTOM_EXISTING_RADIATOR_SELECTION
-        ? 'Enter the custom radiator or towel rail output in kW'
-        : 'Select the existing radiator size to record its retained output');
+    if (newRadiatorDeclined &&
+        (!existingRadiator || existingRadiator.complete === false)) {
+      warnings.push(existingRadiatorGuidance(key));
     }
     if (newRadiatorDeclined && existingRadiator &&
         existingRadiator.watts < heat.totalWatts) {
@@ -2120,12 +2188,15 @@
     }
   }
 
-  function configureExistingRadiatorSelect(result) {
-    var field = document.getElementById('rad_' + result.key + '_ex_size');
+  function configureExistingRadiatorField(result, index) {
+    var suffix = index > 1 ? '_' + index : '';
+    var field = document.getElementById('rad_' + result.key + '_ex_size' + suffix);
     var customOutputField = document.getElementById('rad_' + result.key +
-      '_ex_custom_kw');
+      '_ex_custom_kw' + suffix);
     var customOutputWrap = document.getElementById('rad_' + result.key +
-      '_ex_custom_kw_wrap');
+      '_ex_custom_kw_wrap' + suffix);
+    var locationField = document.getElementById('rad_' + result.key +
+      '_ex_loc' + suffix);
     if (!field) return null;
     var existingValue = field.value;
     if (field.tagName !== 'SELECT') {
@@ -2133,7 +2204,8 @@
       select.id = field.id;
       select.dataset.id = field.dataset.id;
       select.className = field.className;
-      select.setAttribute('aria-label', result.roomName + ' - Existing Size');
+      select.setAttribute('aria-label', result.roomName + ' - Existing Size' +
+        (index > 1 ? ' ' + index : ''));
       field.replaceWith(select);
       field = select;
     }
@@ -2149,6 +2221,11 @@
         if (typeof update === 'function') update();
         persistCombinedData();
       });
+    }
+    if (locationField && locationField.dataset.existingRadiatorWired !== 'yes') {
+      locationField.dataset.existingRadiatorWired = 'yes';
+      locationField.addEventListener('input', persistCombinedData);
+      locationField.addEventListener('change', persistCombinedData);
     }
     var flow = Number(stringValue('hl_radiator_temperature')) || 75;
     var returnTemperature = flow - 10;
@@ -2191,14 +2268,64 @@
     var customSelected = field.value === CUSTOM_EXISTING_RADIATOR_SELECTION;
     if (customOutputWrap) customOutputWrap.hidden = !customSelected;
     if (customOutputField) {
+      if (customOutputField.dataset.existingRadiatorWired !== 'yes') {
+        customOutputField.dataset.existingRadiatorWired = 'yes';
+        customOutputField.addEventListener('input', function () {
+          if (typeof update === 'function') update();
+          persistCombinedData();
+        });
+        customOutputField.addEventListener('change', function () {
+          if (typeof update === 'function') update();
+          persistCombinedData();
+        });
+      }
       customOutputField.disabled = !customSelected;
       customOutputField.required = customSelected;
       customOutputField.title = customSelected
-        ? 'Required. Enter the known output in kW at the selected design temperature.'
+        ? 'Required. Enter the output of one radiator or towel rail in kW at the selected design temperature.'
         : '';
     }
-    field.title = 'Select the installed radiator size, or choose Custom radiator or towel rail and enter its known output in kW.';
+    field.title = 'Select the installed radiator size, or choose Custom radiator or towel rail and enter its output in kW.';
     return field;
+  }
+
+  function configureExistingRadiatorSelect(result) {
+    var quantityField = document.getElementById('rad_' + result.key +
+      '_ex_quantity');
+    var newQuantityField = document.getElementById('hl_' + result.key +
+      '_rad_quantity');
+    var quantity = Math.max(1, Math.min(2,
+      Math.round(numberValue('rad_' + result.key + '_ex_quantity', 1)) || 1));
+    var firstField = null;
+    for (var index = 1; index <= 2; index += 1) {
+      var wrap = document.getElementById('rad_' + result.key +
+        '_ex_radiator_' + index + '_wrap');
+      if (wrap) wrap.hidden = index > quantity;
+      var field = configureExistingRadiatorField(result, index);
+      if (index === 1) firstField = field;
+    }
+    if (quantityField && quantityField.dataset.existingRadiatorWired !== 'yes') {
+      quantityField.dataset.existingRadiatorWired = 'yes';
+      quantityField.addEventListener('change', function () {
+        if (newQuantityField &&
+            newQuantityField.dataset.existingQuantityLinked !== 'no') {
+          newQuantityField.value = String(Math.max(1, Math.min(2,
+            Math.round(numberValue('rad_' + result.key + '_ex_quantity', 1)) || 1)));
+        }
+        if (typeof update === 'function') update();
+        persistCombinedData();
+      });
+      quantityField.title = 'Defaults to one. Select the quantity to record each existing radiator separately.';
+    }
+    if (newQuantityField &&
+        newQuantityField.dataset.existingQuantityLinked !== 'yes' &&
+        newQuantityField.dataset.existingQuantityLinked !== 'no') {
+      newQuantityField.dataset.existingQuantityLinked = 'yes';
+      newQuantityField.addEventListener('change', function () {
+        newQuantityField.dataset.existingQuantityLinked = 'no';
+      });
+    }
+    return firstField;
   }
 
   function setSingleRadiatorChoice(field, value, label) {
@@ -2387,15 +2514,22 @@
   }
 
   function refreshOpeningMeasurementFields(key, opening, maximumCount) {
+    var type = stringValue('hl_' + key + '_' + opening + '_type');
+    var hasOpening = Boolean(type) && (opening === 'window'
+      ? type !== 'No windows'
+      : type !== 'No external door');
     var count = Math.max(0, Math.min(maximumCount, Math.round(numberValue(
       'hl_' + key + '_' + opening + '_count', 0))));
+    var countWrap = document.getElementById('hl_' + key + '_' + opening +
+      '_count_wrap');
+    if (countWrap) countWrap.hidden = !hasOpening;
     var group = document.getElementById('hl_' + key + '_' + opening +
       '_measurements_wrap');
-    if (group) group.hidden = count === 0;
+    if (group) group.hidden = !hasOpening || count === 0;
     for (var index = 1; index <= maximumCount; index += 1) {
       var wrapper = document.getElementById('hl_' + key + '_' + opening + '_' +
         index + '_wrap');
-      if (wrapper) wrapper.hidden = index > count;
+      if (wrapper) wrapper.hidden = !hasOpening || index > count;
     }
   }
 
@@ -2633,7 +2767,7 @@
     var likeForLike = room.radiatorOutcome ===
       'Replace existing radiator like for like';
     room.existingRadiatorAdequate = Boolean(room.complete && room.existingRadiator &&
-      room.existingRadiator.watts >= requirement);
+      room.existingRadiator.complete !== false && room.existingRadiator.watts >= requirement);
     room.radiator = room.complete && requirement > 0 && !room.customerRefused &&
       !likeForLike && !(isAssessment && room.existingRadiatorAdequate)
       ? recommendStelradElite(requirement, room.indoor,
@@ -2731,7 +2865,8 @@
       host.radiatorRequirementWatts = host.radiatorRequirementWatts + suppliedRooms.reduce(
         function (sum, room) { return sum + room.radiatorRequirementWatts; }, 0);
       host.existingRadiatorAdequate = Boolean(host.existingRadiator &&
-        host.existingRadiator.watts >= host.radiatorRequirementWatts);
+      host.existingRadiator.complete !== false &&
+      host.existingRadiator.watts >= host.radiatorRequirementWatts);
       var isAssessment = host.radiatorOutcome === 'Assess existing radiator';
       host.radiator = isAssessment && host.existingRadiatorAdequate
         ? null
@@ -3110,19 +3245,58 @@
     );
     var existingSizePattern = new RegExp(
       '(<div class="field">\\s*<label for="rad_' + key +
-      '_ex_size">[\\s\\S]*?<\\/div>)'
+      '_ex_size">[\\s\\S]*?<\\/div>)\\s*' +
+      '(<div class="field">\\s*<label for="rad_' + key +
+      '_ex_loc">[\\s\\S]*?<\\/div>)'
     );
-    original = original.replace(existingSizePattern, function (existingSizeField) {
-      return existingSizeField +
+    original = original.replace(existingSizePattern, function (
+      matchedFields, existingSizeField, existingLocationField
+    ) {
+      var additionalExistingFields = '';
+      for (var radiatorIndex = 2; radiatorIndex <= 2; radiatorIndex += 1) {
+        additionalExistingFields +=
+          '<div class="hl-existing-radiator-extra" id="rad_' +
+          escapeHtml(key) + '_ex_radiator_' + radiatorIndex + '_wrap" hidden>' +
+          '<div class="field"><label for="rad_' + escapeHtml(key) +
+          '_ex_size_' + radiatorIndex + '">' + escapeHtml(roomName) +
+          ' - Existing Size ' + radiatorIndex + '</label>' +
+          '<select id="rad_' + escapeHtml(key) + '_ex_size_' + radiatorIndex +
+          '" data-id="rad_' + escapeHtml(key) + '_ex_size_' + radiatorIndex +
+          '"><option value="">Select existing radiator size</option></select></div>' +
+          '<div class="field"><label for="rad_' + escapeHtml(key) +
+          '_ex_loc_' + radiatorIndex + '">' + escapeHtml(roomName) +
+          ' - Existing Location ' + radiatorIndex + '</label>' +
+          '<input id="rad_' + escapeHtml(key) + '_ex_loc_' + radiatorIndex +
+          '" data-id="rad_' + escapeHtml(key) + '_ex_loc_' + radiatorIndex +
+          '" type="text"></div>' +
+          '<div class="field hl-custom-existing-output" id="rad_' +
+          escapeHtml(key) + '_ex_custom_kw_wrap_' + radiatorIndex + '" hidden>' +
+          '<label for="rad_' + escapeHtml(key) + '_ex_custom_kw_' +
+          radiatorIndex + '">' + escapeHtml(roomName) +
+          ' - Custom existing output ' + radiatorIndex + ' (kW)</label>' +
+          '<input id="rad_' + escapeHtml(key) + '_ex_custom_kw_' + radiatorIndex +
+          '" data-id="rad_' + escapeHtml(key) + '_ex_custom_kw_' + radiatorIndex +
+          '" type="number" min="0" step="0.01" inputmode="decimal" disabled>' +
+          '<small>Required for a custom radiator or towel rail. Enter its known output at the selected design temperature.</small>' +
+          '</div></div>';
+      }
+      return '<div class="field hl-existing-radiator-quantity">' +
+        '<label for="rad_' + escapeHtml(key) + '_ex_quantity">' +
+        escapeHtml(roomName) + ' - Number of existing radiators</label>' +
+        '<select id="rad_' + escapeHtml(key) + '_ex_quantity" data-id="rad_' +
+        escapeHtml(key) + '_ex_quantity"><option value="1">1</option>' +
+        '<option value="2">2</option></select>' +
+        '<small>Defaults to 1. Selecting a higher number reveals a size field for each radiator.</small>' +
+        '</div>' + existingSizeField + existingLocationField +
         '<div class="field hl-custom-existing-output" id="rad_' +
         escapeHtml(key) + '_ex_custom_kw_wrap" hidden>' +
         '<label for="rad_' + escapeHtml(key) + '_ex_custom_kw">' +
-        escapeHtml(roomName) + ' - Custom existing output (kW)</label>' +
+        escapeHtml(roomName) + ' - Custom existing output per radiator (kW)</label>' +
         '<input id="rad_' + escapeHtml(key) + '_ex_custom_kw" data-id="rad_' +
         escapeHtml(key) + '_ex_custom_kw" type="number" min="0" step="0.01" ' +
         'inputmode="decimal" disabled>' +
-        '<small>Required for a custom radiator or towel rail. Enter its known output at the selected design temperature.</small>' +
-        '</div>';
+        '<small>Required for a custom radiator or towel rail. Enter the output of one unit at the selected design temperature.</small>' +
+        '</div>' + additionalExistingFields;
     });
     var newSizePattern = new RegExp(
       '<div class="field">\\s*<label for="rad_' + key +

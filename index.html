@@ -4516,6 +4516,34 @@
           : "Existing radiator retained";
       }
 
+      function radiatorScheduleExistingSizeCell(key) {
+        const quantity = Math.max(1, Math.min(2, Number(val(`rad_${key}_ex_quantity`)) || 1));
+        const sizes = [];
+        for (let index = 1; index <= quantity; index += 1) {
+          const suffix = index > 1 ? "_" + index : "";
+          const size = val("rad_" + key + "_ex_size" + suffix);
+          if (size) sizes.push(size);
+        }
+        if (!sizes.length) return cell("rad_" + key + "_ex_size");
+        return sizes
+          .map((size) => '<span class="data">' + escapeHtml(size) + "</span>")
+          .join("<br>");
+      }
+
+      function radiatorScheduleExistingLocationCell(key) {
+        const quantity = Math.max(1, Math.min(2, Number(val(`rad_${key}_ex_quantity`)) || 1));
+        const locations = [];
+        for (let index = 1; index <= quantity; index += 1) {
+          const suffix = index > 1 ? "_" + index : "";
+          const location = val("rad_" + key + "_ex_loc" + suffix);
+          if (location) locations.push(location);
+        }
+        if (!locations.length) return cell(`rad_${key}_ex_loc`);
+        return locations
+          .map((location) => '<span class="data">' + escapeHtml(location) + "</span>")
+          .join("<br>");
+      }
+
       function renderRads() {
         const rows = allRoomNames()
           .map((roomName) => {
@@ -4541,9 +4569,15 @@
           "output",
         ]
           .map((field) => {
+            if (field === "ex_size") {
+              return `<td class="input">${radiatorScheduleExistingSizeCell(key)}</td>`;
+            }
+            if (field === "ex_loc") {
+              return `<td class="input">${radiatorScheduleExistingLocationCell(key)}</td>`;
+            }
             if (field === "new_size") {
               const secondSize = val(`rad_${key}_new_size_2`);
-              return `<td class="input">${radiatorScheduleNewSizeCell(key)}${secondSize ? `<br>+ ${cell(`rad_${key}_new_size_2`)}` : ""}</td>`;
+              return `<td class="input">${radiatorScheduleNewSizeCell(key)}${secondSize ? `<br>${cell(`rad_${key}_new_size_2`)}` : ""}</td>`;
             }
             return `<td class="input">${cell(`rad_${key}_${field}`)}</td>`;
           })
