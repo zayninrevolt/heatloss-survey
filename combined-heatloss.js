@@ -276,11 +276,21 @@
     'window_width',
     'window_height',
     'window_count',
+    'window_1_length',
+    'window_1_width',
+    'window_2_length',
+    'window_2_width',
+    'window_3_length',
+    'window_3_width',
     'window_type',
     'door_area',
     'door_width',
     'door_height',
     'door_count',
+    'door_1_length',
+    'door_1_width',
+    'door_2_length',
+    'door_2_width',
     'door_type',
     'floor_type',
     'floor_exposed_perimeter',
@@ -429,6 +439,15 @@
     return targetTemperature(roomName);
   }
 
+  function openingMeasurementFieldsHtml(key, opening, number, label) {
+    var fieldPrefix = 'hl_' + key + '_' + opening + '_' + number;
+    return '<div class="hl-opening-measurement" id="' + escapeHtml(fieldPrefix) +
+      '_wrap" hidden><div class="hl-fields-grid">' +
+      fieldHtml(fieldPrefix + '_length', label + ' length (m)', 'number') +
+      fieldHtml(fieldPrefix + '_width', label + ' width (m)', 'number') +
+      '</div></div>';
+  }
+
   function roomDropdownHtml(roomName) {
     var key = roomKeyFromName(roomName);
     var temperatures = [
@@ -470,9 +489,32 @@
       '</div><div id="hl_' + escapeHtml(key) + '_internal_adjacent_temp_wrap" hidden>' +
       fieldHtml('hl_' + key + '_internal_adjacent_temp', 'Unheated space temperature (°C)', 'number', null, 'Optional. Overrides the standard temperature factor for the selected unheated space.') +
       '</div></div></section><div class="hl-fields-grid">' +
-      fieldHtml('hl_' + key + '_window_area', 'Window area (m²)', 'number') +
+      '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_area" data-id="hl_' +
+      escapeHtml(key) + '_window_area">' +
+      '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_width" data-id="hl_' +
+      escapeHtml(key) + '_window_width"><input type="hidden" id="hl_' +
+      escapeHtml(key) + '_window_height" data-id="hl_' + escapeHtml(key) +
+      '_window_height">' +
+      fieldHtml('hl_' + key + '_window_count', 'Number of windows', 'select', ['0', '1', '2', '3'], 'Choose the number first. Each window can be measured separately.') +
+      '<div class="hl-opening-measurements" id="hl_' + escapeHtml(key) +
+      '_window_measurements_wrap" hidden>' +
+      openingMeasurementFieldsHtml(key, 'window', 1, 'Window 1') +
+      openingMeasurementFieldsHtml(key, 'window', 2, 'Window 2') +
+      openingMeasurementFieldsHtml(key, 'window', 3, 'Window 3') +
+      '</div>' +
       fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
-      fieldHtml('hl_' + key + '_door_area', 'External door area (m²)', 'number') +
+      '<input type="hidden" id="hl_' + escapeHtml(key) + '_door_area" data-id="hl_' +
+      escapeHtml(key) + '_door_area">' +
+      '<input type="hidden" id="hl_' + escapeHtml(key) + '_door_width" data-id="hl_' +
+      escapeHtml(key) + '_door_width"><input type="hidden" id="hl_' +
+      escapeHtml(key) + '_door_height" data-id="hl_' + escapeHtml(key) +
+      '_door_height">' +
+      fieldHtml('hl_' + key + '_door_count', 'Number of doors', 'select', ['0', '1', '2'], 'Choose the number first. Each door can be measured separately.') +
+      '<div class="hl-opening-measurements" id="hl_' + escapeHtml(key) +
+      '_door_measurements_wrap" hidden>' +
+      openingMeasurementFieldsHtml(key, 'door', 1, 'Door 1') +
+      openingMeasurementFieldsHtml(key, 'door', 2, 'Door 2') +
+      '</div>' +
       fieldHtml('hl_' + key + '_door_type', 'External door', 'select', optionsFromMap(VALUES.door)) +
       fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
@@ -1077,7 +1119,9 @@
         indoor_temp: newIndoorDefault,
         wall_type: 'Cavity wall, insulated',
         internal_wall_type: 'No internal wall included',
+        window_count: '0',
         window_type: 'Older standard double glazing',
+        door_count: '0',
         door_type: 'No external door',
         internal_adjacent_space: 'Standard',
         building_part: 'Main dwelling',
@@ -1089,6 +1133,14 @@
         rad_panel_type: 'Any',
         rad_quantity: 'Automatic'
       };
+      if (!stringValue('hl_' + key + '_window_count') &&
+          numberValue('hl_' + key + '_window_area', 0) > 0) {
+        setValue('hl_' + key + '_window_count', '1');
+      }
+      if (!stringValue('hl_' + key + '_door_count') &&
+          numberValue('hl_' + key + '_door_area', 0) > 0) {
+        setValue('hl_' + key + '_door_count', '1');
+      }
       Object.entries(defaults).forEach(function (entry) {
         var id = 'hl_' + key + '_' + entry[0];
         if (!stringValue(id)) setValue(id, entry[1]);
@@ -1612,6 +1664,48 @@
   }
   window.computeHeatLossValuesV60 = computeHeatLossValues;
 
+  function openingMeasurements(key, opening, maximumCount) {
+    var count = Math.max(0, Math.min(maximumCount, Math.round(numberValue(
+      'hl_' + key + '_' + opening + '_count', 0))));
+    var area = 0;
+    var hasDetailedMeasurement = false;
+    var measurementsComplete = true;
+    var index;
+    for (index = 1; index <= count; index += 1) {
+      var length = numberValue('hl_' + key + '_' + opening + '_' + index + '_length', 0);
+      var width = numberValue('hl_' + key + '_' + opening + '_' + index + '_width', 0);
+      if (length > 0 || width > 0) hasDetailedMeasurement = true;
+      if (length <= 0 || width <= 0) {
+        measurementsComplete = false;
+      } else {
+        area += length * width;
+      }
+    }
+    if (count === 0) {
+      return { area: 0, count: 0, complete: true, measured: true };
+    }
+    if (!hasDetailedMeasurement) {
+      var legacyLength = numberValue('hl_' + key + '_' + opening + '_width', 0);
+      var legacyWidth = numberValue('hl_' + key + '_' + opening + '_height', 0);
+      if (legacyLength > 0 && legacyWidth > 0) {
+        return {
+          area: legacyLength * legacyWidth * count,
+          count: count,
+          complete: true,
+          measured: true
+        };
+      }
+      var legacyArea = numberValue('hl_' + key + '_' + opening + '_area', 0);
+      if (legacyArea > 0) {
+        return { area: legacyArea, count: count, complete: true, measured: false };
+      }
+    }
+    if (!measurementsComplete) {
+      return { area: 0, count: count, complete: false, measured: true };
+    }
+    return { area: area, count: count, complete: true, measured: true };
+  }
+
   function calculateRoom(roomName, ventilationContext) {
     ventilationContext = ventilationContext || {};
     var key = roomKeyFromName(roomName);
@@ -1638,19 +1732,17 @@
       : calculatedInternalWallLength;
     var assumedInternalWall = enteredInternalWallLength <= 0 &&
       calculatedInternalWallLength > 0;
-    var windowWidth = numberValue('hl_' + key + '_window_width', 0);
-    var windowHeight = numberValue('hl_' + key + '_window_height', 0);
-    var windowCount = numberValue('hl_' + key + '_window_count', 0);
-    var measuredWindowArea = windowWidth > 0 && windowHeight > 0 && windowCount > 0;
-    var windowArea = measuredWindowArea
-      ? windowWidth * windowHeight * windowCount
+    var windowMeasurements = openingMeasurements(key, 'window', 3);
+    var windowCount = windowMeasurements.count;
+    var measuredWindowArea = windowMeasurements.measured;
+    var windowArea = windowMeasurements.complete
+      ? windowMeasurements.area
       : Math.max(0, numberValue('hl_' + key + '_window_area', 0));
-    var doorWidth = numberValue('hl_' + key + '_door_width', 0);
-    var doorHeight = numberValue('hl_' + key + '_door_height', 0);
-    var doorCount = numberValue('hl_' + key + '_door_count', 0);
-    var measuredDoorArea = doorWidth > 0 && doorHeight > 0 && doorCount > 0;
-    var doorArea = measuredDoorArea
-      ? doorWidth * doorHeight * doorCount
+    var doorMeasurements = openingMeasurements(key, 'door', 2);
+    var doorCount = doorMeasurements.count;
+    var measuredDoorArea = doorMeasurements.measured;
+    var doorArea = doorMeasurements.complete
+      ? doorMeasurements.area
       : Math.max(0, numberValue('hl_' + key + '_door_area', 0));
     var grossWallArea = Math.max(0, wallLength * height);
     var netWallArea = Math.max(0, grossWallArea - windowArea - doorArea);
@@ -1714,6 +1806,8 @@
     if (internalWallLength > 0 && (!internalWallType || internalWallU === 0)) {
       missing.push('internal wall construction');
     }
+    if (windowCount > 0 && !windowMeasurements.complete) missing.push('window dimensions');
+    if (doorCount > 0 && !doorMeasurements.complete) missing.push('door dimensions');
     if (windowArea > 0 && (!windowType || windowU === 0)) missing.push('window construction');
     if (doorArea > 0 && (!doorType || doorU === 0)) missing.push('external door construction');
     if (!floorType) missing.push('floor construction');
@@ -1876,7 +1970,9 @@
       internalWallLength: internalWallLength,
       assumedInternalWall: assumedInternalWall,
       windowArea: windowArea,
+      windowCount: windowCount,
       doorArea: doorArea,
+      doorCount: doorCount,
       wallType: wallType,
       internalWallType: internalWallType,
       internalWallFactor: internalWallFactor,
@@ -2273,6 +2369,21 @@
     var isUnheated = String(internalType || '').indexOf('Unheated space') === 0;
     if (unheatedSpaceWrap) unheatedSpaceWrap.hidden = !isUnheated;
     if (unheatedTemperatureWrap) unheatedTemperatureWrap.hidden = !isUnheated;
+    refreshOpeningMeasurementFields(result.key, 'window', 3);
+    refreshOpeningMeasurementFields(result.key, 'door', 2);
+  }
+
+  function refreshOpeningMeasurementFields(key, opening, maximumCount) {
+    var count = Math.max(0, Math.min(maximumCount, Math.round(numberValue(
+      'hl_' + key + '_' + opening + '_count', 0))));
+    var group = document.getElementById('hl_' + key + '_' + opening +
+      '_measurements_wrap');
+    if (group) group.hidden = count === 0;
+    for (var index = 1; index <= maximumCount; index += 1) {
+      var wrapper = document.getElementById('hl_' + key + '_' + opening + '_' +
+        index + '_wrap');
+      if (wrapper) wrapper.hidden = index > count;
+    }
   }
 
   function renderRoomResult(result) {

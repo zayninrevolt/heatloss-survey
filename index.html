@@ -492,12 +492,25 @@
       .rad-materials .sheet th {
         height: 24px;
       }
+      .rads-insulation-requirement {
+        width: 1180px;
+        box-sizing: border-box;
+        margin-top: 16px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #f8fafc;
+      }
       @media print {
         .rad-materials {
           display: grid !important;
           grid-template-columns: 1fr 1fr !important;
           gap: 10px !important;
           width: 100%;
+        }
+        .rads-insulation-requirement {
+          width: 100% !important;
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
       }
 
@@ -2103,6 +2116,8 @@
           "select",
           ["", "Select Install", "Required", "Not Required"],
         ],
+        ["mat_15mm_insulation", "15mm pipe insulation (≥20mm, ≤0.035 W/(m·K))", "number"],
+        ["mat_22mm_insulation", "22mm pipe insulation (≥20mm, ≤0.035 W/(m·K))", "number"],
         [
           "mat_15hp20",
           "15mm Hep2O Coil",
@@ -2117,6 +2132,15 @@
         ],
         ["mat_aico", "AICO Carbon Monoxide Alarm", "select", yesNo],
       ];
+      function pipeworkInsulationClauseHtml() {
+        return `<section class="pipework-insulation-clause">
+  <h4>General installation requirement: Pipework insulation</h4>
+  <p>All pipework insulation shall be reasonably continuous throughout the insulated pipe run, including at bends, elbows, T-branches, pipe clips/brackets and other supports, and around valves and other obstructions wherever practicable.</p>
+  <p>Insulation shall be closely fitted and joints shall be neatly butted together so that exposed pipework and gaps are kept to a minimum.</p>
+  <p>Insulation must not prevent the correct operation, adjustment, maintenance or servicing of valves, controls or other components.</p>
+  <p>15mm and 22mm heating and hot-water pipework shall use insulation with a minimum thickness of 20mm and thermal conductivity of ≤0.035 W/(m·K), or an alternative insulation product providing equivalent or better performance in accordance with BS 5422.</p>
+</section>`;
+      }
       function makeField(f) {
         let [id, label, type, opts] = f;
         const safeId = escapeHtml(id);
@@ -2384,7 +2408,7 @@
   <td colspan="3" class="label center">Route Of Condense:</td>
   <td colspan="6" class="input">${cell("front_condense")}</td>
   <td colspan="3" class="label">Re-carcass Gas</td>
-  <td colspan="4" class="input">${cell("front_recarcass")}</td>
+  <td colspan="3" class="input">${cell("front_recarcass")}</td>
   </tr>
   <tr>
   <td colspan="6" class="label">Fit tee into condense / vent</td>
@@ -4444,6 +4468,8 @@
           { label: "Installation Type", qty: "", option: "mat_install_type" },
           { label: "15mm Copper Tube", qty: "mat_15mm" },
           { label: "22mm Copper Tube", qty: "mat_22mm" },
+          { label: "15mm pipe insulation (≥20mm, ≤0.035 W/(m·K))", qty: "mat_15mm_insulation" },
+          { label: "22mm pipe insulation (≥20mm, ≤0.035 W/(m·K))", qty: "mat_22mm_insulation" },
           { label: "15mm Hep2O Coil", qty: "mat_15hp20" },
           { label: "22mm Hep2O Tube", qty: "mat_22hp20" },
           { label: "AICO Carbon Monoxide Alarm", qty: "mat_aico" },
@@ -4589,6 +4615,9 @@
         ${renderMaterialTable(leftMaterials)}
         ${renderMaterialTable(rightMaterials)}
       </div>
+      <section class="rads-insulation-requirement">
+        ${pipeworkInsulationClauseHtml()}
+      </section>
     </div>
   `;
       }
@@ -5942,6 +5971,8 @@
           ],
           ["mat_15mm", "15mm Copper Tube", "text"],
           ["mat_22mm", "22mm Copper Tube", "text"],
+          ["mat_15mm_insulation", "15mm pipe insulation (≥20mm, ≤0.035 W/(m·K))", "number"],
+          ["mat_22mm_insulation", "22mm pipe insulation (≥20mm, ≤0.035 W/(m·K))", "number"],
           ["mat_15hp20", "15mm Hep2O Coil", "text"],
           ["mat_22hp20", "22mm Hep2O Tube", "text"],
           ["mat_aico", "AICO Carbon Monoxide Alarm", "select", yesNo],
@@ -7947,6 +7978,29 @@
         font-weight: 800;
         color: #1d4ed8;
       }
+      .hl-installation-requirement {
+        margin-top: 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        background: #f9fafb;
+      }
+      .hl-installation-requirement > summary {
+        padding: 11px 12px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      .pipework-insulation-clause {
+        padding: 0 12px 12px;
+      }
+      .pipework-insulation-clause h4 {
+        margin: 0 0 7px;
+        font-size: 14px;
+      }
+      .pipework-insulation-clause p {
+        margin: 0 0 7px;
+        font-size: 12px;
+        line-height: 1.35;
+      }
       .heatloss-sheet {
         width: 1180px;
       }
@@ -7963,6 +8017,11 @@
       }
       body.theme-dark #heatlossForm details,
       body.theme-dark #heatlossForm details > summary {
+        background: #111827 !important;
+        border-color: #374151 !important;
+        color: #f9fafb !important;
+      }
+      body.theme-dark .hl-installation-requirement {
         background: #111827 !important;
         border-color: #374151 !important;
         color: #f9fafb !important;
@@ -8057,6 +8116,15 @@
           return 20;
         }
 
+        function openingMeasurementFieldsV59(key, opening, number, label) {
+          return `<div class="hl-opening-measurement" id="hl_${escapeHtml(key)}_${opening}_${number}_wrap" hidden>
+            <div class="hl-grid">
+              ${hlFieldV59(`hl_${key}_${opening}_${number}_length`, `${label} length (m)`, "number")}
+              ${hlFieldV59(`hl_${key}_${opening}_${number}_width`, `${label} width (m)`, "number")}
+            </div>
+          </div>`;
+        }
+
         function roomHeatLossHtmlV59(roomName, index) {
           const key = roomKeyFromName(roomName);
           return `<details ${index < 2 ? "open" : ""} data-hl-room="${escapeHtml(key)}">
@@ -8070,10 +8138,25 @@
                 ${hlFieldV59(`hl_${key}_external_wall_length`, "Total exposed wall length (m)", "number", null, "Leave blank to estimate from the outside-wall count on Rads")}
                 ${hlFieldV59(`hl_${key}_wall_preset`, "Wall construction", "select", Object.keys(WALL_PRESETS_V59))}
                 ${hlFieldV59(`hl_${key}_wall_u`, "Wall U-value (W/m²K)", "number")}
-                ${hlFieldV59(`hl_${key}_window_area`, "Total window area (m²)", "number")}
+                <input type="hidden" id="hl_${escapeHtml(key)}_window_area" data-id="hl_${escapeHtml(key)}_window_area">
+                <input type="hidden" id="hl_${escapeHtml(key)}_window_width" data-id="hl_${escapeHtml(key)}_window_width">
+                <input type="hidden" id="hl_${escapeHtml(key)}_window_height" data-id="hl_${escapeHtml(key)}_window_height">
+                ${hlFieldV59(`hl_${key}_window_count`, "Number of windows", "select", ["0", "1", "2", "3"], "Choose the number first. Each window can be measured separately.")}
+                <div class="hl-opening-measurements" id="hl_${escapeHtml(key)}_window_measurements_wrap" hidden>
+                  ${openingMeasurementFieldsV59(key, "window", 1, "Window 1")}
+                  ${openingMeasurementFieldsV59(key, "window", 2, "Window 2")}
+                  ${openingMeasurementFieldsV59(key, "window", 3, "Window 3")}
+                </div>
                 ${hlFieldV59(`hl_${key}_window_preset`, "Window construction", "select", Object.keys(WINDOW_PRESETS_V59))}
                 ${hlFieldV59(`hl_${key}_window_u`, "Window U-value (W/m²K)", "number")}
-                ${hlFieldV59(`hl_${key}_door_area`, "External door area (m²)", "number")}
+                <input type="hidden" id="hl_${escapeHtml(key)}_door_area" data-id="hl_${escapeHtml(key)}_door_area">
+                <input type="hidden" id="hl_${escapeHtml(key)}_door_width" data-id="hl_${escapeHtml(key)}_door_width">
+                <input type="hidden" id="hl_${escapeHtml(key)}_door_height" data-id="hl_${escapeHtml(key)}_door_height">
+                ${hlFieldV59(`hl_${key}_door_count`, "Number of doors", "select", ["0", "1", "2"], "Choose the number first. Each door can be measured separately.")}
+                <div class="hl-opening-measurements" id="hl_${escapeHtml(key)}_door_measurements_wrap" hidden>
+                  ${openingMeasurementFieldsV59(key, "door", 1, "Door 1")}
+                  ${openingMeasurementFieldsV59(key, "door", 2, "Door 2")}
+                </div>
                 ${hlFieldV59(`hl_${key}_door_u`, "Door U-value (W/m²K)", "number")}
                 ${hlFieldV59(`hl_${key}_floor_exposed`, "Floor to ground or unheated space?", "select", ["No", "Yes"])}
                 ${hlFieldV59(`hl_${key}_floor_u`, "Floor U-value (W/m²K)", "number")}
@@ -8104,6 +8187,9 @@
               <div class="hl-total-number" id="hl_property_total">0.00 kW</div>
               <div id="hl_property_detail">Enter at least one room to begin.</div>
             </div>
+            <section class="hl-installation-requirement">
+              ${pipeworkInsulationClauseHtml()}
+            </section>
           </div>`;
         }
 
@@ -8126,8 +8212,10 @@
               [`hl_${key}_indoor_temp`]: targetTemperatureV59(roomName),
               [`hl_${key}_wall_preset`]: "Cavity wall, insulated",
               [`hl_${key}_wall_u`]: 0.55,
+              [`hl_${key}_window_count`]: "0",
               [`hl_${key}_window_preset`]: "Modern double glazing",
               [`hl_${key}_window_u`]: 1.4,
+              [`hl_${key}_door_count`]: "0",
               [`hl_${key}_door_u`]: 1.8,
               [`hl_${key}_floor_exposed`]: "No",
               [`hl_${key}_floor_u`]: 0.25,
@@ -8135,6 +8223,14 @@
               [`hl_${key}_roof_u`]: 0.18,
               [`hl_${key}_ach`]: 0.5,
             };
+            if (!hlValueV59(`hl_${key}_window_count`) &&
+                hlNumberV59(`hl_${key}_window_area`, 0) > 0) {
+              hlSetV59(`hl_${key}_window_count`, "1");
+            }
+            if (!hlValueV59(`hl_${key}_door_count`) &&
+                hlNumberV59(`hl_${key}_door_area`, 0) > 0) {
+              hlSetV59(`hl_${key}_door_count`, "1");
+            }
             Object.entries(defaults).forEach(function (entry) {
               if (!hlValueV59(entry[0])) hlSetV59(entry[0], entry[1]);
             });
@@ -8203,6 +8299,46 @@
         }
         window.computeHeatLossValuesV59 = computeHeatLossValuesV59;
 
+        function openingMeasurementsV59(key, opening, maximumCount) {
+          const count = Math.max(0, Math.min(maximumCount, Math.round(
+            hlNumberV59(`hl_${key}_${opening}_count`, 0))));
+          let area = 0;
+          let hasDetailedMeasurement = false;
+          let complete = true;
+          for (let index = 1; index <= count; index += 1) {
+            const length = Math.max(0, hlNumberV59(`hl_${key}_${opening}_${index}_length`, 0));
+            const width = Math.max(0, hlNumberV59(`hl_${key}_${opening}_${index}_width`, 0));
+            if (length > 0 || width > 0) hasDetailedMeasurement = true;
+            if (length <= 0 || width <= 0) {
+              complete = false;
+            } else {
+              area += length * width;
+            }
+          }
+          if (count === 0) return { area: 0, count: 0, complete: true };
+          if (!hasDetailedMeasurement) {
+            const legacyLength = Math.max(0, hlNumberV59(`hl_${key}_${opening}_width`, 0));
+            const legacyWidth = Math.max(0, hlNumberV59(`hl_${key}_${opening}_height`, 0));
+            if (legacyLength > 0 && legacyWidth > 0) {
+              return { area: legacyLength * legacyWidth * count, count: count, complete: true };
+            }
+            const legacyArea = Math.max(0, hlNumberV59(`hl_${key}_${opening}_area`, 0));
+            if (legacyArea > 0) return { area: legacyArea, count: count, complete: true };
+          }
+          return { area: complete ? area : 0, count: count, complete: complete };
+        }
+
+        function refreshOpeningMeasurementFieldsV59(key, opening, maximumCount) {
+          const count = Math.max(0, Math.min(maximumCount, Math.round(
+            hlNumberV59(`hl_${key}_${opening}_count`, 0))));
+          const group = document.getElementById(`hl_${key}_${opening}_measurements_wrap`);
+          if (group) group.hidden = count === 0;
+          for (let index = 1; index <= maximumCount; index += 1) {
+            const wrapper = document.getElementById(`hl_${key}_${opening}_${index}_wrap`);
+            if (wrapper) wrapper.hidden = index > count;
+          }
+        }
+
         function calculateRoomHeatLossV59(roomName) {
           const key = roomKeyFromName(roomName);
           const length = hlNumberV59(`hl_${key}_length`, hlNumberV59(`rad_${key}_len`, 0));
@@ -8219,8 +8355,10 @@
           const wallLength = enteredWallLength > 0
             ? enteredWallLength
             : estimatedWallLengthV59(length, width, outsideWallCount);
-          const windowArea = Math.max(0, hlNumberV59(`hl_${key}_window_area`, 0));
-          const doorArea = Math.max(0, hlNumberV59(`hl_${key}_door_area`, 0));
+          const windowMeasurements = openingMeasurementsV59(key, "window", 3);
+          const windowArea = windowMeasurements.area;
+          const doorMeasurements = openingMeasurementsV59(key, "door", 2);
+          const doorArea = doorMeasurements.area;
           const grossWallArea = Math.max(0, wallLength * height);
           const netWallArea = Math.max(0, grossWallArea - windowArea - doorArea);
           const wallU = Math.max(0, hlNumberV59(`hl_${key}_wall_u`, 0));
@@ -8232,7 +8370,8 @@
           const floorExposed = hlValueV59(`hl_${key}_floor_exposed`) === "Yes";
           const roofExposed = hlValueV59(`hl_${key}_roof_exposed`) === "Yes";
           const started = length > 0 || width > 0 || enteredWallLength > 0 || windowArea > 0 || doorArea > 0;
-          const complete = length > 0 && width > 0 && height > 0;
+          const complete = length > 0 && width > 0 && height > 0 &&
+            windowMeasurements.complete && doorMeasurements.complete;
 
           const heat = complete ? computeHeatLossValuesV59({
             deltaT: deltaT,
@@ -8256,7 +8395,11 @@
           const bridgeWatts = heat.bridgeWatts;
           const totalWatts = heat.totalWatts;
           const warnings = [];
-          if (started && !complete) warnings.push("Length, width and height are required");
+          if (started && !(length > 0 && width > 0 && height > 0)) {
+            warnings.push("Length, width and height are required");
+          }
+          if (windowMeasurements.count > 0 && !windowMeasurements.complete) warnings.push("Window dimensions are required");
+          if (doorMeasurements.count > 0 && !doorMeasurements.complete) warnings.push("Door dimensions are required");
           if (complete && windowArea + doorArea > grossWallArea && grossWallArea > 0) warnings.push("Openings exceed the exposed wall area");
           if (complete && wallLength === 0 && !floorExposed && !roofExposed) warnings.push("No exposed fabric has been recorded");
 
@@ -8286,6 +8429,8 @@
         }
 
         function renderRoomResultV59(result) {
+          refreshOpeningMeasurementFieldsV59(result.key, "window", 3);
+          refreshOpeningMeasurementFieldsV59(result.key, "door", 2);
           const resultBox = document.getElementById(`hl_${result.key}_result`);
           const summary = document.getElementById(`hl_${result.key}_summary`);
           const radKw = document.getElementById(`rad_${result.key}_kw`);
@@ -8393,6 +8538,7 @@
               }).join("") : '<tr><td colspan="8" class="center">No rooms entered</td></tr>'}
               <tr><td colspan="6" class="label right">Property design heat loss</td><td class="input">${calculation.wattsPerSquareMetre.toFixed(1)} W/m²</td><td class="input"><b>${(calculation.totalWatts / 1000).toFixed(2)} kW</b></td></tr>
               <tr><td colspan="8" class="small">Calculation uses fabric U-value x area x temperature difference, plus 0.33 x room volume x air changes per hour x temperature difference. Indicative presets must be checked against the surveyed construction. This is a survey estimate and is not a certified MCS or BS EN 12831 design report.</td></tr>
+              <tr><td colspan="8" class="small">${pipeworkInsulationClauseHtml()}</td></tr>
             </table>
           </div>`;
         }
@@ -8474,6 +8620,6 @@
       })();
     </script>
     <link rel="stylesheet" href="combined-heatloss.css?v=83">
-    <script src="combined-heatloss.js?v=91"></script>
+    <script src="combined-heatloss.js?v=93"></script>
   </body>
 </html>
