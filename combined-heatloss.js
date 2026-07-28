@@ -402,10 +402,13 @@
       'Select the room containing the shared radiator. Each room keeps its own heat-loss calculation, but the host room sizes one radiator for both loads.');
   }
 
+  function isBathroomRoomName(roomName) {
+    return /bath|shower|en[\s-]*suite/i.test(String(roomName || ''));
+  }
+
   function targetTemperature(roomName) {
     var name = String(roomName || '').toLowerCase();
-    if (name.includes('bath') || name.includes('shower') || name.includes('ensuite') ||
-        name.includes('en suite')) return 22;
+    if (isBathroomRoomName(roomName)) return 22;
     if (name.includes('lounge') || name.includes('living') ||
         name.includes('dining') || name.includes('d room') ||
         name.includes('study') || name.includes('breakfast') ||
@@ -420,8 +423,7 @@
 
   function previousTargetTemperature(roomName) {
     var name = String(roomName || '').toLowerCase();
-    if (name.includes('bath') || name.includes('shower') || name.includes('ensuite') ||
-        name.includes('en suite')) return 22;
+    if (isBathroomRoomName(roomName)) return 22;
     if (name.includes('lounge') || name.includes('living') ||
         name.includes('dining')) return 21;
     if (name.includes('kitchen')) return 20;
@@ -432,9 +434,7 @@
   }
 
   function targetTemperatureForAge(roomName, ageBand) {
-    var name = String(roomName || '').toLowerCase();
-    if (name.includes('bath') || name.includes('shower') || name.includes('ensuite') ||
-        name.includes('en suite')) return 22;
+    if (isBathroomRoomName(roomName)) return 22;
     if (['K', 'L', 'M'].includes(String(ageBand || 'Unknown'))) return 21;
     return targetTemperature(roomName);
   }
@@ -1298,7 +1298,7 @@
   }
 
   function roomIsBathroom(roomName) {
-    return /bath|shower|en\s*suite/i.test(String(roomName || ''));
+    return isBathroomRoomName(roomName);
   }
 
   function sortRadiatorOptions(options, filters) {
@@ -1747,6 +1747,9 @@
     var grossWallArea = Math.max(0, wallLength * height);
     var netWallArea = Math.max(0, grossWallArea - windowArea - doorArea);
     var internalWallArea = internalWallLength * height;
+    var rectangularPerimeter = 2 * (length + width);
+    var openingsExceedWallArea = windowArea + doorArea > grossWallArea + 0.01;
+    var manualWallExceedsRectangle = enteredWallLength > rectangularPerimeter + 0.01;
     var started = length > 0 || width > 0;
     var dimensionsComplete = length > 0 && width > 0 && height > 0;
     var wallType = stringValue('hl_' + key + '_wall_type');
@@ -1816,7 +1819,7 @@
     if (ventilationMode === 'Manual override' && !manualAchValid) {
       missing.push('manual air-change rate');
     }
-    var complete = dimensionsComplete && missing.length === 0;
+    var complete = dimensionsComplete && missing.length === 0 && !openingsExceedWallArea;
     var adjacentKey = stringValue('hl_' + key + '_internal_adjacent_room');
     var adjacentName = allRoomNames().find(function (candidate) {
       return roomKeyFromName(candidate) === adjacentKey;
@@ -1885,8 +1888,11 @@
     if (started && missing.length) {
       warnings.push('Select ' + missing.join(', '));
     }
-    if (complete && windowArea + doorArea > grossWallArea && grossWallArea > 0) {
-      warnings.push('Window and door areas exceed the exposed wall area');
+    if (openingsExceedWallArea) {
+      warnings.push('Window and door areas exceed the exposed wall area; correct the measurements before sizing a radiator');
+    }
+    if (manualWallExceedsRectangle) {
+      warnings.push('Exposed wall length exceeds the simple rectangular perimeter; check this irregular-room measurement');
     }
     var radiatorOutcome = radiatorOutcomeForRoom(key);
     var existingRadiator = existingRadiatorForRoom(key, indoor, roomName);
@@ -1906,7 +1912,7 @@
         roomName)
       : null;
     var effectiveRadiator = customerRefused
-      ? null
+      ? existingRadiator
       : newRadiatorDeclined
         ? existingRadiator
       : replacesLikeForLike
@@ -1916,6 +1922,12 @@
           : radiator && radiator.selected;
     if ((usesExistingAssessment || replacesLikeForLike) && !existingRadiator) {
       warnings.push(existingRadiatorGuidance(key));
+    }
+    if (customerRefused && !existingRadiator) {
+      warnings.push('Customer refused radiator work; select the existing radiator size to record its retained output');
+    }
+    if (customerRefused && existingRadiator && existingRadiator.watts < heat.totalWatts) {
+      warnings.push('Retained radiator output is below the calculated room requirement');
     }
     if (newRadiatorDeclined && !existingRadiator) {
       warnings.push(stringValue('rad_' + key + '_ex_size') ===
@@ -1978,6 +1990,7 @@
       internalWallFactor: internalWallFactor,
       internalDeltaT: internalDeltaT,
       adjacentRoomName: adjacentName,
+      adjacentRoomKey: adjacentKey,
       adjacentIndoor: adjacentIndoor,
       adjacentSpace: adjacentSpace,
       adjacentSpaceFactor: adjacentSpaceFactor,
@@ -2395,19 +2408,32 @@
     if (result.customerRefused) {
       configureRadiatorSelect(result);
       if (radKw) {
-        radKw.value = '';
+        radKw.value = result.complete
+          ? (result.radiatorRequirementWatts / 1000).toFixed(2)
+          : '';
         radKw.readOnly = true;
       }
       if (radOutput) {
-        radOutput.value = '';
+        radOutput.value = result.existingRadiator
+          ? (result.existingRadiator.watts / 1000).toFixed(2)
+          : (result.complete ? '0.00' : '');
         radOutput.readOnly = true;
-        radOutput.title = 'No radiator output selected because the customer refused radiator work.';
+        radOutput.title = result.existingRadiator
+          ? existingRadiatorOutputDescription(result.existingRadiator)
+          : 'No existing radiator output has been recorded.';
       }
       if (summary) summary.textContent = 'Refused';
       if (resultBox) {
         resultBox.innerHTML =
           '<div class="hl-result-main"><strong>Refused</strong></div>' +
-          '<div class="hl-result-breakdown">Customer refused radiator work for this room. Boiler and materials choices remain available.</div>';
+          '<div class="hl-result-breakdown">Customer refused radiator work for this room. ' +
+          (result.existingRadiator
+            ? 'The retained radiator output is included in the total.'
+            : 'Record the existing radiator size to include its retained output.') +
+          '</div>' +
+          (result.warnings.length
+            ? '<div class="hl-warning">' + escapeHtml(result.warnings.join('. ')) + '</div>'
+            : '');
       }
       return;
     }
@@ -2601,12 +2627,73 @@
     }
   }
 
+  function refreshRadiatorRequirement(room) {
+    var requirement = Math.max(0, Number(room.radiatorRequirementWatts) || 0);
+    var isAssessment = room.radiatorOutcome === 'Assess existing radiator';
+    var likeForLike = room.radiatorOutcome ===
+      'Replace existing radiator like for like';
+    room.existingRadiatorAdequate = Boolean(room.complete && room.existingRadiator &&
+      room.existingRadiator.watts >= requirement);
+    room.radiator = room.complete && requirement > 0 && !room.customerRefused &&
+      !likeForLike && !(isAssessment && room.existingRadiatorAdequate)
+      ? recommendStelradElite(requirement, room.indoor,
+        stringValue('rad_' + room.key + '_new_size'), room.key, room.roomName)
+      : null;
+    room.effectiveRadiator = room.customerRefused || room.newRadiatorDeclined || likeForLike
+      ? room.existingRadiator
+      : isAssessment && room.existingRadiatorAdequate
+        ? room.existingRadiator
+        : room.radiator && room.radiator.selected;
+    room.warnings = room.warnings.filter(function (warning) {
+      return warning.indexOf('Existing radiator output is below') !== 0 &&
+        warning.indexOf('Retained radiator output is below') !== 0 &&
+        warning.indexOf('Like-for-like replacement is below') !== 0 &&
+        warning.indexOf('No single radiator option') !== 0 &&
+        warning.indexOf('No two-radiator combination') !== 0;
+    });
+    if (room.customerRefused && room.existingRadiator &&
+        room.existingRadiator.watts < requirement) {
+      room.warnings.push('Retained radiator output is below the calculated room requirement');
+    } else if ((room.newRadiatorDeclined || isAssessment || likeForLike) &&
+        room.existingRadiator && room.existingRadiator.watts < requirement) {
+      room.warnings.push(likeForLike
+        ? 'Like-for-like replacement is below the calculated room requirement'
+        : 'Existing radiator output is below the calculated room requirement');
+    }
+    if (room.radiator && !room.radiator.temperatureWarning && !room.radiator.selected) {
+      room.warnings.push(room.radiator.usesTwo
+        ? 'No two-radiator combination meets the room requirement within the 50% oversize limit'
+        : 'No single radiator option meets the room requirement within the 50% oversize limit');
+    }
+  }
+
+  function applyHeatedInternalWallTransfers(results) {
+    var byKey = {};
+    results.forEach(function (room) {
+      byKey[room.key] = room;
+      room.receivedInternalWallWatts = 0;
+    });
+    results.forEach(function (room) {
+      var adjacent = byKey[room.adjacentRoomKey];
+      if (!room.complete || !adjacent || !adjacent.complete ||
+          room.internalWallWatts <= 0 || adjacent.key === room.key) return;
+      adjacent.receivedInternalWallWatts += room.internalWallWatts;
+    });
+    results.forEach(function (room) {
+      room.radiatorRequirementWatts = Math.max(0,
+        room.totalWatts - room.receivedInternalWallWatts);
+      refreshRadiatorRequirement(room);
+    });
+  }
+
   function applySharedRadiatorGroups(results) {
     var byKey = {};
     var groups = {};
     results.forEach(function (room) {
       byKey[room.key] = room;
-      room.radiatorRequirementWatts = room.totalWatts;
+      room.radiatorRequirementWatts = Number.isFinite(room.radiatorRequirementWatts)
+        ? room.radiatorRequirementWatts
+        : room.totalWatts;
       room.sharedRadiatorHostKey = '';
       room.sharedRadiatorHostName = '';
       room.sharedRadiatorRoomNames = [];
@@ -2616,10 +2703,17 @@
       var host = byKey[hostKey];
       var hostSharesAnotherRadiator = host &&
         stringValue('hl_' + host.key + '_shared_radiator_with') !== '';
+      var guestHasConflictingOutcome = room.customerRefused ||
+        room.radiatorOutcome === 'Replace existing radiator like for like' ||
+        room.newRadiatorDeclined;
       var hostCanSupply = host && host.complete && room.complete &&
         !hostSharesAnotherRadiator && host.radiatorOutcome !== 'Customer refused' &&
         host.radiatorOutcome !== 'Replace existing radiator like for like' &&
         (!host.newRadiatorDeclined || Boolean(host.existingRadiator));
+      if (guestHasConflictingOutcome) {
+        room.warnings.push('A shared radiator cannot be used while this room is marked as refused, retained or like-for-like');
+        return;
+      }
       if (!hostCanSupply || hostKey === room.key) return;
       if (!groups[hostKey]) groups[hostKey] = [];
       groups[hostKey].push(room);
@@ -2634,8 +2728,8 @@
       host.sharedRadiatorRoomNames = suppliedRooms.map(function (room) {
         return room.roomName;
       });
-      host.radiatorRequirementWatts = host.totalWatts + suppliedRooms.reduce(
-        function (sum, room) { return sum + room.totalWatts; }, 0);
+      host.radiatorRequirementWatts = host.radiatorRequirementWatts + suppliedRooms.reduce(
+        function (sum, room) { return sum + room.radiatorRequirementWatts; }, 0);
       host.existingRadiatorAdequate = Boolean(host.existingRadiator &&
         host.existingRadiator.watts >= host.radiatorRequirementWatts);
       var isAssessment = host.radiatorOutcome === 'Assess existing radiator';
@@ -2657,6 +2751,11 @@
         host.warnings.push(existingRadiatorGuidance(host.key));
       } else if (isAssessment && !host.existingRadiatorAdequate) {
         host.warnings.push('Existing radiator output is below the combined room requirement');
+      } else if (host.newRadiatorDeclined && (!host.existingRadiator ||
+          !host.existingRadiatorAdequate)) {
+        host.warnings.push(host.existingRadiator
+          ? 'Retained radiator output is below the combined room requirement'
+          : existingRadiatorGuidance(host.key));
       }
       if (host.radiator && !host.radiator.temperatureWarning &&
           !host.radiator.selected) {
@@ -2681,6 +2780,7 @@
     var results = roomNames.map(function (roomName) {
       return calculateRoom(roomName, { propertyVolume: propertyVolume });
     });
+    applyHeatedInternalWallTransfers(results);
     applySharedRadiatorGroups(results);
     var included = results.filter(function (result) {
       return result.started && result.complete;

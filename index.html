@@ -8108,7 +8108,7 @@
 
         function targetTemperatureV59(roomName) {
           const name = String(roomName || "").toLowerCase();
-          if (name.includes("bath") || name.includes("shower")) return 22;
+          if (/bath|shower|en[\s-]*suite/i.test(name)) return 22;
           if (name.includes("lounge") || name.includes("living") || name.includes("d room") || name.includes("dining")) return 21;
           if (name.includes("kitchen")) return 20;
           if (name.includes("bed")) return 18;
