@@ -409,15 +409,7 @@
   function targetTemperature(roomName) {
     var name = String(roomName || '').toLowerCase();
     if (isBathroomRoomName(roomName)) return 22;
-    if (name.includes('lounge') || name.includes('living') ||
-        name.includes('dining') || name.includes('d room') ||
-        name.includes('study') || name.includes('breakfast') ||
-        name.includes('family') || name.includes('games') ||
-        (name.includes('bed') && name.includes('suite'))) return 21;
-    if (name.includes('kitchen')) return 18;
-    if (name.includes('bed')) return 18;
-    if (name.includes('hall') || name.includes('landing') ||
-        name.includes('wc') || name.includes('toilet')) return 18;
+    if (name.includes('lounge') || name.includes('living')) return 21;
     return 18;
   }
 
@@ -434,9 +426,13 @@
   }
 
   function targetTemperatureForAge(roomName, ageBand) {
+    return targetTemperature(roomName);
+  }
+
+  function previousTargetTemperatureForAge(roomName, ageBand) {
     if (isBathroomRoomName(roomName)) return 22;
     if (['K', 'L', 'M'].includes(String(ageBand || 'Unknown'))) return 21;
-    return targetTemperature(roomName);
+    return previousTargetTemperature(roomName);
   }
 
   function openingMeasurementFieldsHtml(key, opening, number, label) {
@@ -450,17 +446,21 @@
 
   function roomDropdownHtml(roomName) {
     var key = roomKeyFromName(roomName);
+    var ageBand = stringValue('hl_property_age_band') || 'Unknown';
     var temperatures = [
-      { label: '18°C, bedroom, kitchen or general room', value: '18' },
+      { label: '18°C, all other rooms', value: '18' },
       { label: '20°C, manual selection', value: '20' },
-      { label: '21°C, living room or age band K onwards', value: '21' },
+      { label: '21°C, living room or lounge', value: '21' },
       { label: '22°C, bathroom or shower room', value: '22' }
     ];
     var adjacentRooms = [{ label: 'Same design temperature', value: '' }].concat(
       allRoomNames().filter(function (candidate) {
         return roomKeyFromName(candidate) !== key;
       }).map(function (candidate) {
-        return { label: candidate, value: roomKeyFromName(candidate) };
+        return {
+          label: candidate + ' (' + targetTemperatureForAge(candidate, ageBand) + '°C)',
+          value: roomKeyFromName(candidate)
+        };
       })
     );
     return '<details class="hl-room-dropdown" data-hl-room="' +
@@ -581,6 +581,7 @@
       '<input type="hidden" id="hl_ground_station" data-id="hl_ground_station">' +
       '<input type="hidden" id="hl_design_manual" data-id="hl_design_manual">' +
       '<input type="hidden" id="hl_temperature_defaults_v62" data-id="hl_temperature_defaults_v62">' +
+      '<input type="hidden" id="hl_temperature_defaults_v64" data-id="hl_temperature_defaults_v64">' +
       '<input type="hidden" id="hl_applied_age_band" data-id="hl_applied_age_band">' +
       '<div class="hl-property-result"><div class="hl-total-number" id="hl_property_total">0.00 kW</div>' +
       '<div id="hl_property_detail">Enter at least one room to begin.</div></div>' +
@@ -1109,6 +1110,8 @@
       if (!stringValue(entry[0])) setValue(entry[0], entry[1]);
     });
     var migrateTemperatureDefaults = stringValue('hl_temperature_defaults_v62') !== 'yes';
+    var migrateSimplifiedTemperatureDefaults =
+      stringValue('hl_temperature_defaults_v64') !== 'yes';
     allRoomNames().forEach(function (roomName) {
       var key = roomKeyFromName(roomName);
       var ageBand = stringValue('hl_property_age_band') || 'Unknown';
@@ -1117,6 +1120,11 @@
       if (migrateTemperatureDefaults && currentIndoorTemperature === '20' &&
           previousTargetTemperature(roomName) === 20 &&
           newIndoorDefault !== 20) {
+        setValue('hl_' + key + '_indoor_temp', newIndoorDefault);
+      }
+      if (migrateSimplifiedTemperatureDefaults &&
+          Number(currentIndoorTemperature) === previousTargetTemperatureForAge(roomName, ageBand) &&
+          newIndoorDefault !== previousTargetTemperatureForAge(roomName, ageBand)) {
         setValue('hl_' + key + '_indoor_temp', newIndoorDefault);
       }
       var defaults = {
@@ -1160,6 +1168,7 @@
       }
     });
     setValue('hl_temperature_defaults_v62', 'yes');
+    setValue('hl_temperature_defaults_v64', 'yes');
     if (!stringValue('hl_applied_age_band')) {
       setValue('hl_applied_age_band', stringValue('hl_property_age_band') || 'Unknown');
     }
@@ -2533,6 +2542,23 @@
     }
   }
 
+  function sharedRadiatorRequirementDescription(result) {
+    var rawWatts = Math.max(0, Number(result.sharedRadiatorRawCombinedWatts) || 0);
+    var adjustmentWatts = Math.max(0,
+      Number(result.sharedRadiatorTransferAdjustmentWatts) || 0);
+    var requirementWatts = Math.max(0, Number(result.radiatorRequirementWatts) || 0);
+    var description = 'Combined room heat loss: ' + Math.round(rawWatts) + ' W (' +
+      (rawWatts / 1000).toFixed(2) + ' kW).';
+    if (adjustmentWatts > 0.5) {
+      description += ' Heated internal-wall transfer adjustment: minus ' +
+        Math.round(adjustmentWatts) + ' W.';
+    } else {
+      description += ' No heated internal-wall transfer adjustment.';
+    }
+    return description + ' Radiator sizing requirement: ' + Math.round(requirementWatts) +
+      ' W (' + (requirementWatts / 1000).toFixed(2) + ' kW).';
+  }
+
   function renderRoomResult(result) {
     renderRoomGeometry(result);
     var resultBox = document.getElementById('hl_' + result.key + '_result');
@@ -2625,8 +2651,7 @@
       radKw.value = radiatorKw.toFixed(2);
       radKw.readOnly = true;
       radKw.title = result.sharedRadiatorRoomNames.length
-        ? 'Combined heat-loss requirement for this room and ' +
-          result.sharedRadiatorRoomNames.join(', ') + '.'
+        ? sharedRadiatorRequirementDescription(result)
         : 'Calculated from Heat loss details in this room.';
     }
     var radiatorFields = configureRadiatorSelect(result);
@@ -2663,8 +2688,7 @@
       radiatorHtml = '<div class="hl-radiator-result"><b>Shared radiator:</b> ' +
         'This radiator also supplies ' +
         escapeHtml(result.sharedRadiatorRoomNames.join(' and ')) +
-        '. Combined requirement: ' + Math.round(result.radiatorRequirementWatts) +
-        ' W (' + radiatorKw.toFixed(2) + ' kW).</div>';
+        '. ' + sharedRadiatorRequirementDescription(result) + '</div>';
     }
     if (result.radiatorOutcome === 'Assess existing radiator') {
       radiatorHtml += '<div class="hl-radiator-result"><b>Existing radiator:</b> ' +
@@ -2831,6 +2855,8 @@
       room.sharedRadiatorHostKey = '';
       room.sharedRadiatorHostName = '';
       room.sharedRadiatorRoomNames = [];
+      room.sharedRadiatorRawCombinedWatts = 0;
+      room.sharedRadiatorTransferAdjustmentWatts = 0;
     });
     results.forEach(function (room) {
       var hostKey = stringValue('hl_' + room.key + '_shared_radiator_with');
@@ -2862,8 +2888,12 @@
       host.sharedRadiatorRoomNames = suppliedRooms.map(function (room) {
         return room.roomName;
       });
+      host.sharedRadiatorRawCombinedWatts = host.totalWatts + suppliedRooms.reduce(
+        function (sum, room) { return sum + room.totalWatts; }, 0);
       host.radiatorRequirementWatts = host.radiatorRequirementWatts + suppliedRooms.reduce(
         function (sum, room) { return sum + room.radiatorRequirementWatts; }, 0);
+      host.sharedRadiatorTransferAdjustmentWatts = Math.max(0,
+        host.sharedRadiatorRawCombinedWatts - host.radiatorRequirementWatts);
       host.existingRadiatorAdequate = Boolean(host.existingRadiator &&
       host.existingRadiator.complete !== false &&
       host.existingRadiator.watts >= host.radiatorRequirementWatts);
@@ -3210,8 +3240,7 @@
             : room.sharedRadiatorRoomNames.length
               ? '<br><small>Also supplies ' +
                 escapeHtml(room.sharedRadiatorRoomNames.join(' and ')) +
-                ': ' + (room.radiatorRequirementWatts / 1000).toFixed(2) +
-                ' kW combined</small>'
+                '. ' + sharedRadiatorRequirementDescription(room) + '</small>'
               : '') + '</td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No rooms entered</td></tr>') +
       '<tr><td colspan="6" class="label right">Property design heat loss</td>' +
