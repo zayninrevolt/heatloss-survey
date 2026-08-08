@@ -1,0 +1,12 @@
+{
+  "name": "heatloss-survey",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:browser": "playwright test",
+    "check": "node --check combined-heatloss.js && node --check src/heat-loss.js && node --check src/radiator-sizing.js && node --check src/persistence.js && node --check src/validation.js"
+  }
+}

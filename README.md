@@ -62,4 +62,17 @@ Construction choices are practical survey starting points and must be checked ag
 
 Open `index.html` in a browser. All survey data is stored locally in that browser, with JSON export available for portable backups.
 
+## Architecture and verification
+
+Technical logic is being separated from the legacy single-page UI into dependency-free modules under `src/`. These modules work as browser globals and as CommonJS modules, so the exact calculation code used by the survey can be tested with Node without adding a production build step.
+
+- `src/heat-loss.js` — geometry, fabric, ventilation, floor-temperature and altitude calculations
+- `src/radiator-sizing.js` — correction factors, radiator output and single/two-radiator selection
+- `src/persistence.js` — schema-versioned encoding and ordered migrations for saved surveys
+- `src/validation.js` — non-blocking physical-range checks
+
+Run `npm test` for table-driven unit tests and `npm run check` for JavaScript syntax checks. After installing development dependencies and Chromium with `npx playwright install chromium`, run `npm run test:browser` for save/restore, JSON export, failed-postcode and print smoke tests. GitHub Actions runs these checks for pushes and pull requests.
+
+The unit fixtures include hand-calculated component loads using `U-value × area × temperature difference`, ventilation using `0.33 × airflow × temperature difference`, ground-floor temperature differences, complete-100m altitude corrections, ΔT50 radiator output scaling, the 50% oversize boundary, and two-radiator selection. They are regression evidence, not independent MCS certification. The construction assumptions and manufacturer data still require checking against the cited MCS and Stelrad publications before use on a live design.
+
 Based on the original project: https://github.com/zayninrevolt/survey

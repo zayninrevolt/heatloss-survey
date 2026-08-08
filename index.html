@@ -2833,7 +2833,17 @@
       function update() {
         document.getElementById("preview").innerHTML =
           renderFront() + renderRads() + renderA12a() + renderProfile();
-        localStorage.setItem("surveyWebData", JSON.stringify(getData()));
+        try {
+          localStorage.setItem("surveyWebData", JSON.stringify(getData()));
+        } catch (error) {
+          if (typeof showAppStatus === "function") {
+            showAppStatus(
+              "Could not autosave this survey. Browser storage may be full; export JSON now.",
+              "warning",
+            );
+          }
+          console.error("Could not autosave survey:", error);
+        }
       }
       function getData() {
         let d = {};
@@ -3073,7 +3083,7 @@
         function firstValue(ids) {
           for (const id of ids) {
             const e = document.getElementById(id);
-            if (e && e.value) return e.value;
+            if (e && String(e.value || "").trim()) return e.value;
           }
           return "";
         }
@@ -3120,7 +3130,7 @@
           };
           Object.entries(seeds).forEach(([target, ids]) => {
             const t = document.getElementById(target);
-            if (t && !t.value) t.value = firstValue(ids);
+            if (t && !String(t.value || "").trim()) t.value = firstValue(ids);
           });
         }
         function wireCommon() {
@@ -8654,6 +8664,10 @@
       })();
     </script>
     <link rel="stylesheet" href="combined-heatloss.css?v=83">
+    <script src="src/heat-loss.js?v=1"></script>
+    <script src="src/radiator-sizing.js?v=1"></script>
+    <script src="src/persistence.js?v=1"></script>
+    <script src="src/validation.js?v=1"></script>
     <script src="combined-heatloss.js?v=94"></script>
   </body>
 </html>

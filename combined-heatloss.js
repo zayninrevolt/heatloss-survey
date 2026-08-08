@@ -546,6 +546,8 @@
     ];
     return '<div class="card hl-summary-card" id="heatLossSummaryCard">' +
       '<h3>Heat loss summary</h3>' +
+      '<input type="hidden" id="survey_schema_version" data-id="_schemaVersion" value="' +
+      window.SurveyPersistence.CURRENT_SCHEMA_VERSION + '">' +
       '<div class="hl-postcode-lookup">' +
       '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
       '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the design temperature, altitude and ground temperature.</div>' +
@@ -917,14 +919,19 @@
     var propertyAltitude = Number(propertyAltitudeText);
     if (!Number.isFinite(propertyAltitude)) return;
     var groundStation = stringValue('hl_ground_station');
-    var steps = Math.max(0, Math.floor((propertyAltitude - stationAltitude) / 100));
+    var altitudeResult = window.HeatLossCalculations.altitudeAdjustedTemperature(
+      baseTemperature, propertyAltitude, stationAltitude
+    );
+    if (!altitudeResult) return;
+    var steps = altitudeResult.steps;
     postcodeLookupInProgress = true;
-    setValue('hl_outdoor_temp', (baseTemperature - steps * 0.6).toFixed(1));
+    setValue('hl_outdoor_temp', altitudeResult.temperature.toFixed(1));
     postcodeLookupInProgress = false;
     setPostcodeLookupStatus(
       'Using ' + stringValue('hl_design_station') + ', ' +
       numberValue('hl_outdoor_temp', 0).toFixed(1) + '°C' +
-      (steps ? ' after a ' + (steps * 0.6).toFixed(1) + '°C altitude correction.' : '.') +
+      (steps ? ' after a ' + altitudeResult.correction.toFixed(1) +
+        '°C altitude correction.' : '.') +
       ' Ground temperature ' + numberValue('hl_ground_temp', 10).toFixed(1) +
       '°C' + (groundStation === 'Manual value'
         ? ' (manual)'
@@ -975,14 +982,22 @@
     try {
       return JSON.parse(localStorage.getItem('surveyWebData') || '{}') || {};
     } catch (error) {
+      if (typeof showAppStatus === 'function') {
+        showAppStatus('The autosaved survey is damaged and could not be restored. Import a JSON backup or continue with a new survey.', 'warning');
+      }
+      console.error('Could not restore autosaved survey:', error);
       return {};
     }
   }
 
   function storedCombinedData() {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {};
+      return window.SurveyPersistence.decode(localStorage.getItem(STORAGE_KEY));
     } catch (error) {
+      if (typeof showAppStatus === 'function') {
+        showAppStatus('Saved heat-loss details could not be restored. The current form is still usable.', 'warning');
+      }
+      console.error('Could not restore heat-loss data:', error);
       return {};
     }
   }
@@ -993,7 +1008,15 @@
     document.querySelectorAll('#radsForm [data-id]').forEach(function (field) {
       data[field.dataset.id] = field.value;
     });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    data._schemaVersion = window.SurveyPersistence.CURRENT_SCHEMA_VERSION;
+    try {
+      localStorage.setItem(STORAGE_KEY, window.SurveyPersistence.encode(data));
+    } catch (error) {
+      if (typeof showAppStatus === 'function') {
+        showAppStatus('Could not save heat-loss details. Browser storage may be full; export JSON now.', 'warning');
+      }
+      console.error('Could not save heat-loss data:', error);
+    }
   }
 
   function restoreValues(data) {
@@ -1220,19 +1243,13 @@
   }
 
   function estimatedWallLength(length, width, wallCount) {
-    var shorter = Math.min(length, width);
-    var longer = Math.max(length, width);
-    if (wallCount === 1) return shorter;
-    if (wallCount === 2) return length + width;
-    if (wallCount === 3) return length + width + longer;
-    if (wallCount >= 4) return 2 * (length + width);
-    return 0;
+    return window.HeatLossCalculations.estimatedWallLength(length, width, wallCount);
   }
 
   function remainingInternalWallLength(length, width, exposedWallLength) {
-    var perimeter = 2 * (Math.max(0, length) + Math.max(0, width));
-    if (perimeter <= 0 || exposedWallLength <= 0) return 0;
-    return Math.max(0, perimeter - Math.min(perimeter, exposedWallLength));
+    return window.HeatLossCalculations.remainingInternalWallLength(
+      length, width, exposedWallLength
+    );
   }
 
   function mappedValue(group, selected) {
@@ -1249,32 +1266,13 @@
   }
 
   function floorTemperatureDifference(floorType, indoor, outdoor, ground, adjacentTemperature) {
-    if (String(floorType || '').includes('solid ground')) {
-      return Math.max(0, indoor - ground);
-    }
-    if (String(floorType || '').includes('suspended timber ground') ||
-        String(floorType || '').includes('exposed floor')) {
-      return Math.max(0, indoor - outdoor);
-    }
-    if (String(floorType || '').includes('cellar') ||
-        String(floorType || '').includes('garage') ||
-        String(floorType || '').includes('partially heated')) {
-      if (adjacentTemperature !== '' && Number.isFinite(Number(adjacentTemperature))) {
-        return Math.max(0, indoor - Number(adjacentTemperature));
-      }
-      return Math.max(0, indoor - outdoor) * 0.5;
-    }
-    return 0;
+    return window.HeatLossCalculations.floorTemperatureDifference(
+      floorType, indoor, outdoor, ground, adjacentTemperature
+    );
   }
 
   function stelradCorrectionFactor(deltaT) {
-    var value = Math.max(20, Math.min(65, Number(deltaT) || 0));
-    var lower = Math.floor(value);
-    var upper = Math.ceil(value);
-    if (lower === upper) return STELRAD_CORRECTION_FACTORS[lower];
-    var lowerFactor = STELRAD_CORRECTION_FACTORS[lower];
-    var upperFactor = STELRAD_CORRECTION_FACTORS[upper];
-    return lowerFactor + (upperFactor - lowerFactor) * (value - lower);
+    return window.RadiatorSizing.correctionFactor(deltaT, STELRAD_CORRECTION_FACTORS);
   }
 
   function stelradModel(type, height) {
@@ -1285,9 +1283,7 @@
 
   function stelradOutput(type, width, correctionFactor, height) {
     var model = stelradModel(type, height || 600);
-    return model
-      ? model.wattsPerMetre * (width / 1000) * correctionFactor
-      : 0;
+    return window.RadiatorSizing.output(model, width, correctionFactor);
   }
 
   function minimumStelradFallback(correctionFactor, filters) {
@@ -1395,21 +1391,11 @@
     filters = filters || {};
     quantity = Math.max(1, Math.round(Number(quantity) || 1));
     if (requiredWatts <= 0) return [];
-    var maximumWatts = requiredWatts * 1.5;
-    var options = stelradIndividualOptions(correctionFactor, filters, roomName,
-      deltaT, true).map(function (option) {
-      var watts = option.watts * quantity;
-      return Object.assign({}, option, {
-        watts: watts,
-        unitWatts: option.watts,
-        quantity: quantity,
-        ratedWatts: option.ratedWatts * quantity,
-        oversizePercent: Math.max(0, (watts - requiredWatts) / requiredWatts * 100),
-        size: quantity > 1 ? quantity + ' x ' + option.size : option.size
-      });
-    }).filter(function (option) {
-      return option.watts >= requiredWatts && option.watts <= maximumWatts + 0.01;
-    });
+    var options = window.RadiatorSizing.suitableOptions(
+      requiredWatts,
+      stelradIndividualOptions(correctionFactor, filters, roomName, deltaT, true),
+      quantity
+    );
     var minimumFallback = quantity === 1
       ? minimumStelradFallback(correctionFactor, filters)
       : null;
@@ -1421,37 +1407,10 @@
 
   function suitableStelradPairData(requiredWatts, correctionFactor, filters, roomName,
     deltaT) {
-    var maximumWatts = requiredWatts * 1.5;
-    var units = stelradIndividualOptions(correctionFactor, filters, roomName,
-      deltaT, true).filter(function (option) {
-      return option.watts < maximumWatts;
-    });
-    var pairs = [];
-    var participatingSizes = {};
-    units.forEach(function (first, firstIndex) {
-      for (var secondIndex = firstIndex; secondIndex < units.length; secondIndex += 1) {
-        var second = units[secondIndex];
-        var watts = first.watts + second.watts;
-        if (watts < requiredWatts || watts > maximumWatts + 0.01) continue;
-        participatingSizes[first.size] = true;
-        participatingSizes[second.size] = true;
-        pairs.push({
-          first: first,
-          second: second,
-          watts: watts,
-          size: first.size + ' + ' + second.size,
-          quantity: 2,
-          oversizePercent: Math.max(0, (watts - requiredWatts) / requiredWatts * 100)
-        });
-      }
-    });
-    pairs.sort(function (a, b) {
-      return a.watts - b.watts || a.size.localeCompare(b.size);
-    });
-    return {
-      units: units.filter(function (option) { return participatingSizes[option.size]; }),
-      pairs: pairs
-    };
+    return window.RadiatorSizing.suitablePairs(
+      requiredWatts,
+      stelradIndividualOptions(correctionFactor, filters, roomName, deltaT, true)
+    );
   }
 
   function legacyPairSize(selection) {
@@ -1580,8 +1539,7 @@
   }
 
   function recommendedSystemOutputKw(radiatorOutputWatts) {
-    var combinedOutputKw = Math.max(0, Number(radiatorOutputWatts) || 0) / 1000;
-    return Number(Math.max(12, combinedOutputKw * 1.1).toFixed(2));
+    return window.RadiatorSizing.recommendedSystemOutputKw(radiatorOutputWatts);
   }
   window.stelradEliteSizingV63 = {
     wattsPerMetre: STELRAD_ELITE_WATTS_PER_METRE_600,
@@ -1692,47 +1650,7 @@
   }
 
   function computeHeatLossValues(input) {
-    var deltaT = Math.max(0, Number(input.deltaT) || 0);
-    var internalDeltaT = Math.max(0, Number(input.internalDeltaT) || 0);
-    var floorArea = Math.max(0, Number(input.floorArea) || 0);
-    var volume = Math.max(0, Number(input.volume) || 0);
-    var wallWatts = Math.max(0, Number(input.netWallArea) || 0) *
-      Math.max(0, Number(input.wallU) || 0) * deltaT;
-    var internalWallWatts = Math.max(0, Number(input.internalWallArea) || 0) *
-      Math.max(0, Number(input.internalWallU) || 0) * internalDeltaT;
-    var windowWatts = Math.max(0, Number(input.windowArea) || 0) *
-      Math.max(0, Number(input.windowU) || 0) * deltaT;
-    var doorWatts = Math.max(0, Number(input.doorArea) || 0) *
-      Math.max(0, Number(input.doorU) || 0) * deltaT;
-    var floorDeltaT = input.floorDeltaT == null
-      ? deltaT
-      : Math.max(0, Number(input.floorDeltaT) || 0);
-    var floorWatts = floorArea * Math.max(0, Number(input.floorU) || 0) * floorDeltaT;
-    var roofWatts = floorArea * Math.max(0, Number(input.roofU) || 0) * deltaT;
-    var ventilationFlowM3h = input.ventilationFlowM3h == null
-      ? Math.max(0, Number(input.ach) || 0) * volume
-      : Math.max(0, Number(input.ventilationFlowM3h) || 0);
-    var ventilationWatts = 0.33 * ventilationFlowM3h * deltaT;
-    var externalFabric = wallWatts + windowWatts + doorWatts +
-      floorWatts + roofWatts;
-    var bridgeWatts = input.bridgeFactorWm2K == null
-      ? externalFabric * Math.max(0, Number(input.bridgePercent) || 0) / 100
-      : Math.max(0, Number(input.bridgeArea) || 0) *
-        Math.max(0, Number(input.bridgeFactorWm2K) || 0) * deltaT;
-    var fabricWatts = externalFabric + internalWallWatts + bridgeWatts;
-    return {
-      wallWatts: wallWatts,
-      internalWallWatts: internalWallWatts,
-      windowWatts: windowWatts,
-      doorWatts: doorWatts,
-      floorWatts: floorWatts,
-      roofWatts: roofWatts,
-      ventilationFlowM3h: ventilationFlowM3h,
-      ventilationWatts: ventilationWatts,
-      bridgeWatts: bridgeWatts,
-      fabricWatts: fabricWatts,
-      totalWatts: fabricWatts + ventilationWatts
-    };
+    return window.HeatLossCalculations.computeHeatLossValues(input);
   }
   window.computeHeatLossValuesV60 = computeHeatLossValues;
 
@@ -1968,6 +1886,31 @@
     if (openingsExceedWallArea) {
       warnings.push('Window and door areas exceed the exposed wall area; correct the measurements before sizing a radiator');
     }
+    var radiatorOutputsKw = [];
+    for (var radiatorIndex = 1; radiatorIndex <= 2; radiatorIndex += 1) {
+      var radiatorSuffix = radiatorIndex > 1 ? '_' + radiatorIndex : '';
+      var customOutputText = stringValue('rad_' + key + '_ex_custom_kw' + radiatorSuffix);
+      if (customOutputText !== '') radiatorOutputsKw.push(Number(customOutputText));
+    }
+    warnings = warnings.concat(window.SurveyValidation.validateRoom({
+      started: started,
+      length: length,
+      width: width,
+      height: height,
+      indoor: indoor,
+      outdoor: outdoor,
+      ground: numberValue('hl_ground_temp', 10),
+      manualAch: ventilationMode === 'Manual override' && manualAchValid ? manualAch : null,
+      uValues: [
+        { label: 'External wall', value: wallU },
+        { label: 'Internal wall', value: internalWallU },
+        { label: 'Window', value: windowU },
+        { label: 'Door', value: doorU },
+        { label: 'Floor', value: floorU },
+        { label: 'Roof', value: roofU }
+      ],
+      radiatorOutputsKw: radiatorOutputsKw
+    }));
     if (manualWallExceedsRectangle) {
       warnings.push('Exposed wall length exceeds the simple rectangular perimeter; check this irregular-room measurement');
     }
@@ -3424,9 +3367,19 @@
 
   var previousSetData = window.setData || setData;
   setData = window.setData = function (data) {
-    rebuildRadsForm(data || {});
-    var result = previousSetData.apply(this, arguments);
-    restoreValues(data || {});
+    var migratedData;
+    try {
+      migratedData = window.SurveyPersistence.migrateSurvey(data || {});
+    } catch (error) {
+      if (typeof showAppStatus === 'function') {
+        showAppStatus('This survey could not be loaded: ' + error.message, 'warning');
+      }
+      console.error('Could not migrate survey data:', error);
+      return;
+    }
+    rebuildRadsForm(migratedData);
+    var result = previousSetData.call(this, migratedData);
+    restoreValues(migratedData);
     applyDefaults();
     calculateHeatLoss();
     persistCombinedData();
