@@ -1854,6 +1854,34 @@
       : null;
     var bridgeArea = netWallArea + windowArea + doorArea +
       (floorU > 0 ? floorArea : 0) + (roofU > 0 ? floorArea : 0);
+    var radiatorOutputsKw = [];
+    for (var radiatorIndex = 1; radiatorIndex <= 2; radiatorIndex += 1) {
+      var radiatorSuffix = radiatorIndex > 1 ? '_' + radiatorIndex : '';
+      var customOutputText = stringValue('rad_' + key + '_ex_custom_kw' + radiatorSuffix);
+      if (customOutputText !== '') radiatorOutputsKw.push(Number(customOutputText));
+    }
+    var validationIssues = window.SurveyValidation.validateRoomDetails({
+      started: started,
+      length: stringValue('rad_' + key + '_len'),
+      width: stringValue('rad_' + key + '_wid'),
+      height: stringValue('r_ceiling'),
+      indoor: stringValue('hl_' + key + '_indoor_temp'),
+      outdoor: stringValue('hl_outdoor_temp'),
+      ground: stringValue('hl_ground_temp'),
+      groundRequired: String(floorType || '').toLowerCase().indexOf('solid ground') >= 0,
+      ventilationAch: effectiveAch,
+      ventilationRequired: started,
+      uValues: [
+        { label: 'External wall', value: wallU, required: wallLength > 0 },
+        { label: 'Internal wall', value: internalWallU, required: internalWallLength > 0 },
+        { label: 'Window', value: windowU, required: windowArea > 0 },
+        { label: 'Door', value: doorU, required: doorArea > 0 },
+        { label: 'Floor', value: floorU, required: floorU > 0 },
+        { label: 'Roof', value: roofU, required: roofU > 0 }
+      ],
+      radiatorOutputsKw: radiatorOutputsKw
+    });
+    complete = complete && window.SurveyValidation.canRecommendRadiator(validationIssues);
     var heat = complete ? computeHeatLossValues({
       deltaT: deltaT,
       internalDeltaT: internalDeltaT,
@@ -1876,7 +1904,7 @@
       bridgeFactorWm2K: bridgeMethod === 'Age-based' ? bridgeFactor : null,
       bridgeArea: bridgeArea
     }) : computeHeatLossValues({});
-    var warnings = [];
+    var warnings = validationIssues.map(function (issue) { return issue.message; });
     if (started && !dimensionsComplete) {
       warnings.push('Room length, width and ceiling height are required');
     }
@@ -1886,31 +1914,6 @@
     if (openingsExceedWallArea) {
       warnings.push('Window and door areas exceed the exposed wall area; correct the measurements before sizing a radiator');
     }
-    var radiatorOutputsKw = [];
-    for (var radiatorIndex = 1; radiatorIndex <= 2; radiatorIndex += 1) {
-      var radiatorSuffix = radiatorIndex > 1 ? '_' + radiatorIndex : '';
-      var customOutputText = stringValue('rad_' + key + '_ex_custom_kw' + radiatorSuffix);
-      if (customOutputText !== '') radiatorOutputsKw.push(Number(customOutputText));
-    }
-    warnings = warnings.concat(window.SurveyValidation.validateRoom({
-      started: started,
-      length: length,
-      width: width,
-      height: height,
-      indoor: indoor,
-      outdoor: outdoor,
-      ground: numberValue('hl_ground_temp', 10),
-      manualAch: ventilationMode === 'Manual override' && manualAchValid ? manualAch : null,
-      uValues: [
-        { label: 'External wall', value: wallU },
-        { label: 'Internal wall', value: internalWallU },
-        { label: 'Window', value: windowU },
-        { label: 'Door', value: doorU },
-        { label: 'Floor', value: floorU },
-        { label: 'Roof', value: roofU }
-      ],
-      radiatorOutputsKw: radiatorOutputsKw
-    }));
     if (manualWallExceedsRectangle) {
       warnings.push('Exposed wall length exceeds the simple rectangular perimeter; check this irregular-room measurement');
     }

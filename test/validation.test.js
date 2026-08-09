@@ -30,3 +30,51 @@ test('does not warn about empty optional U-values or radiator outputs', () => {
     uValues: [{ label: 'Floor', value: 0 }], radiatorOutputsKw: [0]
   }), []);
 });
+
+test('returns structured blocking errors for incomplete required engineering inputs', () => {
+  const issues = validation.validateRoomDetails({
+    started: true,
+    length: '',
+    width: 'not-a-number',
+    height: Infinity,
+    indoor: '',
+    outdoor: NaN,
+    ground: '',
+    groundRequired: true,
+    ventilationAch: NaN,
+    ventilationRequired: true,
+    uValues: [
+      { label: 'External wall', value: 0, required: true },
+      { label: 'Floor', value: 0, required: false }
+    ]
+  });
+
+  assert.deepEqual(
+    issues.filter(issue => issue.severity === 'error').map(issue => issue.field),
+    ['length', 'width', 'height', 'indoor', 'outdoor', 'ground',
+      'external-wall-u-value', 'ventilation-ach']
+  );
+  assert.equal(validation.canRecommendRadiator(issues), false);
+});
+
+test('allows recommendations when required inputs are valid and optional zero values are absent', () => {
+  const issues = validation.validateRoomDetails({
+    started: true,
+    length: 4,
+    width: 5,
+    height: 2.4,
+    indoor: 21,
+    outdoor: -3,
+    ground: 10,
+    groundRequired: true,
+    ventilationAch: 0.5,
+    ventilationRequired: true,
+    uValues: [
+      { label: 'External wall', value: 0.55, required: true },
+      { label: 'Floor', value: 0, required: false }
+    ]
+  });
+
+  assert.deepEqual(issues, []);
+  assert.equal(validation.canRecommendRadiator(issues), true);
+});
