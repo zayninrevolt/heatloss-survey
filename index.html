@@ -3070,6 +3070,9 @@
           ["site_address", "Main property address", "textarea"],
           ["site_postcode", "Postcode", "text"],
           ["site_customer", "Customer name", "text"],
+          ["site_home", "Home telephone", "tel"],
+          ["site_mobile", "Mobile telephone", "tel"],
+          ["site_property_type", "Property type", "text"],
           ["site_surveyor", "Surveyor", "text"],
           ["site_date", "Survey date", "date"],
         ];
@@ -3097,6 +3100,9 @@
             ],
             site_postcode: ["front_postcode", "p_postcode"],
             site_customer: ["front_customer", "p_customer"],
+            site_home: ["front_home", "p_home"],
+            site_mobile: ["front_mobile", "p_mobile"],
+            site_property_type: ["front_type", "p_property_type"],
             site_surveyor: ["front_surveyor"],
             site_date: ["front_date"],
           };
@@ -3125,6 +3131,9 @@
             ],
             site_postcode: ["site_postcode", "front_postcode", "p_postcode"],
             site_customer: ["site_customer", "front_customer", "p_customer"],
+            site_home: ["site_home", "front_home", "p_home"],
+            site_mobile: ["site_mobile", "front_mobile", "p_mobile"],
+            site_property_type: ["site_property_type", "front_type", "p_property_type"],
             site_surveyor: ["site_surveyor", "front_surveyor"],
             site_date: ["site_date", "front_date"],
           };
@@ -3143,6 +3152,12 @@
             "p_postcode",
             "front_customer",
             "p_customer",
+            "front_home",
+            "p_home",
+            "front_mobile",
+            "p_mobile",
+            "front_type",
+            "p_property_type",
             "front_surveyor",
             "front_date",
           ].forEach(hideDuplicate);

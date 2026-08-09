@@ -14,6 +14,53 @@ test('saves and restores survey values', async ({ page }) => {
   await expect(page.locator('#site_address')).toHaveValue('12 Test Street');
 });
 
+const sharedProfileFields = [
+  {
+    canonical: 'site_home',
+    front: 'front_home',
+    profile: 'p_home',
+    value: '020 7946 0958'
+  },
+  {
+    canonical: 'site_mobile',
+    front: 'front_mobile',
+    profile: 'p_mobile',
+    value: '07700 900123'
+  },
+  {
+    canonical: 'site_property_type',
+    front: 'front_type',
+    profile: 'p_property_type',
+    value: 'Semi-detached'
+  }
+];
+
+test('copies new main property details to hidden Front and Profile fields', async ({ page }) => {
+  for (const field of sharedProfileFields) {
+    await page.locator(`#${field.canonical}`).fill(field.value);
+    await expect(page.locator(`#${field.front}`)).toHaveValue(field.value);
+    await expect(page.locator(`#${field.profile}`)).toHaveValue(field.value);
+  }
+});
+
+test('seeds new main property details from legacy Front values before Profile values', async ({ page }) => {
+  const legacyData = Object.fromEntries(sharedProfileFields.flatMap((field) => [
+    [field.front, `Front ${field.value}`],
+    [field.profile, `Profile ${field.value}`]
+  ]));
+  await page.evaluate((data) => {
+    localStorage.setItem('surveyWebData', JSON.stringify(data));
+  }, legacyData);
+  await page.reload();
+
+  for (const field of sharedProfileFields) {
+    const expected = `Front ${field.value}`;
+    await expect(page.locator(`#${field.canonical}`)).toHaveValue(expected);
+    await expect(page.locator(`#${field.front}`)).toHaveValue(expected);
+    await expect(page.locator(`#${field.profile}`)).toHaveValue(expected);
+  }
+});
+
 test('exports a JSON backup', async ({ page }) => {
   await page.locator('#site_address').fill('34 Export Road');
   const downloadPromise = page.waitForEvent('download');
