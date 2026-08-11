@@ -120,6 +120,22 @@
     }, null);
   }
 
+  function sharedRadiatorDisplay(config) {
+    config = config || {};
+    var suppliedRoomNames = Array.isArray(config.suppliedRoomNames)
+      ? config.suppliedRoomNames.slice()
+      : [];
+    var suppliedByRoomName = String(config.suppliedByRoomName || '');
+    return {
+      individualRequirementWatts: Math.max(0, Number(config.roomWatts) || 0),
+      radiatorSizingRequirementWatts: suppliedByRoomName
+        ? null
+        : Math.max(0, Number(config.radiatorRequirementWatts) || 0),
+      suppliedRoomNames: suppliedRoomNames,
+      suppliedByRoomName: suppliedByRoomName
+    };
+  }
+
   function recommendedSystemOutputKw(radiatorOutputWatts) {
     return Number(Math.max(12,
       Math.max(0, Number(radiatorOutputWatts) || 0) / 1000 * 1.1).toFixed(2));
@@ -131,6 +147,7 @@
     output: output,
     recommendedSystemOutputKw: recommendedSystemOutputKw,
     selectRadiators: selectRadiators,
+    sharedRadiatorDisplay: sharedRadiatorDisplay,
     sortOptions: sortOptions,
     suitableOptions: suitableOptions,
     suitablePairs: suitablePairs

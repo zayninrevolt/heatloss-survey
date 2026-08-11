@@ -2592,13 +2592,21 @@
       return;
     }
     var roomKw = result.totalWatts / 1000;
-    var radiatorKw = result.radiatorRequirementWatts / 1000;
+    var sharedRadiatorDisplay = window.RadiatorSizing.sharedRadiatorDisplay({
+      roomWatts: result.totalWatts,
+      radiatorRequirementWatts: result.radiatorRequirementWatts,
+      suppliedRoomNames: result.sharedRadiatorRoomNames,
+      suppliedByRoomName: result.sharedRadiatorHostName
+    });
     if (radKw) {
-      radKw.value = radiatorKw.toFixed(2);
+      radKw.value = (sharedRadiatorDisplay.individualRequirementWatts / 1000).toFixed(2);
       radKw.readOnly = true;
-      radKw.title = result.sharedRadiatorRoomNames.length
-        ? sharedRadiatorRequirementDescription(result)
-        : 'Calculated from Heat loss details in this room.';
+      radKw.title = sharedRadiatorDisplay.suppliedByRoomName
+        ? 'Individual room heat loss. This room is supplied by the radiator selected for ' +
+          sharedRadiatorDisplay.suppliedByRoomName + '.'
+        : sharedRadiatorDisplay.suppliedRoomNames.length
+          ? 'Individual room heat loss. ' + sharedRadiatorRequirementDescription(result)
+          : 'Calculated from Heat loss details in this room.';
     }
     var radiatorFields = configureRadiatorSelect(result);
     if (result.effectiveRadiator) {

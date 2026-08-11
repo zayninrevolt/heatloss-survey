@@ -59,6 +59,32 @@ test('automatic selection falls back to the smallest valid two-radiator pair', (
   assert.equal(sizing.selectRadiators(1600, [], pairs, 'Automatic').size, 'A + B');
 });
 
+test('shared radiator display keeps room losses separate from host sizing', () => {
+  const host = sizing.sharedRadiatorDisplay({
+    roomWatts: 349,
+    radiatorRequirementWatts: 1360,
+    suppliedRoomNames: ['Landing']
+  });
+  const guest = sizing.sharedRadiatorDisplay({
+    roomWatts: 1011,
+    radiatorRequirementWatts: 1011,
+    suppliedByRoomName: 'Hallway'
+  });
+
+  assert.deepEqual(host, {
+    individualRequirementWatts: 349,
+    radiatorSizingRequirementWatts: 1360,
+    suppliedRoomNames: ['Landing'],
+    suppliedByRoomName: ''
+  });
+  assert.deepEqual(guest, {
+    individualRequirementWatts: 1011,
+    radiatorSizingRequirementWatts: null,
+    suppliedRoomNames: [],
+    suppliedByRoomName: 'Hallway'
+  });
+});
+
 test('system output retains 12 kW minimum and applies 10% headroom above it', () => {
   assert.equal(sizing.recommendedSystemOutputKw(5000), 12);
   assert.equal(sizing.recommendedSystemOutputKw(15000), 16.5);
