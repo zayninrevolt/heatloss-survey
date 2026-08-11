@@ -88,3 +88,27 @@ test('print output contains the heat-loss sheet', async ({ page }) => {
   expect(html).toContain('Heat Loss');
   expect(html).toContain('Smoke test');
 });
+
+test('coalesces typing into one preview render and delayed autosave', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    if (!window.SurveyPerformance) return null;
+    window.SurveyPerformance.resetStats();
+    const field = document.getElementById('site_address');
+    for (const value of ['1', '12', '123', '123 T', '123 Te']) {
+      field.value = value;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const duringTyping = window.SurveyPerformance.getStats();
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+    const afterChange = window.SurveyPerformance.getStats();
+    return { duringTyping, afterChange, saved: JSON.parse(localStorage.getItem('surveyWebData')).site_address };
+  });
+
+  expect(result).not.toBeNull();
+  expect(result.duringTyping.renders).toBe(1);
+  expect(result.duringTyping.autosaves).toBe(0);
+  expect(result.afterChange.renders).toBe(2);
+  expect(result.afterChange.autosaves).toBe(1);
+  expect(result.saved).toBe('123 Te');
+});

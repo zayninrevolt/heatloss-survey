@@ -2228,10 +2228,22 @@
   <h3>Notes</h3>${makeField(["a_note_contractor", "Note to Contractor", "textarea"])}${makeField(["a_site_rules", "Site Rules", "textarea"])}</div>`;
         document.getElementById("profileForm").innerHTML = `<div class="card">
   <h3>Customer Profile</h3>${profileFields.map(makeField).join("")}</div>`;
-        document.querySelectorAll("[data-id]").forEach((el) => {
-          el.addEventListener("input", update);
-          el.addEventListener("change", update);
-        });
+        if (!document.documentElement.dataset.surveyUpdateListeners) {
+          document.documentElement.dataset.surveyUpdateListeners = "yes";
+          document.addEventListener("input", (event) => {
+            if (event.target.matches("[data-id]")) update(event);
+          });
+          document.addEventListener("change", (event) => {
+            if (event.target.matches("[data-id]")) update(event);
+          });
+          document.addEventListener("blur", (event) => {
+            if (event.target.matches("[data-id]")) update();
+          }, true);
+          window.addEventListener("pagehide", () => update());
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "hidden") update();
+          });
+        }
         setDefaults();
       }
       function setDefaults() {
@@ -2830,11 +2842,25 @@
   </table>
   </div>`;
       }
-      function update() {
+      let previewUpdateTimer = null;
+      let previewAnimationFrame = null;
+      let autosaveTimer = null;
+      let lastSavedSurveyJson = null;
+      const surveyPerformanceStats = { renders: 0, autosaves: 0 };
+
+      function renderPreview() {
         document.getElementById("preview").innerHTML =
           renderFront() + renderRads() + renderA12a() + renderProfile();
+        surveyPerformanceStats.renders += 1;
+      }
+
+      function autosaveSurvey() {
         try {
-          localStorage.setItem("surveyWebData", JSON.stringify(getData()));
+          const serialized = JSON.stringify(getData());
+          if (serialized === lastSavedSurveyJson) return;
+          localStorage.setItem("surveyWebData", serialized);
+          lastSavedSurveyJson = serialized;
+          surveyPerformanceStats.autosaves += 1;
         } catch (error) {
           if (typeof showAppStatus === "function") {
             showAppStatus(
@@ -2844,6 +2870,55 @@
           }
           console.error("Could not autosave survey:", error);
         }
+      }
+
+      function cancelScheduledUpdate() {
+        if (previewUpdateTimer) clearTimeout(previewUpdateTimer);
+        if (previewAnimationFrame) cancelAnimationFrame(previewAnimationFrame);
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        previewUpdateTimer = null;
+        previewAnimationFrame = null;
+        autosaveTimer = null;
+      }
+
+      function flushUpdate() {
+        cancelScheduledUpdate();
+        renderPreview();
+        autosaveSurvey();
+      }
+
+      function scheduleInputUpdate() {
+        if (previewUpdateTimer) clearTimeout(previewUpdateTimer);
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        previewUpdateTimer = setTimeout(() => {
+          previewUpdateTimer = null;
+          if (previewAnimationFrame) cancelAnimationFrame(previewAnimationFrame);
+          previewAnimationFrame = requestAnimationFrame(() => {
+            previewAnimationFrame = null;
+            renderPreview();
+          });
+        }, 150);
+        autosaveTimer = setTimeout(() => {
+          autosaveTimer = null;
+          autosaveSurvey();
+        }, 400);
+      }
+
+      window.SurveyPerformance = {
+        flush: flushUpdate,
+        getStats: () => ({ ...surveyPerformanceStats }),
+        resetStats: () => {
+          surveyPerformanceStats.renders = 0;
+          surveyPerformanceStats.autosaves = 0;
+        },
+      };
+
+      function update(event) {
+        if (event && event.type === "input") {
+          scheduleInputUpdate();
+          return;
+        }
+        flushUpdate();
       }
       function getData() {
         let d = {};
@@ -3164,11 +3239,9 @@
           document.querySelectorAll("#commonForm [data-id]").forEach((el) => {
             el.addEventListener("input", () => {
               copyCommon();
-              update();
             });
             el.addEventListener("change", () => {
               copyCommon();
-              update();
             });
           });
         }
@@ -4092,11 +4165,8 @@
 
         radsForm.innerHTML = radsHtml;
 
-        // Reconnect live preview updates after rebuilding the form HTML.
-        radsForm.querySelectorAll("[data-id]").forEach((element) => {
-          element.addEventListener("input", update);
-          element.addEventListener("change", update);
-        });
+        // Delegated document listeners keep rebuilt room fields connected without
+        // allocating duplicate input/change handlers for every room.
       }
 
       function addCustomRoom() {
@@ -4201,7 +4271,7 @@
       const oldUpdateForCalculatedOutput = update;
       update = function () {
         updateCalculatedOutputField();
-        oldUpdateForCalculatedOutput();
+        return oldUpdateForCalculatedOutput.apply(this, arguments);
       };
 
       // Make sure the output field is read-only again after the Rads form is rebuilt.
@@ -4311,7 +4381,7 @@
 
         updateA12aDateFields();
         updateFrontBoilerTempFromRads();
-        oldUpdateForDatesAndBoilerOutput();
+        return oldUpdateForDatesAndBoilerOutput.apply(this, arguments);
       };
 
       updateA12aDateFields();
@@ -4915,7 +4985,7 @@
       const oldUpdateForLockedA12aText = update;
       update = function () {
         lockA12aFixedText();
-        oldUpdateForLockedA12aText();
+        return oldUpdateForLockedA12aText.apply(this, arguments);
       };
 
       const oldSetDataForLockedA12aText = setData;
@@ -4958,7 +5028,7 @@
       const oldUpdateForA12aNames = update;
       update = function () {
         updateA12aSurveyorAndLiaison();
-        oldUpdateForA12aNames();
+        return oldUpdateForA12aNames.apply(this, arguments);
       };
 
       const oldSetDataForA12aNames = setData;
