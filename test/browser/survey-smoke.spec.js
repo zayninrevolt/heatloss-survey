@@ -158,3 +158,48 @@ test('routes ordinary typing directly to the deferred preview scheduler', async 
 
   expect(result.inputUpdateCalls).toBe(0);
 });
+
+test('new radiator sizing hides existing details and keeps like-for-like in the radiator picker', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const key = 'lounge';
+    const outcome = document.getElementById(`rad_${key}_outcome`);
+    const existingWrap = document.getElementById(`hl_${key}_existing_radiator_fields`);
+    const existingSize = document.getElementById(`rad_${key}_ex_size`);
+
+    const choose = (field, value) => {
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const waitForRender = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    choose(outcome, 'New radiator required');
+    await waitForRender();
+    const hiddenForNewRadiator = existingWrap.hidden;
+
+    choose(outcome, 'Assess existing radiator');
+    await waitForRender();
+    const visibleForAssessment = !existingWrap.hidden;
+    const installedSize = [...existingSize.options].find(option => option.value)?.value;
+    choose(existingSize, installedSize);
+    await waitForRender();
+
+    const newSize = document.getElementById(`rad_${key}_new_size`);
+    return {
+      outcomeLabels: [...outcome.options].map(option => option.textContent),
+      hiddenForNewRadiator,
+      visibleForAssessment,
+      newSizeLabels: newSize && newSize.tagName === 'SELECT'
+        ? [...newSize.options].map(option => option.textContent)
+        : []
+    };
+  });
+
+  expect(result.outcomeLabels).toEqual([
+    'Size a new radiator',
+    'Assess the existing radiator',
+    'Customer refused radiator work'
+  ]);
+  expect(result.hiddenForNewRadiator).toBe(true);
+  expect(result.visibleForAssessment).toBe(true);
+  expect(result.newSizeLabels).toContain('Replace existing radiator like for like');
+});

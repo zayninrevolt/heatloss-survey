@@ -2,6 +2,7 @@
 (function () {
   var STORAGE_KEY = 'heatLossDataV60';
   var NO_NEW_RADIATOR_SELECTION = 'No new radiator selected';
+  var REPLACE_LIKE_FOR_LIKE_SELECTION = 'Replace existing radiator like for like';
   var CUSTOM_EXISTING_RADIATOR_SELECTION = 'Custom radiator or towel rail';
   var persistenceReady = false;
   var postcodeLookupTimer = null;
@@ -10,7 +11,6 @@
   var RADIATOR_OUTCOMES = [
     { label: 'Size a new radiator', value: 'New radiator required' },
     { label: 'Assess the existing radiator', value: 'Assess existing radiator' },
-    { label: 'Replace the existing radiator with the same size', value: 'Replace existing radiator like for like' },
     { label: 'Customer refused radiator work', value: 'Customer refused' }
   ];
   var DESIGN_STATIONS = [
@@ -1920,14 +1920,14 @@
     var radiatorOutcome = radiatorOutcomeForRoom(key);
     var existingRadiator = existingRadiatorForRoom(key, indoor, roomName);
     var usesExistingAssessment = radiatorOutcome === 'Assess existing radiator';
-    var replacesLikeForLike = radiatorOutcome ===
-      'Replace existing radiator like for like';
     var customerRefused = radiatorOutcome === 'Customer refused';
     var existingRadiatorAdequate = Boolean(
       complete && existingRadiator && existingRadiator.complete !== false &&
       existingRadiator.watts >= heat.totalWatts
     );
     var currentRadiatorSelection = stringValue('rad_' + key + '_new_size');
+    var replacesLikeForLike = currentRadiatorSelection ===
+      REPLACE_LIKE_FOR_LIKE_SELECTION;
     var newRadiatorDeclined = currentRadiatorSelection ===
       NO_NEW_RADIATOR_SELECTION;
     var radiator = complete && heat.totalWatts > 0 && !customerRefused &&
@@ -2067,6 +2067,7 @@
       wattsPerSquareMetre: floorArea > 0 ? heat.totalWatts / floorArea : 0,
       radiatorOutcome: radiatorOutcome,
       customerRefused: customerRefused,
+      replacesLikeForLike: replacesLikeForLike,
       newRadiatorDeclined: newRadiatorDeclined,
       existingRadiator: existingRadiator,
       existingRadiatorAdequate: existingRadiatorAdequate,
@@ -2245,6 +2246,11 @@
   }
 
   function configureExistingRadiatorSelect(result) {
+    var existingFieldsWrap = document.getElementById('hl_' + result.key +
+      '_existing_radiator_fields');
+    if (existingFieldsWrap) {
+      existingFieldsWrap.hidden = result.radiatorOutcome === 'New radiator required';
+    }
     var quantityField = document.getElementById('rad_' + result.key +
       '_ex_quantity');
     var newQuantityField = document.getElementById('hl_' + result.key +
@@ -2297,6 +2303,11 @@
     var field = document.getElementById('rad_' + result.key + '_new_size');
     if (!field) return null;
     configureExistingRadiatorSelect(result);
+    var existingFieldsWrap = document.getElementById('hl_' + result.key +
+      '_existing_radiator_fields');
+    if (existingFieldsWrap) {
+      existingFieldsWrap.hidden = result.radiatorOutcome === 'New radiator required';
+    }
     var existingValue = field.value;
     if (field.tagName !== 'SELECT') {
       var select = document.createElement('select');
@@ -2357,20 +2368,6 @@
       if (secondField) secondField.value = '';
       return { first: field, second: secondField };
     }
-    if (result.radiatorOutcome === 'Replace existing radiator like for like') {
-      var sameSize = result.existingRadiator ? result.existingRadiator.size : '';
-      setSingleRadiatorChoice(
-        field,
-        sameSize,
-        sameSize ? 'Replace like for like: ' + sameSize :
-          'Select the existing radiator size first'
-      );
-      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - New Size');
-      field.title = 'The replacement is intentionally the same size as the existing radiator.';
-      if (secondWrap) secondWrap.hidden = true;
-      if (secondField) secondField.value = '';
-      return { first: field, second: secondField };
-    }
     var warningPlaceholder = radiator && radiator.temperatureWarning
       ? 'Review the radiator design temperature'
       : 'Choose a suitable radiator';
@@ -2390,6 +2387,15 @@
         ? 'Radiator refused, undersized | use Existing Size output'
         : 'Keep existing radiator | use Existing Size output'
     );
+    if (result.existingRadiator && result.existingRadiator.complete !== false) {
+      var likeForLikeChoice = document.createElement('option');
+      likeForLikeChoice.value = REPLACE_LIKE_FOR_LIKE_SELECTION;
+      likeForLikeChoice.textContent = 'Replace existing radiator like for like';
+      field.appendChild(likeForLikeChoice);
+      if (existingValue === REPLACE_LIKE_FOR_LIKE_SELECTION) {
+        field.value = REPLACE_LIKE_FOR_LIKE_SELECTION;
+      }
+    }
     setRadiatorFieldLabel(result.key, 'new_size', result.roomName +
       (usesTwo ? ' - Radiator 1' : ' - New Size'));
     field.setAttribute('aria-label', result.roomName +
@@ -2544,8 +2550,9 @@
       return;
     }
     configureExistingRadiatorSelect(result);
-    if (result.radiatorOutcome === 'Replace existing radiator like for like' &&
-        !result.complete) {
+    if ((result.replacesLikeForLike ||
+        (result.radiatorOutcome === 'Assess existing radiator' &&
+          result.existingRadiator)) && !result.complete) {
       configureRadiatorSelect(result);
       if (radKw) {
         radKw.value = '';
@@ -3263,7 +3270,8 @@
           '<small>Required for a custom radiator or towel rail. Enter its known output at the selected design temperature.</small>' +
           '</div></div>';
       }
-      return '<div class="field hl-existing-radiator-quantity">' +
+      return '<div id="hl_' + escapeHtml(key) + '_existing_radiator_fields">' +
+        '<div class="field hl-existing-radiator-quantity">' +
         '<label for="rad_' + escapeHtml(key) + '_ex_quantity">' +
         escapeHtml(roomName) + ' - Number of existing radiators</label>' +
         '<select id="rad_' + escapeHtml(key) + '_ex_quantity" data-id="rad_' +
@@ -3279,7 +3287,7 @@
         escapeHtml(key) + '_ex_custom_kw" type="number" min="0" step="0.01" ' +
         'inputmode="decimal" disabled>' +
         '<small>Required for a custom radiator or towel rail. Enter the output of one unit at the selected design temperature.</small>' +
-        '</div>' + additionalExistingFields;
+        '</div>' + additionalExistingFields + '</div>';
     });
     var newSizePattern = new RegExp(
       '<div class="field">\\s*<label for="rad_' + key +
