@@ -2357,13 +2357,20 @@
     }
     if (result.radiatorOutcome === 'Assess existing radiator' &&
         result.existingRadiatorAdequate) {
-      setSingleRadiatorChoice(
-        field,
-        'No new radiator required',
-        'No new radiator required'
-      );
+      field.innerHTML = '';
+      var keepExistingChoice = document.createElement('option');
+      keepExistingChoice.value = 'No new radiator required';
+      keepExistingChoice.textContent = 'No new radiator required';
+      field.appendChild(keepExistingChoice);
+      var replaceLikeForLikeChoice = document.createElement('option');
+      replaceLikeForLikeChoice.value = REPLACE_LIKE_FOR_LIKE_SELECTION;
+      replaceLikeForLikeChoice.textContent = 'Replace existing radiator like for like';
+      field.appendChild(replaceLikeForLikeChoice);
+      field.value = existingValue === REPLACE_LIKE_FOR_LIKE_SELECTION
+        ? REPLACE_LIKE_FOR_LIKE_SELECTION
+        : 'No new radiator required';
       setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - New Size');
-      field.title = 'The existing radiator meets or exceeds the calculated room requirement.';
+      field.title = 'Keep the adequate existing radiator, or replace it with the same size.';
       if (secondWrap) secondWrap.hidden = true;
       if (secondField) secondField.value = '';
       return { first: field, second: secondField };
