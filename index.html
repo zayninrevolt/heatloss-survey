@@ -2231,7 +2231,7 @@
         if (!document.documentElement.dataset.surveyUpdateListeners) {
           document.documentElement.dataset.surveyUpdateListeners = "yes";
           document.addEventListener("input", (event) => {
-            if (event.target.matches("[data-id]")) update(event);
+            if (event.target.matches("[data-id]")) scheduleInputUpdate();
           });
           document.addEventListener("change", (event) => {
             if (event.target.matches("[data-id]")) update(event);
@@ -2846,7 +2846,7 @@
       let previewAnimationFrame = null;
       let autosaveTimer = null;
       let lastSavedSurveyJson = null;
-      const surveyPerformanceStats = { renders: 0, autosaves: 0 };
+      const surveyPerformanceStats = { renders: 0, autosaves: 0, badgeUpdates: 0, heatLossSyncs: 0, inputUpdateCalls: 0 };
 
       function renderPreview() {
         document.getElementById("preview").innerHTML =
@@ -2910,11 +2910,15 @@
         resetStats: () => {
           surveyPerformanceStats.renders = 0;
           surveyPerformanceStats.autosaves = 0;
+          surveyPerformanceStats.badgeUpdates = 0;
+          surveyPerformanceStats.heatLossSyncs = 0;
+          surveyPerformanceStats.inputUpdateCalls = 0;
         },
       };
 
       function update(event) {
         if (event && event.type === "input") {
+          surveyPerformanceStats.inputUpdateCalls += 1;
           scheduleInputUpdate();
           return;
         }
@@ -7939,6 +7943,7 @@
         }
 
         function updateSectionBadgesV58() {
+          surveyPerformanceStats.badgeUpdates += 1;
           document.querySelectorAll(SECTION_SELECTOR).forEach(function (details) {
             const summary = details.querySelector(":scope > summary");
             if (!summary) return;
@@ -7987,10 +7992,19 @@
 
         window.updateSectionBadgesV58 = updateSectionBadgesV58;
 
-        // Live updates while typing/selecting (delegated so it survives the
-        // app's many update() re-wraps).
-        document.addEventListener("input", updateSectionBadgesV58, true);
-        document.addEventListener("change", updateSectionBadgesV58, true);
+        let sectionBadgeAnimationFrameV58 = null;
+        function scheduleSectionBadgeUpdateV58() {
+          if (sectionBadgeAnimationFrameV58) return;
+          sectionBadgeAnimationFrameV58 = requestAnimationFrame(function () {
+            sectionBadgeAnimationFrameV58 = null;
+            updateSectionBadgesV58();
+          });
+        }
+
+        // Coalesce input-driven badge refreshes so typing does not repeatedly scan
+        // every section and field before the browser can paint.
+        document.addEventListener("input", scheduleSectionBadgeUpdateV58, true);
+        document.addEventListener("change", scheduleSectionBadgeUpdateV58, true);
 
         // Refresh when a section is expanded/collapsed.
         document.addEventListener(
@@ -8009,7 +8023,7 @@
           const prev = update;
           update = function () {
             const r = prev.apply(this, arguments);
-            try { updateSectionBadgesV58(); } catch (e) {}
+            try { scheduleSectionBadgeUpdateV58(); } catch (e) {}
             return r;
           };
           update._v58BadgeWrapped = true;
@@ -8733,10 +8747,13 @@
 
         const previousUpdateV59 = update;
         update = function () {
-          allRoomNames().forEach(function (roomName) {
-            syncHeatLossRoomToRadsV59(roomKeyFromName(roomName));
-          });
-          calculateHeatLossV59();
+          if (document.getElementById("heatlossForm")) {
+            surveyPerformanceStats.heatLossSyncs += 1;
+            allRoomNames().forEach(function (roomName) {
+              syncHeatLossRoomToRadsV59(roomKeyFromName(roomName));
+            });
+            calculateHeatLossV59();
+          }
           return previousUpdateV59.apply(this, arguments);
         };
 

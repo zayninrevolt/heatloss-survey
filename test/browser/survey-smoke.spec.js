@@ -112,3 +112,49 @@ test('coalesces typing into one preview render and delayed autosave', async ({ p
   expect(result.afterChange.autosaves).toBe(1);
   expect(result.saved).toBe('123 Te');
 });
+
+test('coalesces section badge refreshes while typing', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    await new Promise(resolve => setTimeout(resolve, 350));
+    window.SurveyPerformance.resetStats();
+    const field = document.getElementById('site_address');
+    for (const value of ['1', '12', '123', '123 T', '123 Te']) {
+      field.value = value;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return window.SurveyPerformance.getStats();
+  });
+
+  expect(result.badgeUpdates).toBe(1);
+});
+
+test('skips inactive legacy heat-loss processing for general survey input', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    await new Promise(resolve => setTimeout(resolve, 350));
+    window.SurveyPerformance.resetStats();
+    const field = document.getElementById('site_address');
+    field.value = '12 Test Street';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    return window.SurveyPerformance.getStats();
+  });
+
+  expect(result.heatLossSyncs).toBe(0);
+});
+
+test('routes ordinary typing directly to the deferred preview scheduler', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    await new Promise(resolve => setTimeout(resolve, 350));
+    window.SurveyPerformance.resetStats();
+    const field = document.getElementById('site_address');
+    for (const value of ['1', '12', '123', '123 T', '123 Te']) {
+      field.value = value;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return window.SurveyPerformance.getStats();
+  });
+
+  expect(result.inputUpdateCalls).toBe(0);
+});
