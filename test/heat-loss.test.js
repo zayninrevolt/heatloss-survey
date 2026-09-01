@@ -117,3 +117,39 @@ test('invalid and negative inputs cannot create negative or non-finite loss', ()
   assert.equal(result.totalWatts, 0);
   assert.ok(Object.values(result).every(Number.isFinite));
 });
+
+test('selects the requested age and room based minimum ACH values', () => {
+  const oldProperty = [
+    ['Bathroom', 3.0],
+    ['Bedroom', 1.0],
+    ['Bedroom with en-suite', 2.0],
+    ['Kitchen', 2.0],
+    ['Hallway', 2.0],
+    ['Landing', 2.0],
+    ['Lounge', 1.5],
+    ['D Room', 1.5],
+    ['WC', 2.0],
+    ['Utility room', 3.0],
+    ['Internal room/corridor', 0.0]
+  ];
+  for (const [room, expected] of oldProperty) {
+    assert.equal(heatLoss.minimumRoomAirChangeRate(room, 'H'), expected, room);
+  }
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Kitchen', 'I'), 1.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Kitchen', 'J'), 0.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Bedroom', 'K'), 0.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Landing', 'H', true), 2.0);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Landing', 'H', false), 0.0);
+  assert.equal(heatLoss.roomDesignTemperature('Bedroom with en-suite', 'H'), 21);
+  assert.equal(heatLoss.roomDesignTemperature('Study', 'H'), 21);
+  assert.equal(heatLoss.roomDesignTemperature('Bedroom', 'H'), 18);
+  assert.equal(heatLoss.roomDesignTemperature('Bedroom', 'K'), 21);
+  assert.equal(heatLoss.roomDesignTemperature('Bathroom', 'K'), 22);
+  assert.equal(heatLoss.roomDesignTemperature('Hall', 'K'), 21);
+});
+
+test('BBOE adds a radiator sizing allowance without changing room heat loss', () => {
+  assert.equal(heatLoss.radiatorSizingRequirement(2000, 'TBOE'), 2000);
+  assert.equal(heatLoss.radiatorSizingRequirement(2000, 'BBOE'), 2000 / 0.9);
+  assert.equal(heatLoss.radiatorSizingRequirement(2000, ''), 2000);
+});

@@ -8305,7 +8305,7 @@
                 ${hlFieldV59(`hl_${key}_floor_u`, "Floor U-value (W/m²K)", "number")}
                 ${hlFieldV59(`hl_${key}_roof_exposed`, "Ceiling or roof to loft/outside?", "select", ["No", "Yes"])}
                 ${hlFieldV59(`hl_${key}_roof_u`, "Ceiling or roof U-value (W/m²K)", "number")}
-                ${hlFieldV59(`hl_${key}_ach`, "Air changes per hour", "number", null, "0.5 ACH is the starting survey assumption")}
+                ${hlFieldV59(`hl_${key}_ach`, "Air changes per hour", "number", null, "Legacy field; current automatic defaults use room type and property age")}
               </div>
               <div class="hl-room-result" id="hl_${escapeHtml(key)}_result">
                 <div class="hl-result-main">Enter the room length and width</div>
@@ -8766,10 +8766,10 @@
       })();
     </script>
     <link rel="stylesheet" href="combined-heatloss.css?v=83">
-    <script src="src/heat-loss.js?v=1"></script>
+    <script src="src/heat-loss.js?v=3"></script>
     <script src="src/radiator-sizing.js?v=1"></script>
     <script src="src/persistence.js?v=1"></script>
     <script src="src/validation.js?v=1"></script>
-    <script src="combined-heatloss.js?v=94"></script>
+    <script src="combined-heatloss.js?v=96"></script>
   </body>
 </html>
