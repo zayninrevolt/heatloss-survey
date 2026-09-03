@@ -71,6 +71,164 @@ test('exports a JSON backup', async ({ page }) => {
   expect(JSON.parse(content).site_address).toBe('34 Export Road');
 });
 
+test('round-trips every current field including a custom room', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  await page.locator('#newCustomRoomName').fill('Utility Test');
+  await page.getByRole('button', { name: 'Add room' }).click();
+
+  await page.evaluate(() => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      if (!field) throw new Error(`Missing field ${id}`);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    set('site_address', '77 Round Trip Road');
+    set('rad_lounge_outcome', 'Assess existing radiator');
+    set('rad_lounge_ex_size', '600(h) x 1000(w) K1');
+    set('rad_lounge_ex_loc', 'Under window');
+    set('hl_lounge_internal_wall_count', '1');
+    set('hl_lounge_internal_segment_1_length', '12.5');
+    set('hl_lounge_internal_segment_1_adjacent_temp', '21');
+    set('rad_utility_test_len', '3.7');
+    set('rad_utility_test_wid', '2.8');
+    set('hl_utility_test_internal_wall_count', '1');
+    set('hl_utility_test_internal_segment_1_length', '8');
+    set('hl_utility_test_internal_segment_1_adjacent_temp', '18');
+  });
+  const before = await page.evaluate(() => getData());
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.evaluate(() => saveJson());
+  const download = await downloadPromise;
+  const content = await require('node:fs/promises').readFile(await download.path(), 'utf8');
+  expect(JSON.parse(content)).toEqual(before);
+
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.locator('#loadFile').setInputFiles({
+    name: 'round-trip-survey.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(content)
+  });
+
+  await expect(page.locator('#appStatusMessage')).toHaveText('Survey backup imported.');
+  const restored = await page.evaluate(() => getData());
+  expect(restored).toEqual(before);
+  await expect(page.locator('#rad_utility_test_len')).toHaveValue('3.7');
+  await expect(page.locator('#hl_utility_test_internal_segment_1_adjacent_temp')).toHaveValue(
+    '18'
+  );
+});
+
+test('preserves current data when a newer backup is rejected', async ({ page }) => {
+  await page.locator('#site_address').fill('Keep Current Survey');
+  const dialogPromise = page.waitForEvent('dialog');
+  await page.locator('#loadFile').setInputFiles({
+    name: 'future-survey.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ schemaVersion: 99, data: {} }))
+  });
+  const dialog = await dialogPromise;
+
+  expect(dialog.message()).toContain('created by a newer app version');
+  await dialog.dismiss();
+  await expect(page.locator('#site_address')).toHaveValue('Keep Current Survey');
+});
+
+test('imports a schema-versioned JSON backup', async ({ page }) => {
+  const backup = {
+    schemaVersion: 1,
+    data: {
+      site_address: '9 Envelope Avenue',
+      rad_lounge_len: '4.2'
+    }
+  };
+
+  await page.locator('#loadFile').setInputFiles({
+    name: 'versioned-survey.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(backup))
+  });
+
+  await expect(page.locator('#site_address')).toHaveValue('9 Envelope Avenue');
+  await expect(page.locator('#rad_lounge_len')).toHaveValue('4.2');
+});
+
+test('migrates old renamed fields before import filtering', async ({ page }) => {
+  const backup = {
+    r_address: '1 Legacy Lane',
+    hl_flow_temp: '60',
+    rad_lounge_len: '5'
+  };
+
+  await page.locator('#loadFile').setInputFiles({
+    name: 'legacy-survey.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(backup))
+  });
+
+  await expect(page.locator('#site_address')).toHaveValue('1 Legacy Lane');
+  await expect(page.locator('#hl_radiator_temperature')).toHaveValue('55');
+  await expect(page.locator('#rad_lounge_len')).toHaveValue('5');
+  await expect(page.locator('#appStatusMessage')).toContainText(
+    'Legacy fields migrated: address, radiator temperature'
+  );
+});
+
+test('imports one legacy aggregate wall as Wall 1 and requests review', async ({ page }) => {
+  const backup = {
+    schemaVersion: 1,
+    data: {
+      rad_lounge_len: '5',
+      rad_lounge_wid: '5',
+      rad_lounge_outside: '1',
+      hl_lounge_internal_wall_type: 'Unheated space, single brick',
+      hl_lounge_internal_wall_length: '15',
+      hl_lounge_internal_adjacent_temp: '18'
+    }
+  };
+
+  await page.locator('#loadFile').setInputFiles({
+    name: 'aggregate-wall-survey.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(backup))
+  });
+
+  await expect(page.locator('#hl_lounge_internal_wall_count')).toHaveValue('1');
+  await expect(page.locator('#hl_lounge_internal_segment_1_length')).toHaveValue('15');
+  await expect(page.locator('#hl_lounge_internal_segment_1_adjacent_temp')).toHaveValue('18');
+  await expect(page.locator('#hl_lounge_internal_wall_type')).toHaveValue(
+    'Heated room, single brick'
+  );
+  await expect(page.locator('#appStatusMessage')).toContainText(
+    'legacy internal-wall total converted to Wall 1 for review'
+  );
+});
+
+test('reports an unsupported legacy wall temperature without guessing', async ({ page }) => {
+  const backup = {
+    schemaVersion: 1,
+    data: {
+      hl_lounge_internal_wall_count: '1',
+      hl_lounge_internal_segment_1_length: '15',
+      hl_lounge_internal_segment_1_adjacent_temp: '20'
+    }
+  };
+
+  await page.locator('#loadFile').setInputFiles({
+    name: 'unsupported-wall-temperature.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(backup))
+  });
+
+  await expect(page.locator('#hl_lounge_internal_segment_1_length')).toHaveValue('15');
+  await expect(page.locator('#hl_lounge_internal_segment_1_adjacent_temp')).toHaveValue('');
+  await expect(page.locator('#appStatusMessage')).toContainText(
+    'Lounge Wall 1 used 20°C, which is not a standard temperature'
+  );
+});
+
 test('uses property age and room type for automatic ACH and defaults radiator connection to BBOE', async ({ page }) => {
   await page.locator('#radsTab').click();
   await expect(page.locator('#hl_radiator_connection')).toHaveValue('BBOE');

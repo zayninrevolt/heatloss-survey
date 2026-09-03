@@ -2998,10 +2998,16 @@
         );
       }
       function parseSurveyBackup(text) {
-        const parsed = JSON.parse(text);
-        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+        const backup = JSON.parse(text);
+        if (!backup || Array.isArray(backup) || typeof backup !== "object") {
           throw new Error("The backup must contain one survey object.");
         }
+        const decoded =
+          window.SurveyPersistence &&
+          typeof window.SurveyPersistence.decodeWithReport === "function"
+            ? window.SurveyPersistence.decodeWithReport(backup)
+            : { data: backup, review: [], migrated: [] };
+        const parsed = decoded.data;
 
         const allowedFields = new Set(
           Array.from(document.querySelectorAll("[data-id]")).map(
@@ -3016,6 +3022,10 @@
         const clean = {};
 
         Object.entries(parsed).forEach(([key, rawValue]) => {
+          if (key === "_schemaVersion") {
+            clean[key] = Number(rawValue);
+            return;
+          }
           if (key === "_customRooms") {
             if (!Array.isArray(rawValue)) return;
             clean[key] = rawValue
@@ -3075,7 +3085,11 @@
           clean[key] = value.slice(0, 20000);
         });
 
-        return clean;
+        return {
+          data: clean,
+          review: decoded.review || [],
+          migrated: decoded.migrated || [],
+        };
       }
       /* Removed unused exportXls() Excel export function. */
       document.querySelectorAll(".tab").forEach((b) =>
@@ -3096,24 +3110,47 @@
         }),
       );
       document.getElementById("loadFile").addEventListener("change", (e) => {
+        delete e.target.dataset.importStatusHandled;
         let f = e.target.files[0];
         if (!f) return;
         let r = new FileReader();
         r.onload = () => {
           try {
-            setData(parseSurveyBackup(r.result));
+            const imported = parseSurveyBackup(r.result);
+            setData(imported.data);
+            e.target.dataset.importStatusHandled = "yes";
             if (typeof showAppStatus === "function") {
-              showAppStatus("Survey backup imported.");
+              const migrationText = imported.migrated.length
+                ? " Legacy fields migrated: " + imported.migrated.join(", ") + "."
+                : "";
+              if (imported.review.length) {
+                showAppStatus(
+                  "Survey backup imported." + migrationText + " Review required: " +
+                    imported.review.join(" "),
+                  "warning",
+                );
+              } else if (migrationText) {
+                showAppStatus("Survey backup imported." + migrationText);
+              } else {
+                showAppStatus("Survey backup imported.");
+              }
             }
           } catch (error) {
+            e.target.dataset.importStatusHandled = "yes";
+            const newerVersion =
+              error && typeof error.message === "string" &&
+              error.message.toLowerCase().includes("newer");
             alert(
-              "Could not import this survey backup. Please choose a valid Heating Survey JSON file.",
+              newerVersion
+                ? "Could not import this survey backup. It was created by a newer app version."
+                : "Could not import this survey backup. Please choose a valid Heating Survey JSON file.",
             );
           } finally {
             e.target.value = "";
           }
         };
         r.onerror = () => {
+          e.target.dataset.importStatusHandled = "yes";
           alert("Could not read this survey backup.");
           e.target.value = "";
         };
@@ -5930,6 +5967,7 @@
 
           loadInput.addEventListener("change", function () {
             window.setTimeout(function () {
+              if (loadInput.dataset.importStatusHandled === "yes") return;
               showAppStatus(
                 "Saved survey data loaded. Please check the preview before saving PDFs.",
               );
@@ -8768,7 +8806,7 @@
     <link rel="stylesheet" href="combined-heatloss.css?v=86">
     <script src="src/heat-loss.js?v=4"></script>
     <script src="src/radiator-sizing.js?v=1"></script>
-    <script src="src/persistence.js?v=1"></script>
+    <script src="src/persistence.js?v=2"></script>
     <script src="src/validation.js?v=1"></script>
     <script src="combined-heatloss.js?v=105"></script>
   </body>

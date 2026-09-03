@@ -21,7 +21,7 @@ test('migrates an unversioned survey without mutating the source', () => {
     hl_lounge_window_type: 'Older standard double glazing',
     hl_lounge_floor_type: 'Insulated solid ground floor',
     hl_lounge_internal_wall_type: 'Unheated space, single brick',
-    _schemaVersion: 1
+    _schemaVersion: persistence.CURRENT_SCHEMA_VERSION
   });
 });
 
@@ -43,6 +43,53 @@ test('current survey data round-trips through a versioned envelope', () => {
 
 test('legacy flat JSON remains readable', () => {
   assert.equal(persistence.decode('{"r_address":"Legacy"}').site_address, 'Legacy');
+});
+
+test('converts one legacy aggregate wall into one reviewable numbered wall', () => {
+  const migrated = persistence.decodeWithReport({
+    schemaVersion: 1,
+    data: {
+      hl_lounge_internal_wall_type: 'Unheated space, single brick',
+      hl_lounge_internal_wall_length: '15',
+      hl_lounge_internal_adjacent_temp: '18'
+    }
+  });
+
+  assert.equal(migrated.data.hl_lounge_internal_wall_count, '1');
+  assert.equal(migrated.data.hl_lounge_internal_segment_1_length, '15');
+  assert.equal(migrated.data.hl_lounge_internal_segment_1_adjacent_temp, '18');
+  assert.equal(migrated.data.hl_lounge_internal_wall_type, 'Heated room, single brick');
+  assert.match(migrated.review.join(' '), /Lounge.*converted.*Wall 1/i);
+});
+
+test('respects an explicit zero wall count when legacy totals remain', () => {
+  const migrated = persistence.decodeWithReport({
+    schemaVersion: 1,
+    data: {
+      hl_lounge_internal_wall_count: '0',
+      hl_lounge_internal_wall_length: '15',
+      hl_lounge_internal_adjacent_temp: '18'
+    }
+  });
+
+  assert.equal(migrated.data.hl_lounge_internal_wall_count, '0');
+  assert.equal(migrated.data.hl_lounge_internal_segment_1_length, undefined);
+  assert.equal(migrated.review.length, 0);
+});
+
+test('leaves unsupported legacy wall temperatures blank and reports them', () => {
+  const migrated = persistence.decodeWithReport({
+    schemaVersion: 1,
+    data: {
+      hl_lounge_internal_wall_count: '1',
+      hl_lounge_internal_segment_1_length: '15',
+      hl_lounge_internal_segment_1_adjacent_temp: '20'
+    }
+  });
+
+  assert.equal(migrated.data.hl_lounge_internal_segment_1_length, '15');
+  assert.equal(migrated.data.hl_lounge_internal_segment_1_adjacent_temp, '');
+  assert.match(migrated.review.join(' '), /Lounge.*Wall 1.*20°C.*standard temperature/i);
 });
 
 test('malformed, non-object, and future data fail explicitly', () => {

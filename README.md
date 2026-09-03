@@ -64,6 +64,12 @@ Construction choices are practical survey starting points and must be checked ag
 
 Open `index.html` in a browser. All survey data is stored locally in that browser, with JSON export available for portable backups.
 
+## JSON backups and legacy imports
+
+Current JSON backups round-trip all built-in and custom-room fields through the browser download and file-picker controls. Imports accept both the app's flat JSON backup and a schema-versioned `{ schemaVersion, data }` envelope.
+
+Older backups are migrated before the safety filter is applied. Renamed address, radiator-temperature and construction fields are converted to their current equivalents. An old aggregate internal-wall measurement is preserved as one numbered Wall 1 and clearly flagged for review; the app does not invent a split across several walls. Temperatures that already match 10°C, 18°C, 21°C, 22°C or 23°C are retained. Any other legacy wall temperature is left blank and named in the import review message so the surveyor must choose a standard value. Old manual floor and roof temperatures remain compatibility data only and cannot override the current ground/outdoor boundary rules. Backups created by a newer unsupported app schema are rejected without replacing the open survey.
+
 ## Architecture and verification
 
 Technical logic is being separated from the legacy single-page UI into dependency-free modules under `src/`. These modules work as browser globals and as CommonJS modules, so the exact calculation code used by the survey can be tested with Node without adding a production build step.
