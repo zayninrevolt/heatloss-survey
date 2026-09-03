@@ -349,7 +349,7 @@ test('Lounge shows numbered internal walls with direct lengths and temperatures'
     set('hl_lounge_internal_segment_1_length', '5');
     set('hl_lounge_internal_segment_1_adjacent_temp', '18');
     set('hl_lounge_internal_segment_2_length', '5');
-    set('hl_lounge_internal_segment_2_adjacent_temp', '20');
+    set('hl_lounge_internal_segment_2_adjacent_temp', '21');
     set('hl_lounge_internal_segment_3_length', '5');
     set('hl_lounge_internal_segment_3_adjacent_temp', '10');
     set('hl_lounge_floor_type', 'Insulated solid ground floor');
@@ -377,8 +377,138 @@ test('Lounge shows numbered internal walls with direct lengths and temperatures'
   expect(result.rows[0].temperatureLabel).toBe('Wall 1 temperature on other side (°C)');
   expect(result.complete).toBe(true);
   expect(result.segmentCount).toBe(3);
-  expect(result.deltas).toEqual([3, 1, 11]);
-  expect(result.internalWallWatts).toBeCloseTo(147.6, 5);
+  expect(result.deltas).toEqual([3, 0, 11]);
+  expect(result.internalWallWatts).toBeCloseTo(137.76, 5);
+});
+
+test('internal wall temperatures use the standard DHDG dropdown', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  await page.evaluate(() => {
+    const count = document.getElementById('hl_lounge_internal_wall_count');
+    count.value = '1';
+    count.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  const temperature = page.locator('#hl_lounge_internal_segment_1_adjacent_temp');
+  await expect(temperature).toHaveJSProperty('tagName', 'SELECT');
+  await expect(temperature.locator('option')).toHaveText([
+    '',
+    '10°C, unheated space or party wall',
+    '18°C, functional room',
+    '21°C, living space',
+    '22°C, bathroom or shower room',
+    '23°C, vulnerable-person living temperature'
+  ]);
+});
+
+test('10 degree internal walls remain in the property heat loss', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const result = await page.evaluate(async () => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      if (!field) throw new Error(`Missing field ${id}`);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const waitForRender = () => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    set('rad_lounge_len', '5');
+    set('rad_lounge_wid', '5');
+    set('rad_lounge_outside', '1');
+    set('hl_lounge_internal_wall_count', '1');
+    set('hl_lounge_internal_wall_type', 'Heated room, aerated block');
+    set('hl_lounge_internal_segment_1_length', '15');
+    set('hl_lounge_internal_segment_1_adjacent_temp', '10');
+    set('hl_lounge_wall_type', 'Cavity wall, insulated');
+    set('hl_lounge_window_type', 'No windows');
+    set('hl_lounge_door_type', 'No external door');
+    set('hl_lounge_floor_type', 'Insulated solid ground floor');
+    set('hl_lounge_loft_type', 'Plasterboard with 200mm insulation');
+    await waitForRender();
+
+    const unheated = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    const unheatedResult = {
+      internalWallWatts: unheated.internalWallWatts,
+      totalWatts: unheated.totalWatts,
+      propertyWatts: unheated.propertyWatts
+    };
+
+    set('hl_lounge_internal_segment_1_adjacent_temp', '18');
+    await waitForRender();
+    const heated = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+
+    return {
+      unheated: unheatedResult,
+      heated: {
+        internalWallWatts: heated.internalWallWatts,
+        totalWatts: heated.totalWatts,
+        propertyWatts: heated.propertyWatts
+      }
+    };
+  });
+
+  expect(result.unheated.internalWallWatts).toBeGreaterThan(0);
+  expect(result.unheated.propertyWatts).toBeCloseTo(result.unheated.totalWatts, 9);
+  expect(result.heated.propertyWatts).toBeCloseTo(
+    result.heated.totalWatts - result.heated.internalWallWatts,
+    9
+  );
+});
+
+test('floor and roof boundaries use the correct reference temperatures', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const result = await page.evaluate(async () => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      if (!field) throw new Error(`Missing field ${id}`);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const waitForRender = () => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    set('rad_lounge_len', '5');
+    set('rad_lounge_wid', '4');
+    set('rad_lounge_outside', '1');
+    set('hl_lounge_internal_wall_count', '0');
+    set('hl_lounge_indoor_temp', '21');
+    set('hl_outdoor_temp', '-4');
+    set('hl_ground_temp', '6');
+    set('hl_lounge_wall_type', 'Cavity wall, insulated');
+    set('hl_lounge_window_type', 'No windows');
+    set('hl_lounge_door_type', 'No external door');
+    set('hl_lounge_floor_type', 'Insulated solid ground floor');
+    set('hl_lounge_loft_type', 'Plasterboard with 200mm insulation');
+    set('hl_lounge_floor_adjacent_temp', '18');
+    set('hl_lounge_roof_adjacent_temp', '18');
+    await waitForRender();
+
+    const solid = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    const solidResult = {
+      floorDeltaT: solid.floorDeltaT,
+      roofDeltaT: solid.roofDeltaT,
+      floorTemperatureInputType: document.getElementById(
+        'hl_lounge_floor_adjacent_temp').type,
+      roofTemperatureInputType: document.getElementById(
+        'hl_lounge_roof_adjacent_temp').type
+    };
+
+    set('hl_lounge_floor_type', 'Suspended timber ground floor, uninsulated');
+    await waitForRender();
+    const suspended = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+
+    return {
+      solid: solidResult,
+      suspendedFloorDeltaT: suspended.floorDeltaT
+    };
+  });
+
+  expect(result.solid.floorDeltaT).toBe(15);
+  expect(result.suspendedFloorDeltaT).toBe(25);
+  expect(result.solid.roofDeltaT).toBe(25);
+  expect(result.solid.floorTemperatureInputType).toBe('hidden');
+  expect(result.solid.roofTemperatureInputType).toBe('hidden');
 });
 
 test('Lounge warns when entered internal walls exceed the remaining perimeter', async ({ page }) => {
@@ -403,7 +533,7 @@ test('Lounge warns when entered internal walls exceed the remaining perimeter', 
     set('hl_lounge_internal_segment_1_length', '6');
     set('hl_lounge_internal_segment_1_adjacent_temp', '18');
     set('hl_lounge_internal_segment_2_length', '5');
-    set('hl_lounge_internal_segment_2_adjacent_temp', '20');
+    set('hl_lounge_internal_segment_2_adjacent_temp', '21');
     set('hl_lounge_internal_segment_3_length', '6');
     set('hl_lounge_internal_segment_3_adjacent_temp', '10');
     await waitForRender();
@@ -593,14 +723,42 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
   await expect(page.locator('label[for="rad_lounge_new_size"]')).toContainText('Replacement radiator');
   await expect(page.locator('#rad_lounge_new_size option').filter({ hasText: 'kW' }).first()).toBeAttached();
 
-  const metrics = await page.evaluate(() => ({
-    sidebarWidth: document.querySelector('.sidebar').getBoundingClientRect().width,
-    mainMinWidth: getComputedStyle(document.querySelector('.main')).minWidth,
-    outcomeWidth: document.getElementById('rad_lounge_outcome').getBoundingClientRect().width,
-    appColumns: getComputedStyle(document.querySelector('.app')).gridTemplateColumns
-  }));
+  const metrics = await page.evaluate(() => {
+    const heatLoss = document.querySelector('details[data-hl-room="lounge"]');
+    const radiatorPanel = document.querySelector('.hl-radiator-panel');
+    const radiatorControls = [
+      'rad_lounge_outcome',
+      'hl_lounge_radiator_requirement',
+      'rad_lounge_ex_size',
+      'rad_lounge_ex_loc',
+      'rad_lounge_new_size',
+      'rad_lounge_new_loc',
+      'rad_lounge_kw',
+      'rad_lounge_output'
+    ].map(id => document.getElementById(id));
+    return {
+      sidebarWidth: document.querySelector('.sidebar').getBoundingClientRect().width,
+      mainMinWidth: getComputedStyle(document.querySelector('.main')).minWidth,
+      outcomeWidth: document.getElementById('rad_lounge_outcome').getBoundingClientRect().width,
+      appColumns: getComputedStyle(document.querySelector('.app')).gridTemplateColumns,
+      radiatorPanelOutsideHeatLoss: !radiatorPanel.closest('details[data-hl-room]'),
+      heatLossBeforeRadiatorPanel: Boolean(
+        heatLoss.compareDocumentPosition(radiatorPanel) & Node.DOCUMENT_POSITION_FOLLOWING
+      ),
+      radiatorControlsTogether: radiatorControls.every(control =>
+        control && radiatorPanel.contains(control)
+      ),
+      existingRadiatorControlsFirst: radiatorPanel.querySelector(
+        '.hl-radiator-controls').firstElementChild.id ===
+        'hl_lounge_existing_radiator_fields'
+    };
+  });
   expect(metrics.sidebarWidth).toBeGreaterThanOrEqual(440);
   expect(metrics.mainMinWidth).toBe('0px');
   expect(metrics.outcomeWidth).toBeGreaterThanOrEqual(300);
   expect(metrics.appColumns).toMatch(/^4\d{2}px/);
+  expect(metrics.radiatorPanelOutsideHeatLoss).toBe(true);
+  expect(metrics.heatLossBeforeRadiatorPanel).toBe(true);
+  expect(metrics.radiatorControlsTogether).toBe(true);
+  expect(metrics.existingRadiatorControlsFirst).toBe(true);
 });

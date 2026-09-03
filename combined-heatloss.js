@@ -229,6 +229,13 @@
     { label: 'L, 2012 to 2022', value: 'L' },
     { label: 'M, 2023 onwards', value: 'M' }
   ];
+  var DHDG_ADJACENT_TEMPERATURES = [
+    { label: '10°C, unheated space or party wall', value: '10' },
+    { label: '18°C, functional room', value: '18' },
+    { label: '21°C, living space', value: '21' },
+    { label: '22°C, bathroom or shower room', value: '22' },
+    { label: '23°C, vulnerable-person living temperature', value: '23' }
+  ];
   var ADJACENT_SPACES = [
     { label: 'Use standard unheated-space assumption', value: 'Standard' },
     { label: 'Attached garage', value: 'Attached garage' },
@@ -462,7 +469,7 @@
         '<div class="hl-wall-row-grid">' +
         fieldHtml(prefix + '_length', 'Wall ' + index + ' length (m)', 'number') +
         fieldHtml(prefix + '_adjacent_temp', 'Wall ' + index +
-          ' temperature on other side (°C)', 'number') +
+          ' temperature on other side (°C)', 'select', DHDG_ADJACENT_TEMPERATURES) +
         '</div>' +
         '<input type="hidden" id="' + escapeHtml(prefix) + '_type" data-id="' +
         escapeHtml(prefix) + '_type">' +
@@ -537,6 +544,20 @@
       '</div></div>';
   }
 
+  function radiatorPanelHtml(roomName) {
+    var key = roomKeyFromName(roomName);
+    return '<section class="hl-radiator-panel" id="hl_' + escapeHtml(key) +
+      '_radiator_panel"><div class="hl-radiator-panel-heading"><h4>Radiator assessment and selection</h4>' +
+      '<p>Choose the outcome, record the existing radiator where required, then select any replacement.</p></div>' +
+      fieldHtml('rad_' + key + '_outcome', roomName + ' - Radiator outcome', 'select',
+        RADIATOR_OUTCOMES,
+        'Choose a new radiator, assess the installed radiator, replace it like for like, or record that the customer refused radiator work.') +
+      '<div class="hl-radiator-requirement" id="hl_' + escapeHtml(key) +
+      '_radiator_requirement">Required radiator output: complete the room details to calculate.</div>' +
+      '<div class="hl-radiator-controls" id="hl_' + escapeHtml(key) +
+      '_radiator_controls"></div></section>';
+  }
+
   function roomDropdownHtml(roomName) {
     var key = roomKeyFromName(roomName);
     var ageBand = stringValue('hl_property_age_band') || 'Unknown';
@@ -562,9 +583,6 @@
       escapeHtml(key) + '_summary">Uses room dimensions</span></summary>' +
       '<div class="hl-room-body">' +
       '<p class="hl-room-intro">Length and width come from this room. Ceiling height comes from the top of the Rads page. Construction choices apply standard values automatically.</p>' +
-      '<section class="hl-radiator-panel"><div class="hl-radiator-panel-heading"><h4>Radiator selection</h4><p>Choose the required radiator outcome for this room. The app will show the calculated output and suitable radiator sizes below.</p></div>' +
-      fieldHtml('rad_' + key + '_outcome', roomName + ' - Radiator outcome', 'select', RADIATOR_OUTCOMES, 'Choose a new radiator, assess the installed radiator, replace it like for like, or record that the customer refused radiator work.') +
-      '<div class="hl-radiator-requirement" id="hl_' + escapeHtml(key) + '_radiator_requirement">Required radiator output: complete the room details to calculate.</div></section>' +
       '<div class="hl-room-geometry" id="hl_' + escapeHtml(key) +
       '_geometry" aria-live="polite">Enter the room length and width to see its wall geometry.</div>' +
       '<div class="hl-fields-grid">' +
@@ -617,10 +635,14 @@
       openingMeasurementFieldsHtml(key, 'door', 1, 'Door 1') +
       openingMeasurementFieldsHtml(key, 'door', 2, 'Door 2') +
       '</div>' +
-      fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
-      fieldHtml('hl_' + key + '_floor_adjacent_temp', 'Room below temperature (°C)', 'number', null, 'Use for a heated room below or a measured adjoining space. Leave blank for the standard floor assumption.') +
-      fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
-      fieldHtml('hl_' + key + '_roof_adjacent_temp', 'Room above temperature (°C)', 'number', null, 'Optional. Use when the ceiling borders a heated or partially heated room rather than outdoor air.') +
+      fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor),
+        'Solid ground floors use the property ground temperature. Suspended and exposed floors use the outdoor design temperature.') +
+      '<input type="hidden" id="hl_' + escapeHtml(key) +
+      '_floor_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_floor_adjacent_temp">' +
+      fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft),
+        'Roof and loft constructions use the outdoor design temperature because the loft space is already included in the U-value.') +
+      '<input type="hidden" id="hl_' + escapeHtml(key) +
+      '_roof_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_roof_adjacent_temp">' +
       fieldHtml('hl_' + key + '_rooflight_type', 'Rooflights', 'select', [
         { label: 'No rooflights', value: 'No rooflights' },
         { label: 'Rooflight, double glazed', value: 'Rooflight, double glazed' },
@@ -2015,7 +2037,8 @@
     var roofU = mappedValue('loft', loftType);
     var roofAdjacentTemperatureText = stringValue('hl_' + key + '_roof_adjacent_temp');
     var roofDeltaT = window.HeatLossCalculations.roofTemperatureDifference(
-      indoor, outdoor, roofAdjacentTemperatureText
+      indoor, outdoor, loftType === 'Heated room above'
+        ? roofAdjacentTemperatureText : ''
     );
     var rooflightType = stringValue('hl_' + key + '_rooflight_type');
     var rooflightArea = rooflightType && rooflightType !== 'No rooflights'
@@ -2302,9 +2325,15 @@
         ? 'No two-radiator combination meets the room requirement within the 50% oversize limit'
         : 'No single radiator option meets the room requirement within the 50% oversize limit');
     }
-    var heatedInternalWatts = isHeatedInternalWall(internalWallType)
-      ? heat.internalWallWatts
-      : 0;
+    var heatedInternalWatts = internalWallSegments.length
+      ? internalWallSegments.reduce(function (sum, segment) {
+        var isUnheatedBoundary = Number(segment.adjacentTemperature) === 10;
+        if (!isHeatedInternalWall(segment.type) || isUnheatedBoundary) return sum;
+        return sum + segment.length * height * segment.u * segment.deltaT;
+      }, 0)
+      : isHeatedInternalWall(internalWallType)
+        ? heat.internalWallWatts
+        : 0;
     return {
       roomName: roomName,
       key: key,
@@ -2351,7 +2380,8 @@
       floorAdjacentTemperature: floorAdjacentTemperatureText === ''
         ? null : Number(floorAdjacentTemperatureText),
       loftType: loftType,
-      roofAdjacentTemperature: roofAdjacentTemperatureText === ''
+      roofAdjacentTemperature: loftType !== 'Heated room above' ||
+          roofAdjacentTemperatureText === ''
         ? null : Number(roofAdjacentTemperatureText),
       roofDeltaT: roofDeltaT,
       rooflightType: rooflightType,
@@ -3765,10 +3795,55 @@
       '<button type="button" data-room-completion-button="' + escapeHtml(key) +
       '" onclick="completeRadiatorRoom(\'' + escapeHtml(key) + '\')">Completed room</button>' +
       '</div>';
-    return original.replace(
+    var assembled = original.replace(
       /<\/details>\s*$/,
       outputField + completionControl + '</details>'
     );
+    // Parse only markup produced by this app's local form builders in a detached
+    // element. Dynamic room labels are escaped before they enter the added markup.
+    var holder = document.createElement('div');
+    holder.innerHTML = assembled;
+    var room = holder.firstElementChild;
+    var heatLossDetails = room && room.querySelector('details[data-hl-room="' + key + '"]');
+    if (!room || !heatLossDetails) return assembled;
+
+    var panelHolder = document.createElement('div');
+    panelHolder.innerHTML = radiatorPanelHtml(roomName);
+    var radiatorPanel = panelHolder.firstElementChild;
+    heatLossDetails.insertAdjacentElement('afterend', radiatorPanel);
+    var radiatorControls = radiatorPanel.querySelector('#hl_' + key + '_radiator_controls');
+
+    function fieldContainer(id) {
+      var element = room.querySelector('#' + id);
+      return element ? (element.closest('.field') || element) : null;
+    }
+
+    var existingFields = room.querySelector('#hl_' + key + '_existing_radiator_fields');
+    var existingTrvField = fieldContainer('rad_' + key + '_ex_trv');
+    if (existingFields && existingTrvField) existingFields.appendChild(existingTrvField);
+
+    if (existingFields) radiatorControls.appendChild(existingFields);
+    [
+      'hl_' + key + '_shared_radiator_with',
+      'hl_' + key + '_radiator_installation',
+      'hl_' + key + '_radiator_finish'
+    ].forEach(function (id) {
+      var field = fieldContainer(id);
+      if (field) radiatorControls.appendChild(field);
+    });
+    [
+      'hl_' + key + '_rad_quantity',
+      'rad_' + key + '_new_size',
+      'rad_' + key + '_new_size_2',
+      'rad_' + key + '_new_loc',
+      'rad_' + key + '_new_trv',
+      'rad_' + key + '_kw',
+      'rad_' + key + '_output'
+    ].forEach(function (id) {
+      var field = fieldContainer(id);
+      if (field) radiatorControls.appendChild(field);
+    });
+    return holder.innerHTML;
   };
 
   function refreshRoomCompletionControls() {
