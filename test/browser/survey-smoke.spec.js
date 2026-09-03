@@ -221,6 +221,99 @@ test('routes ordinary typing directly to the deferred preview scheduler', async 
   expect(result.inputUpdateCalls).toBe(0);
 });
 
+test('tablet layout exposes DHDG controls with touch-sized fields', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.locator('#radsTab').click();
+  await expect(page.locator('#hl_ventilation_age_category')).toBeVisible();
+  await expect(page.locator('#hl_reheat_factor')).toBeVisible();
+  await expect(page.locator('#hl_high_ceiling_factor')).toBeVisible();
+  await expect(page.locator('#hl_lounge_internal_segment_1_length')).toBeAttached();
+  const metrics = await page.evaluate(() => {
+    const summary = document.querySelector('.hl-summary-grid');
+    const controls = [...document.querySelectorAll('#heatLossSummaryCard input:not([type="hidden"]), #heatLossSummaryCard select, .hl-room-body input:not([type="hidden"]), .hl-room-body select')].filter(control => control.getBoundingClientRect().height > 0);
+    return {
+      columns: getComputedStyle(summary).gridTemplateColumns,
+      minControlHeight: Math.min(...controls.map(control => control.getBoundingClientRect().height)),
+      segmentCount: document.querySelectorAll('.hl-room-dropdown[data-hl-room="lounge"] .hl-segment-card').length
+    };
+  });
+  expect(metrics.columns).not.toBe('none');
+  expect(metrics.minControlHeight).toBeGreaterThanOrEqual(44);
+  expect(metrics.segmentCount).toBe(4);
+});
+
+test('construction presets include the small DHDG reference set', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const result = await page.evaluate(() => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    set('rad_lounge_len', '4');
+    set('rad_lounge_wid', '3');
+    set('rad_lounge_outside', '1');
+    set('hl_lounge_wall_type', 'Brick, open cavity, 100mm aerated block + 13mm plaster');
+    set('hl_lounge_window_type', 'No windows');
+    set('hl_lounge_window_count', '0');
+    set('hl_lounge_door_type', 'No external door');
+    set('hl_lounge_door_count', '0');
+    set('hl_lounge_floor_type', 'Uninsulated solid ground floor, DHDG example');
+    set('hl_lounge_loft_type', 'Flat roof, 200mm insulation, DHDG example');
+    set('hl_lounge_ventilation_mode', 'Automatic');
+    const oneHundred = window.heatLossResultsV60.rooms.find(room => room.roomName === 'Lounge');
+    set('hl_lounge_wall_type', 'Brick, open cavity, 125mm aerated block + 13mm plaster');
+    const oneTwentyFive = window.heatLossResultsV60.rooms.find(room => room.roomName === 'Lounge');
+    return { oneHundred, oneTwentyFive };
+  });
+  expect(result.oneHundred.complete).toBe(true);
+  expect(result.oneHundred.wallU).toBeCloseTo(0.87, 5);
+  expect(result.oneHundred.floorU).toBeCloseTo(0.85, 5);
+  expect(result.oneHundred.roofU).toBeCloseTo(0.17, 5);
+  expect(result.oneTwentyFive.wallU).toBeCloseTo(0.77, 5);
+});
+test('browser calculation uses signed gains, chimney ACH and room allowances', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  await page.evaluate(() => {
+    const values = {
+      rad_lounge_len: '4',
+      rad_lounge_wid: '3',
+      rad_lounge_outside: '1',
+      hl_lounge_wall_type: 'Cavity wall, insulated',
+      hl_lounge_window_type: 'No windows',
+      hl_lounge_window_count: '0',
+      hl_lounge_door_type: 'No external door',
+      hl_lounge_door_count: '0',
+      hl_lounge_floor_type: 'Insulated solid ground floor',
+      hl_lounge_loft_type: 'Plasterboard with 200mm insulation',
+      hl_lounge_ventilation_mode: 'Automatic',
+      hl_lounge_ventilation_device: 'Open chimney',
+      hl_lounge_chimney_restricted: 'No',
+      hl_lounge_radiator_installation: '0.8',
+      hl_lounge_radiator_finish: '0.85',
+      hl_lounge_internal_segment_1_length: '3',
+      hl_lounge_internal_segment_1_type: 'Heated room, aerated block',
+      hl_lounge_internal_segment_1_adjacent_room: 'bath',
+      hl_reheat_factor: '1.1'
+    };
+    for (const [id, value] of Object.entries(values)) {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  await page.waitForTimeout(100);
+  const lounge = await page.evaluate(() =>
+    window.heatLossResultsV60.rooms.find(room => room.roomName === 'Lounge')
+  );
+  expect(lounge.complete, JSON.stringify({ warnings: lounge.warnings, missing: lounge.missing })).toBe(true);
+  expect(lounge.internalWallWatts).toBeLessThan(0);
+  expect(lounge.chimneyAch).toBe(5);
+  expect(lounge.factorMultiplier).toBeCloseTo(1.1, 5);
+  expect(lounge.radiatorOutputFactor).toBeCloseTo(0.68, 5);
+  expect(lounge.totalWatts).toBeCloseTo(lounge.baseTotalWatts * 1.1, 5);
+});
+
 test('new radiator sizing hides existing details and keeps like-for-like in the radiator picker', async ({ page }) => {
   const result = await page.evaluate(async () => {
     const key = 'lounge';

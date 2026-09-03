@@ -39,9 +39,9 @@ test('calculates a known reference room by component', () => {
     roofWatts: 100.8,
     ventilationFlowM3h: 24,
     ventilationWatts: 190.08,
-    bridgeWatts: 56.90800000000001,
-    fabricWatts: 689.3480000000001,
-    totalWatts: 879.4280000000001
+    bridgeWatts: 82.25200000000001,
+    fabricWatts: 714.6920000000001,
+    totalWatts: 904.7720000000001
   };
   for (const [component, value] of Object.entries(expected)) {
     closeTo(result[component], value);
@@ -136,7 +136,7 @@ test('selects the requested age and room based minimum ACH values', () => {
     assert.equal(heatLoss.minimumRoomAirChangeRate(room, 'H'), expected, room);
   }
   assert.equal(heatLoss.minimumRoomAirChangeRate('Kitchen', 'I'), 1.5);
-  assert.equal(heatLoss.minimumRoomAirChangeRate('Kitchen', 'J'), 0.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Kitchen', 'J'), 1.5);
   assert.equal(heatLoss.minimumRoomAirChangeRate('Bedroom', 'K'), 0.5);
   assert.equal(heatLoss.minimumRoomAirChangeRate('Landing', 'H', true), 2.0);
   assert.equal(heatLoss.minimumRoomAirChangeRate('Landing', 'H', false), 0.0);
@@ -152,4 +152,43 @@ test('BBOE adds a radiator sizing allowance without changing room heat loss', ()
   assert.equal(heatLoss.radiatorSizingRequirement(2000, 'TBOE'), 2000);
   assert.equal(heatLoss.radiatorSizingRequirement(2000, 'BBOE'), 2000 / 0.9);
   assert.equal(heatLoss.radiatorSizingRequirement(2000, ''), 2000);
+});
+
+test('preserves signed heat gains and applies percentage bridges to the complete room load', () => {
+  const result = heatLoss.computeHeatLossValues({
+    deltaT: 20,
+    internalDeltaT: -4,
+    internalWallArea: 10,
+    internalWallU: 1,
+    ventilationFlowM3h: 100,
+    bridgePercent: 10
+  });
+  assert.equal(result.internalWallWatts, -40);
+  assert.equal(result.ventilationWatts, 660);
+  assert.equal(result.bridgeWatts, 62);
+  assert.equal(result.totalWatts, 682);
+});
+
+test('uses an explicit adjacent temperature for roofs and retains signed floor gains', () => {
+  assert.equal(heatLoss.roofTemperatureDifference(21, -3, ''), 24);
+  assert.equal(heatLoss.roofTemperatureDifference(18, -3, '21'), -3);
+  assert.equal(heatLoss.floorTemperatureDifference('Heated room below', 18, -3, 10, '21'), -3);
+});
+
+test('uses the DHDG ventilation age categories and chimney rates', () => {
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', '2000-2006', true), 1);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', '2006+', true), 0.5);
+  assert.equal(heatLoss.chimneyAirChangeRate(35, false), 5);
+  assert.equal(heatLoss.chimneyAirChangeRate(60, true), 2);
+});
+
+test('applies documented additional room factors in sequence', () => {
+  const result = heatLoss.applyAdditionalHeatLossFactors(2000, {
+    thermalBridge: 1.1,
+    intermittent: 1.1,
+    exposed: 1.1,
+    highCeiling: 1.05
+  });
+  assert.ok(Math.abs(result.totalWatts - 2795.1) < 0.001);
+  assert.ok(Math.abs(result.additionalWatts - 795.1) < 0.001);
 });

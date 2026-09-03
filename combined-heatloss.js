@@ -124,6 +124,8 @@
       'Solid wall with 50mm internal or external insulation': 0.55,
       'Solid wall with 100mm internal or external insulation': 0.32,
       'Cavity wall, uninsulated': 1.6,
+      'Brick, open cavity, 100mm aerated block + 13mm plaster': 0.87,
+      'Brick, open cavity, 125mm aerated block + 13mm plaster': 0.77,
       'Cavity wall, insulated': 0.55,
       'Modern insulated wall': 0.28,
       'Timber frame, insulated': 0.4,
@@ -164,6 +166,7 @@
     floor: {
       'Heated room below': 0,
       'Uninsulated solid ground floor': 0.7,
+      'Uninsulated solid ground floor, DHDG example': 0.85,
       'Insulated solid ground floor': 0.25,
       'Suspended timber ground floor, uninsulated': 1.2,
       'Suspended timber ground floor, 50mm insulation': 0.5,
@@ -183,6 +186,7 @@
       'Plasterboard with 270mm insulation': 0.16,
       'Plasterboard with 300mm insulation': 0.14,
       'Flat roof, uninsulated': 2.3,
+      'Flat roof, 200mm insulation, DHDG example': 0.17,
       'Flat roof, insulated': 0.25,
       'Sloping roof or room-in-roof, uninsulated': 2.3,
       'Sloping roof or room-in-roof, 100mm insulation': 0.4,
@@ -265,6 +269,34 @@
     { label: 'BBOE, 10% lower emitter output', value: 'BBOE' },
     { label: 'TBOE, recommended reference connection', value: 'TBOE' }
   ];
+  var VENTILATION_AGE_CATEGORIES = [
+    { label: 'Use property age band', value: '' },
+    { label: 'Pre-2000: 1.5 ACH baseline', value: 'pre-2000' },
+    { label: '2000 to 2006: 1.0 ACH baseline', value: '2000-2006' },
+    { label: '2006 onwards: 0.5 ACH baseline', value: '2006+' }
+  ];
+  var REHEAT_FACTORS = [
+    { label: 'No intermittent-heating allowance', value: '1' },
+    { label: 'Setback up to 8 hours: +10%', value: '1.1' },
+    { label: 'Setback 8 to 11 hours: +15%', value: '1.15' },
+    { label: 'Setback over 11 hours: +20%', value: '1.2' }
+  ];
+  var CEILING_FACTORS = [
+    { label: 'Ceiling up to 2.4m: no allowance', value: '1' },
+    { label: 'Ceiling up to 3.0m: +2%', value: '1.02' },
+    { label: 'Ceiling up to 4.0m: +5%', value: '1.05' },
+    { label: 'Ceiling above 4.0m: +8%', value: '1.08' }
+  ];
+  var RADIATOR_INSTALLATION_FACTORS = [
+    { label: 'Standard wall-mounted, unobstructed', value: '1' },
+    { label: 'Shelf above radiator: -5%', value: '0.95' },
+    { label: 'Enclosed cabinet with top grille: -20%', value: '0.8' },
+    { label: 'Enclosed cabinet with front grille: -30%', value: '0.7' }
+  ];
+  var RADIATOR_FINISH_FACTORS = [
+    { label: 'Factory, oil or water-based finish', value: '1' },
+    { label: 'Metallic paint: -15%', value: '0.85' }
+  ];
 
   var HEAT_LOSS_SUFFIXES = [
     'indoor_temp',
@@ -301,17 +333,43 @@
     'floor_exposed_perimeter',
     'floor_adjacent_temp',
     'loft_type',
+    'roof_adjacent_temp',
+    'rooflight_area',
+    'rooflight_type',
+    'internal_segment_1_length',
+    'internal_segment_1_type',
+    'internal_segment_1_adjacent_room',
+    'internal_segment_1_adjacent_space',
+    'internal_segment_1_adjacent_temp',
+    'internal_segment_2_length',
+    'internal_segment_2_type',
+    'internal_segment_2_adjacent_room',
+    'internal_segment_2_adjacent_space',
+    'internal_segment_2_adjacent_temp',
+    'internal_segment_3_length',
+    'internal_segment_3_type',
+    'internal_segment_3_adjacent_room',
+    'internal_segment_3_adjacent_space',
+    'internal_segment_3_adjacent_temp',
+    'internal_segment_4_length',
+    'internal_segment_4_type',
+    'internal_segment_4_adjacent_room',
+    'internal_segment_4_adjacent_space',
+    'internal_segment_4_adjacent_temp',
     'building_part',
     'element_age_band',
     'assumption_quality',
     'ventilation_mode',
     'manual_ach',
     'ventilation_device',
+    'chimney_restricted',
     'shared_radiator_with',
     'rad_max_height',
     'rad_max_width',
     'rad_preferred_width',
     'rad_panel_type',
+    'radiator_installation',
+    'radiator_finish',
     'rad_quantity'
   ];
 
@@ -362,7 +420,10 @@
         '" type="number" step="any" inputmode="decimal"' +
         (id === 'hl_mvhr_efficiency' ? ' max="100"' : '') +
         (id === 'hl_outdoor_temp' || id === 'hl_property_altitude' ||
-          id.endsWith('_internal_adjacent_temp') || id.endsWith('_floor_adjacent_temp')
+          id.endsWith('_internal_adjacent_temp') || id.endsWith('_floor_adjacent_temp') ||
+          id.endsWith('_roof_adjacent_temp') || id.endsWith('_segment_1_adjacent_temp') ||
+          id.endsWith('_segment_2_adjacent_temp') || id.endsWith('_segment_3_adjacent_temp') ||
+          id.endsWith('_segment_4_adjacent_temp')
           ? ''
           : ' min="0"') + '>';
     }
@@ -392,6 +453,23 @@
       '</optgroup><optgroup label="Unheated space">' +
       unheated.map(optionHtml).join('') + '</optgroup></select>' +
       '<small>Choose the room condition first, then the matching wall construction.</small></div>';
+  }
+
+  function internalWallSegmentsHtml(key, adjacentRooms) {
+    var rows = [1, 2, 3, 4].map(function (index) {
+      var prefix = 'hl_' + key + '_internal_segment_' + index;
+      return '<div class="hl-segment-card"><h5>Wall segment ' + index + '</h5>' +
+        '<div class="hl-fields-grid">' +
+        fieldHtml(prefix + '_length', 'Length (m)', 'number') +
+        fieldHtml(prefix + '_type', 'Construction and boundary', 'select', optionsFromMap(VALUES.internalWall)) +
+        fieldHtml(prefix + '_adjacent_room', 'Heated room on other side', 'select', adjacentRooms) +
+        fieldHtml(prefix + '_adjacent_space', 'Unheated adjoining space', 'select', ADJACENT_SPACES) +
+        fieldHtml(prefix + '_adjacent_temp', 'Measured adjoining temperature (°C)', 'number', null, 'Optional. A measured value takes priority over the standard 10°C unheated-space assumption.') +
+        '</div></div>';
+    }).join('');
+    return '<details class="hl-wall-segments"><summary>Use separate internal wall segments</summary>' +
+      '<p class="hl-help">Use this when a room borders different rooms or spaces. Leave all lengths blank to use the quick single-wall estimate above.</p>' +
+      rows + '</details>';
   }
 
   function sharedRadiatorFieldHtml(key) {
@@ -493,7 +571,7 @@
       fieldHtml('hl_' + key + '_internal_adjacent_space', 'Unheated adjoining space', 'select', Object.keys(ADJACENT_SPACE_FACTORS), 'Used when no measured adjoining-space temperature is available.') +
       '</div><div id="hl_' + escapeHtml(key) + '_internal_adjacent_temp_wrap" hidden>' +
       fieldHtml('hl_' + key + '_internal_adjacent_temp', 'Unheated space temperature (°C)', 'number', null, 'Optional. Overrides the standard temperature factor for the selected unheated space.') +
-      '</div></div></section><div class="hl-fields-grid">' +
+      '</div></div></section>' + internalWallSegmentsHtml(key, adjacentRooms) + '<div class="hl-fields-grid">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_area" data-id="hl_' +
       escapeHtml(key) + '_window_area">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_width" data-id="hl_' +
@@ -526,11 +604,25 @@
       openingMeasurementFieldsHtml(key, 'door', 2, 'Door 2') +
       '</div>' +
       fieldHtml('hl_' + key + '_floor_type', 'Floor', 'select', optionsFromMap(VALUES.floor)) +
+      fieldHtml('hl_' + key + '_floor_adjacent_temp', 'Room below temperature (°C)', 'number', null, 'Use for a heated room below or a measured adjoining space. Leave blank for the standard floor assumption.') +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft)) +
+      fieldHtml('hl_' + key + '_roof_adjacent_temp', 'Room above temperature (°C)', 'number', null, 'Optional. Use when the ceiling borders a heated or partially heated room rather than outdoor air.') +
+      fieldHtml('hl_' + key + '_rooflight_type', 'Rooflights', 'select', [
+        { label: 'No rooflights', value: 'No rooflights' },
+        { label: 'Rooflight, double glazed', value: 'Rooflight, double glazed' },
+        { label: 'Rooflight, single glazed', value: 'Single glazing' }
+      ]) +
+      fieldHtml('hl_' + key + '_rooflight_area', 'Total rooflight area (m²)', 'number', null, 'Keep rooflights separate from the roof or ceiling area.') +
       fieldHtml('hl_' + key + '_assumption_quality', 'Construction evidence', 'select', ['Measured and confirmed', 'Visually estimated', 'Age-based assumption', 'General default']) +
       fieldHtml('hl_' + key + '_ventilation_mode', 'Room air-change rate', 'select', AIR_CHANGE_MODES, 'Automatic uses the MCS/CIBSE minimum for this room type and the selected property age band, or 0 ACH where the room has no external envelope.') +
       fieldHtml('hl_' + key + '_manual_ach', 'Manual ACH override', 'number', null, 'Only used when Manual override is selected.') +
-      fieldHtml('hl_' + key + '_ventilation_device', 'Additional vent, fan or flue', 'select', optionsFromMap(VALUES.ventilationDevice), 'Adds the published default airflow for this room. Select the closest item and use the ACH override where required.') +
+      fieldHtml('hl_' + key + '_ventilation_device', 'Additional vent, fan or flue', 'select', optionsFromMap(VALUES.ventilationDevice), 'Adds the published default airflow for this room. Open chimney uses the room-volume and throat-restriction ACH table.') +
+      fieldHtml('hl_' + key + '_chimney_restricted', 'Open chimney throat restrictor', 'select', [
+        { label: 'No restrictor', value: 'No' },
+        { label: 'Restrictor fitted', value: 'Yes' }
+      ], 'Only used for Open chimney. The airflow is selected from room volume: up to 40m³ or over 40m³.') +
+      fieldHtml('hl_' + key + '_radiator_installation', 'Radiator installation', 'select', RADIATOR_INSTALLATION_FACTORS, 'The selected factor reduces actual emitter output for a shelf or enclosure.') +
+      fieldHtml('hl_' + key + '_radiator_finish', 'Radiator finish', 'select', RADIATOR_FINISH_FACTORS, 'Metallic paint reduces output by 15%; factory, oil or water-based finishes use 1.00.') +
       fieldHtml('hl_' + key + '_rad_quantity', 'Number of new radiators', 'select', ['Automatic', '1', '2'], 'Automatic tries one radiator first, then two independently sized radiators if required.') +
       '</div>' +
       '<div class="hl-room-result" id="hl_' + escapeHtml(key) + '_result">' +
@@ -562,7 +654,14 @@
       fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The surveyor can verify the age separately before finalising the survey.') +
       fieldHtml('hl_property_age_source', 'Property age evidence', 'select', ['Title deeds or building-control record', 'Homeowner or landlord', 'Visual estimate', 'Unknown']) +
       fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
-      fieldHtml('hl_bridge_method', 'Thermal bridge method', 'select', bridgeMethods) +
+      fieldHtml('hl_bridge_method', 'Thermal bridge method', 'select', bridgeMethods, 'The percentage method applies the allowance to the complete room load before the room factors.') +
+      fieldHtml('hl_ventilation_age_category', 'Ventilation age category', 'select', VENTILATION_AGE_CATEGORIES, 'Matches the presentation bands: pre-2000, 2000 to 2006, and 2006 onwards. Override the property age band when it crosses a band.') +
+      fieldHtml('hl_exposed_location', 'Exposed location allowance', 'select', [
+        { label: 'No additional exposed-location allowance', value: '1' },
+        { label: 'Exposed site: +10%', value: '1.1' }
+      ]) +
+      fieldHtml('hl_reheat_factor', 'Intermittent heating / reheat allowance', 'select', REHEAT_FACTORS, 'Use the setback duration from the heating design. This is applied after the room heat loss is calculated.') +
+      fieldHtml('hl_high_ceiling_factor', 'High-ceiling allowance', 'select', CEILING_FACTORS, 'The standard room height is 2.4m. Choose the nearest higher band for rooms with high ceilings.') +
       fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Estimated from postcode coordinates using Elevation API EU and Copernicus terrain data. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
       fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Uses the annual mean temperature from the nearest MCS reference station for solid ground floors.') +
       fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
@@ -1120,6 +1219,10 @@
     if (!stringValue('hl_property_age_band')) setValue('hl_property_age_band', 'Unknown');
     if (!stringValue('hl_property_age_source')) setValue('hl_property_age_source', 'Unknown');
     if (!stringValue('hl_bridge_method')) setValue('hl_bridge_method', 'Percentage');
+    if (!stringValue('hl_ventilation_age_category')) setValue('hl_ventilation_age_category', '');
+    if (!stringValue('hl_exposed_location')) setValue('hl_exposed_location', '1');
+    if (!stringValue('hl_reheat_factor')) setValue('hl_reheat_factor', '1');
+    if (!stringValue('hl_high_ceiling_factor')) setValue('hl_high_ceiling_factor', '1');
     if (!stringValue('hl_ventilation_system')) {
       setValue('hl_ventilation_system', 'Natural ventilation');
     }
@@ -1179,6 +1282,10 @@
         assumption_quality: 'General default',
         ventilation_mode: 'Automatic',
         ventilation_device: 'No additional vent or flue',
+        chimney_restricted: 'No',
+        radiator_installation: '1',
+        radiator_finish: '1',
+        rooflight_type: 'No rooflights',
         rad_max_height: 'Any',
         rad_panel_type: 'Any'
       };
@@ -1270,6 +1377,14 @@
     return Number.isFinite(value) ? value : 0;
   }
 
+  function radiatorOutputFactor(key) {
+    var installation = numberValue('hl_' + key + '_radiator_installation', 1);
+    var finish = numberValue('hl_' + key + '_radiator_finish', 1);
+    installation = installation > 0 && installation <= 1 ? installation : 1;
+    finish = finish > 0 && finish <= 1 ? finish : 1;
+    return installation * finish;
+  }
+
   function internalWallTemperatureFactor(selected) {
     return String(selected || '').indexOf('Unheated space') === 0 ? 0.5 : 0;
   }
@@ -1310,7 +1425,8 @@
           filters.panelType !== model.type)) {
       return null;
     }
-    var watts = model.wattsPerMetre * 0.4 * correctionFactor;
+    var watts = model.wattsPerMetre * 0.4 * correctionFactor *
+      (Number(filters.outputFactor) || 1);
     return {
       type: model.type,
       height: model.height,
@@ -1351,7 +1467,8 @@
       return !filters.panelType || filters.panelType === 'Any';
     }).map(function (model) {
       // Myson's published 75/65 and 90/70 data follows a 1.06 exponent.
-      var watts = model.wattsAtDt50 * Math.pow(Math.max(0, deltaT) / 50, 1.06);
+      var watts = model.wattsAtDt50 * Math.pow(Math.max(0, deltaT) / 50, 1.06) *
+        (Number(filters.outputFactor) || 1);
       return {
         type: model.type,
         height: model.height,
@@ -1381,7 +1498,8 @@
           model.type !== filters.panelType) return;
       model.widths.forEach(function (width) {
         if (filters.maxWidth && width > filters.maxWidth) return;
-        var watts = model.wattsPerMetre * (width / 1000) * correctionFactor;
+        var watts = model.wattsPerMetre * (width / 1000) * correctionFactor *
+          (Number(filters.outputFactor) || 1);
         options.push({
           type: model.type,
           height: model.height,
@@ -1442,7 +1560,8 @@
       maxHeight: Number(stringValue('hl_' + key + '_rad_max_height')) || 0,
       maxWidth: numberValue('hl_' + key + '_rad_max_width', 0),
       preferredWidth: numberValue('hl_' + key + '_rad_preferred_width', 0),
-      panelType: stringValue('hl_' + key + '_rad_panel_type') || 'Any'
+      panelType: stringValue('hl_' + key + '_rad_panel_type') || 'Any',
+      outputFactor: radiatorOutputFactor(key)
     };
     var quantityChoice = stringValue('hl_' + key + '_rad_quantity') || 'Automatic';
     var currentFirstSize = legacyPairSize(currentSelection);
@@ -1574,6 +1693,7 @@
     var suffix = index > 1 ? '_' + index : '';
     var size = stringValue('rad_' + key + '_ex_size' + suffix);
     if (!size) return null;
+    var radiatorFactor = radiatorOutputFactor(key);
     if (size === CUSTOM_EXISTING_RADIATOR_SELECTION) {
       var customKw = numberValue('rad_' + key + '_ex_custom_kw' + suffix, 0);
       if (customKw <= 0) return null;
@@ -1581,8 +1701,8 @@
         type: 'Custom radiator or towel rail',
         size: CUSTOM_EXISTING_RADIATOR_SELECTION,
         unitSize: CUSTOM_EXISTING_RADIATOR_SELECTION,
-        watts: customKw * 1000,
-        unitWatts: customKw * 1000,
+        watts: customKw * 1000 * radiatorFactor,
+        unitWatts: customKw * 1000 * radiatorFactor,
         quantity: 1,
         ratedWatts: customKw * 1000,
         customOutput: true
@@ -1593,7 +1713,8 @@
     var deltaT = (flow + returnTemperature) / 2 - indoor;
     if (deltaT < 20 || deltaT > 65) return null;
     var correctionFactor = stelradCorrectionFactor(deltaT);
-    var option = stelradIndividualOptions(correctionFactor, {}, roomName, deltaT, false).find(function (option) {
+    var option = stelradIndividualOptions(correctionFactor,
+      { outputFactor: radiatorFactor }, roomName, deltaT, false).find(function (option) {
       return option.size === size;
     });
     if (!option) return null;
@@ -1724,7 +1845,7 @@
     var indoor = numberValue('hl_' + key + '_indoor_temp',
       targetTemperatureForAge(roomName, propertyAgeBand));
     var outdoor = numberValue('hl_outdoor_temp', -3);
-    var deltaT = Math.max(0, indoor - outdoor);
+    var deltaT = indoor - outdoor;
     var floorArea = length * width;
     var volume = floorArea * height;
     var outsideWallCount = Math.round(numberValue('rad_' + key + '_outside', 0));
@@ -1767,6 +1888,48 @@
       Math.max(0, numberValue('hl_' + key + '_alternative_wall_length', 0)));
     var alternativeWallType = stringValue('hl_' + key + '_alternative_wall_type');
     var internalWallType = stringValue('hl_' + key + '_internal_wall_type');
+    var internalWallSegments = [];
+    for (var segmentIndex = 1; segmentIndex <= 4; segmentIndex += 1) {
+      var segmentPrefix = 'hl_' + key + '_internal_segment_' + segmentIndex;
+      var segmentLength = numberValue(segmentPrefix + '_length', 0);
+      if (segmentLength <= 0) continue;
+      var segmentType = stringValue(segmentPrefix + '_type');
+      var segmentAdjacentKey = stringValue(segmentPrefix + '_adjacent_room');
+      var segmentAdjacentName = allRoomNames().find(function (candidate) {
+        return roomKeyFromName(candidate) === segmentAdjacentKey;
+      }) || '';
+      var segmentAdjacentIndoor = segmentAdjacentName
+        ? numberValue('hl_' + segmentAdjacentKey + '_indoor_temp',
+          targetTemperatureForAge(segmentAdjacentName, propertyAgeBand))
+        : indoor;
+      var segmentAdjacentTempText = stringValue(segmentPrefix + '_adjacent_temp');
+      var segmentAdjacentSpace = stringValue(segmentPrefix + '_adjacent_space') || 'Standard';
+      var segmentDelta = isHeatedInternalWall(segmentType)
+        ? indoor - segmentAdjacentIndoor
+        : String(segmentType || '').indexOf('Unheated space') === 0
+          ? (segmentAdjacentTempText !== '' && Number.isFinite(Number(segmentAdjacentTempText))
+            ? indoor - Number(segmentAdjacentTempText) : indoor - 10)
+          : 0;
+      internalWallSegments.push({
+        length: segmentLength,
+        type: segmentType,
+        u: mappedValue('internalWall', segmentType),
+        deltaT: segmentDelta,
+        adjacentRoomName: segmentAdjacentName,
+        adjacentSpace: segmentAdjacentSpace,
+        adjacentTemperature: segmentAdjacentTempText !== '' && Number.isFinite(Number(segmentAdjacentTempText))
+          ? Number(segmentAdjacentTempText) : null
+      });
+    }
+    if (internalWallSegments.length) {
+      internalWallLength = internalWallSegments.reduce(function (sum, segment) {
+        return sum + segment.length;
+      }, 0);
+      internalWallArea = internalWallSegments.reduce(function (sum, segment) {
+        return sum + segment.length * height;
+      }, 0);
+      assumedInternalWall = false;
+    }
     var windowType = stringValue('hl_' + key + '_window_type');
     var doorType = stringValue('hl_' + key + '_door_type');
     var floorType = stringValue('hl_' + key + '_floor_type');
@@ -1787,15 +1950,26 @@
     var doorU = mappedValue('door', doorType);
     var floorU = mappedValue('floor', floorType);
     var roofU = mappedValue('loft', loftType);
+    var roofAdjacentTemperatureText = stringValue('hl_' + key + '_roof_adjacent_temp');
+    var roofDeltaT = window.HeatLossCalculations.roofTemperatureDifference(
+      indoor, outdoor, roofAdjacentTemperatureText
+    );
+    var rooflightType = stringValue('hl_' + key + '_rooflight_type');
+    var rooflightArea = rooflightType && rooflightType !== 'No rooflights'
+      ? Math.max(0, numberValue('hl_' + key + '_rooflight_area', 0)) : 0;
+    var rooflightU = mappedValue('window', rooflightType);
     var hasExternalEnvelope = wallLength > 0 || windowArea > 0 || doorArea > 0 ||
-      floorU > 0 || roofU > 0;
+      rooflightArea > 0 || floorU > 0 || roofU > 0;
     var roomAgeBand = stringValue('hl_' + key + '_element_age_band');
     if (!roomAgeBand || roomAgeBand === 'Unknown') {
       roomAgeBand = stringValue('hl_property_age_band') || 'Unknown';
     }
+    var ventilationAgeCategory = window.HeatLossCalculations.ventilationAgeCategory(
+      stringValue('hl_ventilation_age_category') || roomAgeBand
+    );
     var roomType = window.HeatLossCalculations.roomTypeForAirChange(roomName);
     var standardAch = window.HeatLossCalculations.minimumRoomAirChangeRate(
-      roomName, roomAgeBand, hasExternalEnvelope
+      roomName, ventilationAgeCategory, hasExternalEnvelope
     );
     var manualAch = Number(manualAchText);
     var manualAchValid = manualAchText !== '' && Number.isFinite(manualAch) && manualAch >= 0;
@@ -1814,25 +1988,39 @@
     var deviceValue = ventilationDevice === 'Other open flue'
       ? 'Other heater flue'
       : ventilationDevice;
-    var deviceFlowM3h = mappedValue('ventilationDevice', deviceValue);
+    var chimneyRestricted = stringValue('hl_' + key + '_chimney_restricted') === 'Yes';
+    var chimneyAch = deviceValue === 'Open chimney'
+      ? window.HeatLossCalculations.chimneyAirChangeRate(volume, chimneyRestricted)
+      : 0;
+    var deviceFlowM3h = chimneyAch > 0
+      ? 0
+      : mappedValue('ventilationDevice', deviceValue);
     var pivFlowM3h = ventilationSystem === 'Positive input ventilation (PIV)' &&
       Number(ventilationContext.propertyVolume) > 0
       ? 20 * volume / Number(ventilationContext.propertyVolume)
       : 0;
-    var ventilationFlowM3h = recoveredVentilationFlowM3h + deviceFlowM3h + pivFlowM3h;
+    var ventilationFlowM3h = recoveredVentilationFlowM3h + deviceFlowM3h +
+      pivFlowM3h + chimneyAch * volume;
     var effectiveAch = volume > 0 ? ventilationFlowM3h / volume : 0;
     var missing = [];
     if (wallLength > 0 && !wallType) missing.push('external wall construction');
     if (alternativeWallLength > 0 && !alternativeWallType) {
       missing.push('alternative external wall construction');
     }
-    if (internalWallLength > 0 && (!internalWallType || internalWallU === 0)) {
+    if (internalWallSegments.length) {
+      internalWallSegments.forEach(function (segment, index) {
+        if (!segment.type || segment.u === 0) {
+          missing.push('wall segment ' + (index + 1) + ' construction');
+        }
+      });
+    } else if (internalWallLength > 0 && (!internalWallType || internalWallU === 0)) {
       missing.push('internal wall construction');
     }
     if (windowCount > 0 && !windowMeasurements.complete) missing.push('window dimensions');
     if (doorCount > 0 && !doorMeasurements.complete) missing.push('door dimensions');
     if (windowArea > 0 && (!windowType || windowU === 0)) missing.push('window construction');
     if (doorArea > 0 && (!doorType || doorU === 0)) missing.push('external door construction');
+    if (rooflightArea > 0 && (!rooflightType || rooflightU === 0)) missing.push('rooflight construction');
     if (!floorType) missing.push('floor construction');
     if (!loftType) missing.push('ceiling or loft construction');
     if (!ventilationMode) missing.push('room air-change method');
@@ -1855,12 +2043,16 @@
     var adjacentSpaceFactor = ADJACENT_SPACE_FACTORS[adjacentSpace];
     if (!Number.isFinite(adjacentSpaceFactor)) adjacentSpaceFactor = internalWallFactor;
     var internalDeltaT = 0;
-    if (isHeatedInternalWall(internalWallType)) {
-      internalDeltaT = Math.max(0, indoor - adjacentIndoor);
+    if (internalWallSegments.length) {
+      internalDeltaT = internalWallSegments.reduce(function (sum, segment) {
+        return sum + segment.deltaT * segment.length * height;
+      }, 0) / Math.max(1, internalWallArea);
+    } else if (isHeatedInternalWall(internalWallType)) {
+      internalDeltaT = indoor - adjacentIndoor;
     } else if (String(internalWallType || '').indexOf('Unheated space') === 0) {
       internalDeltaT = adjacentTemperatureKnown
-        ? Math.max(0, indoor - Number(adjacentTemperatureText))
-        : deltaT * adjacentSpaceFactor;
+        ? indoor - Number(adjacentTemperatureText)
+        : indoor - 10;
     }
     var floorAdjacentTemperatureText = stringValue('hl_' + key + '_floor_adjacent_temp');
     var floorDeltaT = floorTemperatureDifference(
@@ -1892,10 +2084,11 @@
       ground: stringValue('hl_ground_temp'),
       groundRequired: String(floorType || '').toLowerCase().indexOf('solid ground') >= 0,
       ventilationAch: effectiveAch,
+      ventilationAchMaximum: 5 + chimneyAch,
       ventilationRequired: started,
       uValues: [
         { label: 'External wall', value: wallU, required: wallLength > 0 },
-        { label: 'Internal wall', value: internalWallU, required: internalWallLength > 0 },
+        { label: 'Internal wall', value: internalWallU, required: internalWallSegments.length === 0 && internalWallLength > 0 },
         { label: 'Window', value: windowU, required: windowArea > 0 },
         { label: 'Door', value: doorU, required: doorArea > 0 },
         { label: 'Floor', value: floorU, required: floorU > 0 },
@@ -1920,12 +2113,32 @@
       doorU: doorU,
       floorU: floorU,
       roofU: roofU,
+      roofDeltaT: roofDeltaT,
+      rooflightArea: rooflightArea,
+      rooflightU: rooflightU,
+      internalSegments: internalWallSegments.length ? internalWallSegments.map(function (segment) {
+        return { area: segment.length * height, u: segment.u, deltaT: segment.deltaT };
+      }) : null,
       ach: effectiveAch,
       ventilationFlowM3h: ventilationFlowM3h,
       bridgePercent: bridgeMethod === 'Percentage' ? numberValue('hl_bridge_pct', 10) : 0,
       bridgeFactorWm2K: bridgeMethod === 'Age-based' ? bridgeFactor : null,
       bridgeArea: bridgeArea
     }) : computeHeatLossValues({});
+    var unadjustedRoomWatts = heat.totalWatts;
+    var roomFactors = window.HeatLossCalculations.applyAdditionalHeatLossFactors(
+      unadjustedRoomWatts,
+      {
+        intermittent: numberValue('hl_reheat_factor', 1),
+        exposed: numberValue('hl_exposed_location', 1),
+        highCeiling: numberValue('hl_high_ceiling_factor', 1)
+      }
+    );
+    heat.baseTotalWatts = unadjustedRoomWatts;
+    heat.factorMultiplier = roomFactors.multiplier;
+    heat.factorWatts = roomFactors.additionalWatts;
+    heat.totalWatts = roomFactors.totalWatts;
+    var radiatorFactor = radiatorOutputFactor(key);
     var radiatorConnection = stringValue('hl_radiator_connection') || 'BBOE';
     var radiatorRequirementWatts = window.HeatLossCalculations.radiatorSizingRequirement(
       heat.totalWatts, radiatorConnection
@@ -2036,6 +2249,7 @@
       doorCount: doorCount,
       wallType: wallType,
       internalWallType: internalWallType,
+      internalWallSegments: internalWallSegments,
       internalWallFactor: internalWallFactor,
       internalDeltaT: internalDeltaT,
       adjacentRoomName: adjacentName,
@@ -2053,8 +2267,15 @@
       floorAdjacentTemperature: floorAdjacentTemperatureText === ''
         ? null : Number(floorAdjacentTemperatureText),
       loftType: loftType,
+      roofAdjacentTemperature: roofAdjacentTemperatureText === ''
+        ? null : Number(roofAdjacentTemperatureText),
+      roofDeltaT: roofDeltaT,
+      rooflightType: rooflightType,
+      rooflightArea: rooflightArea,
+      rooflightU: rooflightU,
       buildingPart: stringValue('hl_' + key + '_building_part') || 'Main dwelling',
       roomAgeBand: roomAgeBand,
+      ventilationAgeCategory: ventilationAgeCategory,
       assumptionQuality: stringValue('hl_' + key + '_assumption_quality') || 'General default',
       ventilationMode: ventilationMode,
       manualAch: manualAchValid ? manualAch : null,
@@ -2069,6 +2290,8 @@
       baseVentilationFlowM3h: baseVentilationFlowM3h,
       deviceFlowM3h: deviceFlowM3h,
       pivFlowM3h: pivFlowM3h,
+      chimneyAch: chimneyAch,
+      chimneyRestricted: chimneyRestricted,
       ventilationFlowM3h: heat.ventilationFlowM3h,
       wallU: wallU,
       primaryWallU: primaryWallU,
@@ -2086,8 +2309,12 @@
       internalWallWatts: heat.internalWallWatts,
       fabricWatts: heat.fabricWatts,
       ventilationWatts: heat.ventilationWatts,
+      baseTotalWatts: heat.baseTotalWatts,
+      factorMultiplier: heat.factorMultiplier,
+      factorWatts: heat.factorWatts,
       totalWatts: heat.totalWatts,
       radiatorConnection: radiatorConnection,
+      radiatorOutputFactor: radiatorFactor,
       radiatorRequirementWatts: radiatorRequirementWatts,
       sharedRadiatorHostKey: '',
       sharedRadiatorHostName: '',
@@ -2766,6 +2993,20 @@
       if (result.pivFlowM3h > 0) {
         ventilationDetails += ', +' + result.pivFlowM3h.toFixed(1) + ' m³/h PIV share';
       }
+      if (result.chimneyAch > 0) {
+        ventilationDetails += ', +' + result.chimneyAch.toFixed(1) + ' ACH open chimney' +
+          (result.chimneyRestricted ? ' with restrictor' : ' without restrictor');
+      }
+      var factorDetails = result.factorMultiplier !== 1
+        ? ' &nbsp; Design allowances: ×' + result.factorMultiplier.toFixed(2) +
+          ' (' + (result.factorWatts >= 0 ? '+' : '') + Math.round(result.factorWatts) + ' W)'
+        : '';
+      var gainDetails = result.internalWallWatts < 0
+        ? ' &nbsp; Internal-wall gain: ' + Math.round(result.internalWallWatts) + ' W'
+        : '';
+      var radiatorFactorDetails = result.radiatorOutputFactor !== 1
+        ? ' &nbsp; Radiator output factor: ×' + result.radiatorOutputFactor.toFixed(2)
+        : '';
       resultBox.innerHTML =
         '<div class="hl-result-main"><strong>' + Math.round(result.totalWatts) +
         ' W</strong> (' + roomKw.toFixed(2) + ' kW)' +
@@ -2773,7 +3014,7 @@
         '</div><div class="hl-result-breakdown">Fabric: ' +
         Math.round(result.fabricWatts) + ' W &nbsp; Ventilation: ' +
         Math.round(result.ventilationWatts) + ' W &nbsp; Load density: ' +
-        result.wattsPerSquareMetre.toFixed(1) + ' W/m²<br><small>' +
+        result.wattsPerSquareMetre.toFixed(1) + ' W/m²' + factorDetails + gainDetails + radiatorFactorDetails + '<br><small>' +
         escapeHtml(ventilationDetails) + '; effective heat-loss airflow ' +
         result.ach.toFixed(2) + ' ACH.</small></div>' + radiatorHtml +
         (result.warnings.length
@@ -3100,7 +3341,10 @@
       ? 'Age-based RdSAP y-value by room age'
       : bridgeMethod === 'None'
         ? 'None'
-        : numberValue('hl_bridge_pct', 10).toFixed(0) + '% of external fabric loss';
+        : numberValue('hl_bridge_pct', 10).toFixed(0) + '% of complete room load';
+    var allowanceSummary = 'Reheat ×' + numberValue('hl_reheat_factor', 1).toFixed(2) +
+      ', exposed ×' + numberValue('hl_exposed_location', 1).toFixed(2) +
+      ', high ceiling ×' + numberValue('hl_high_ceiling_factor', 1).toFixed(2);
     return '<div class="sheet-wrap" id="heatLossAssumptionsSheetV61">' +
       '<div class="sheet-title"><h2>Heat Loss</h2><small>U-values and ventilation assumptions used</small></div>' +
       '<table class="sheet heatloss-sheet heatloss-assumptions-sheet">' +
@@ -3110,7 +3354,7 @@
       '<tr><td class="label">Outdoor design</td><td class="input">' +
       escapeHtml(stringValue('hl_outdoor_temp')) + ' °C</td>' +
       '<td class="label">Thermal bridges</td><td class="input">' +
-      bridgeSummary + '</td>' +
+      bridgeSummary + '<br><small>' + allowanceSummary + '</small></td>' +
       '<td class="label">Radiator design</td><td colspan="3" class="input">Radiator options at ' +
       escapeHtml(stringValue('hl_radiator_temperature')) + '°C, nominal ΔT' +
       (Number(stringValue('hl_radiator_temperature')) - 25) + ', ' +
@@ -3134,6 +3378,7 @@
         'Mechanical ventilation with heat recovery (MVHR)'
         ? ', ' + escapeHtml(stringValue('hl_mvhr_efficiency')) + '% heat recovery'
         : '') +
+      '<br>Age category: ' + escapeHtml(stringValue('hl_ventilation_age_category') || 'From property age band') +
       '</td><td class="label">Room minimum</td><td class="input">Selected room type and age band</td></tr>' +
       '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
       (rows.length ? rows.map(function (room) {
@@ -3167,7 +3412,12 @@
           (room.floorExposedPerimeter > 0
             ? '<br>Exposed perimeter: ' + room.floorExposedPerimeter.toFixed(2) + 'm'
             : '') + '</td>' +
-          '<td>' + uValueAssumption(room.loftType, room.roofU, room.roofU > 0) + '</td>' +
+          '<td>' + uValueAssumption(room.loftType, room.roofU, room.roofU > 0) +
+          (room.roofAdjacentTemperature == null
+            ? '' : '<br>Adjacent room: ' + room.roofAdjacentTemperature.toFixed(1) + '°C') +
+          (room.rooflightArea > 0
+            ? '<br>Rooflight: ' + room.rooflightArea.toFixed(2) + 'm², U ' + room.rooflightU.toFixed(2)
+            : '') + '</td>' +
           '<td>' + escapeHtml(room.ventilationMode) + ': <b>' +
           room.baseAch.toFixed(2) + ' ACH</b><br>Standard: ' +
           escapeHtml(room.roomType) + ', band ' + escapeHtml(room.roomAgeBand) +

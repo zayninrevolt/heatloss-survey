@@ -57,6 +57,16 @@ test('returns structured blocking errors for incomplete required engineering inp
   assert.equal(validation.canRecommendRadiator(issues), false);
 });
 
+test('allows documented chimney ACH above the normal room-air-change guard', () => {
+  assert.deepEqual(validation.validateRoomDetails({
+    started: true, length: 4, width: 5, height: 2.4,
+    indoor: 21, outdoor: -3, ground: 10,
+    ventilationAch: 6.5, ventilationAchMaximum: 6.5,
+    ventilationRequired: true,
+    uValues: [], radiatorOutputsKw: []
+  }), []);
+});
+
 test('allows recommendations when required inputs are valid and optional zero values are absent', () => {
   const issues = validation.validateRoomDetails({
     started: true,

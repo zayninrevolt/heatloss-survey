@@ -10,6 +10,11 @@
     return Number.isFinite(number) ? Math.max(0, number) : 0;
   }
 
+  function signedNumber(value, fallback) {
+    var number = Number(value);
+    return Number.isFinite(number) ? number : (fallback || 0);
+  }
+
   function estimatedWallLength(length, width, wallCount) {
     length = nonNegative(length);
     width = nonNegative(width);
@@ -36,20 +41,32 @@
     indoor = Number(indoor) || 0;
     outdoor = Number(outdoor) || 0;
     ground = Number(ground) || 0;
-    if (floorType.includes('solid ground')) return Math.max(0, indoor - ground);
+    if (adjacentTemperature !== '' &&
+        Number.isFinite(Number(adjacentTemperature)) &&
+        (floorType.includes('heated room') || floorType.includes('cellar') ||
+          floorType.includes('garage') || floorType.includes('partially heated'))) {
+      return indoor - Number(adjacentTemperature);
+    }
+    if (floorType.includes('solid ground')) return indoor - ground;
     if (floorType.includes('suspended timber ground') ||
         floorType.includes('exposed floor')) {
-      return Math.max(0, indoor - outdoor);
+      return indoor - outdoor;
     }
     if (floorType.includes('cellar') || floorType.includes('garage') ||
         floorType.includes('partially heated')) {
-      if (adjacentTemperature !== '' &&
-          Number.isFinite(Number(adjacentTemperature))) {
-        return Math.max(0, indoor - Number(adjacentTemperature));
-      }
-      return Math.max(0, indoor - outdoor) * 0.5;
+      return (indoor - outdoor) * 0.5;
     }
     return 0;
+  }
+
+  function roofTemperatureDifference(indoor, outdoor, adjacentTemperature) {
+    indoor = signedNumber(indoor);
+    outdoor = signedNumber(outdoor);
+    if (adjacentTemperature !== '' &&
+        Number.isFinite(Number(adjacentTemperature))) {
+      return indoor - Number(adjacentTemperature);
+    }
+    return indoor - outdoor;
   }
 
   function altitudeAdjustedTemperature(baseTemperature, propertyAltitude,
@@ -203,11 +220,26 @@
 
   function roomAirChangeAgeGroup(ageBand) {
     var band = String(ageBand || 'Unknown').toUpperCase();
+    if (band === '2000-2006' || band === 'MIDDLE' || band === 'B' || band === 'J') return 'middle';
+    if (band === '2006+' || band === 'MODERN' || band === 'C') return 'modern';
+    if (band === 'PRE-2000' || band === 'OLD' || band === 'A') return 'old';
     if (band === 'I' || band === '1996-2002') return 'middle';
-    if (['J', 'K', 'L', 'M'].includes(band) || band === '2003-PRESENT') {
+    if (['K', 'L', 'M'].includes(band) || band === '2003-PRESENT') {
       return 'modern';
     }
     return 'old';
+  }
+
+  function ventilationAgeCategory(ageBand) {
+    var band = String(ageBand || 'Unknown').toUpperCase();
+    if (['PRE-2000', 'OLD', 'A'].includes(band)) return 'pre-2000';
+    if (['2000-2006', 'MIDDLE', 'B', 'I', 'J', '1996-2002'].includes(band)) {
+      return '2000-2006';
+    }
+    if (['2006+', 'MODERN', 'C', 'K', 'L', 'M', '2003-PRESENT'].includes(band)) {
+      return '2006+';
+    }
+    return 'pre-2000';
   }
 
   function minimumRoomAirChangeRate(roomName, ageBand, hasExternalEnvelope) {
@@ -215,6 +247,29 @@
     var roomType = roomTypeForAirChange(roomName);
     var group = roomAirChangeAgeGroup(ageBand);
     return ROOM_AIR_CHANGE_RATES[group][roomType];
+  }
+
+  function chimneyAirChangeRate(volume, restricted) {
+    volume = nonNegative(volume);
+    if (!volume) return 0;
+    if (volume <= 40) return restricted ? 3 : 5;
+    return restricted ? 2 : 4;
+  }
+
+  function applyAdditionalHeatLossFactors(baseWatts, factors) {
+    var base = signedNumber(baseWatts);
+    factors = factors || {};
+    var multiplier = ['thermalBridge', 'intermittent', 'exposed', 'highCeiling']
+      .reduce(function (product, key) {
+        var factor = signedNumber(factors[key], 1);
+        return product * (factor > 0 ? factor : 1);
+      }, 1);
+    var total = base * multiplier;
+    return {
+      multiplier: multiplier,
+      totalWatts: total,
+      additionalWatts: total - base
+    };
   }
 
   function radiatorSizingRequirement(roomWatts, connectionType) {
@@ -236,26 +291,36 @@
 
   function computeHeatLossValues(input) {
     input = input || {};
-    var deltaT = nonNegative(input.deltaT);
-    var internalDeltaT = nonNegative(input.internalDeltaT);
+    var deltaT = signedNumber(input.deltaT);
+    var internalDeltaT = signedNumber(input.internalDeltaT);
     var floorArea = nonNegative(input.floorArea);
     var volume = nonNegative(input.volume);
     var wallWatts = nonNegative(input.netWallArea) * nonNegative(input.wallU) * deltaT;
-    var internalWallWatts = nonNegative(input.internalWallArea) *
-      nonNegative(input.internalWallU) * internalDeltaT;
+    var internalSegments = Array.isArray(input.internalSegments)
+      ? input.internalSegments : [];
+    var internalWallWatts = internalSegments.length
+      ? internalSegments.reduce(function (sum, segment) {
+        return sum + nonNegative(segment.area) * nonNegative(segment.u) * signedNumber(segment.deltaT);
+      }, 0)
+      : nonNegative(input.internalWallArea) * nonNegative(input.internalWallU) * internalDeltaT;
     var windowWatts = nonNegative(input.windowArea) * nonNegative(input.windowU) * deltaT;
     var doorWatts = nonNegative(input.doorArea) * nonNegative(input.doorU) * deltaT;
-    var floorDeltaT = input.floorDeltaT == null ? deltaT : nonNegative(input.floorDeltaT);
+    var floorDeltaT = input.floorDeltaT == null ? deltaT : signedNumber(input.floorDeltaT);
     var floorWatts = floorArea * nonNegative(input.floorU) * floorDeltaT;
-    var roofWatts = floorArea * nonNegative(input.roofU) * deltaT;
+    var roofDeltaT = input.roofDeltaT == null ? deltaT : signedNumber(input.roofDeltaT);
+    var rooflightWatts = nonNegative(input.rooflightArea) *
+      nonNegative(input.rooflightU) * roofDeltaT;
+    var roofWatts = floorArea * nonNegative(input.roofU) * roofDeltaT;
     var ventilationFlowM3h = input.ventilationFlowM3h == null
       ? nonNegative(input.ach) * volume
       : nonNegative(input.ventilationFlowM3h);
     var ventilationWatts = 0.33 * ventilationFlowM3h * deltaT;
-    var externalFabric = wallWatts + windowWatts + doorWatts + floorWatts + roofWatts;
+    var externalFabric = wallWatts + windowWatts + doorWatts + floorWatts +
+      roofWatts + rooflightWatts;
+    var bridgeBaseWatts = externalFabric + internalWallWatts + ventilationWatts;
     var bridgeWatts = input.bridgeFactorWm2K == null
-      ? externalFabric * nonNegative(input.bridgePercent) / 100
-      : nonNegative(input.bridgeArea) * nonNegative(input.bridgeFactorWm2K) * deltaT;
+      ? bridgeBaseWatts * signedNumber(input.bridgePercent) / 100
+      : nonNegative(input.bridgeArea) * signedNumber(input.bridgeFactorWm2K) * deltaT;
     var fabricWatts = externalFabric + internalWallWatts + bridgeWatts;
     return {
       wallWatts: wallWatts,
@@ -264,6 +329,7 @@
       doorWatts: doorWatts,
       floorWatts: floorWatts,
       roofWatts: roofWatts,
+      rooflightWatts: rooflightWatts,
       ventilationFlowM3h: ventilationFlowM3h,
       ventilationWatts: ventilationWatts,
       bridgeWatts: bridgeWatts,
@@ -275,13 +341,17 @@
   return {
     altitudeAdjustedTemperature: altitudeAdjustedTemperature,
     computeHeatLossValues: computeHeatLossValues,
+    applyAdditionalHeatLossFactors: applyAdditionalHeatLossFactors,
+    chimneyAirChangeRate: chimneyAirChangeRate,
     estimatedWallLength: estimatedWallLength,
     floorTemperatureDifference: floorTemperatureDifference,
     minimumRoomAirChangeRate: minimumRoomAirChangeRate,
     radiatorSizingRequirement: radiatorSizingRequirement,
     remainingInternalWallLength: remainingInternalWallLength,
+    roofTemperatureDifference: roofTemperatureDifference,
     roomDesignTemperature: roomDesignTemperature,
     roomTypeForAirChange: roomTypeForAirChange,
+    ventilationAgeCategory: ventilationAgeCategory,
     ventilationFlow: ventilationFlow
   };
 });

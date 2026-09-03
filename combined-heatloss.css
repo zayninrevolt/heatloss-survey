@@ -6,8 +6,16 @@
 .hl-summary-grid,
 .hl-fields-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px 12px;
+}
+
+.hl-summary-card input,
+.hl-summary-card select,
+.hl-room-body input,
+.hl-room-body select,
+.hl-room-body button {
+  min-height: 44px;
 }
 
 .hl-summary-card .field,
@@ -179,6 +187,35 @@
   line-height: 1.4;
 }
 
+.hl-wall-segments {
+  margin: 14px 0;
+  border: 1px solid #93c5fd;
+  border-radius: 9px;
+  background: #f8fbff;
+  padding: 10px 12px;
+}
+
+.hl-wall-segments > summary {
+  min-height: 32px;
+  cursor: pointer;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+
+.hl-segment-card {
+  margin-top: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+}
+
+.hl-segment-card h5 {
+  margin: 0 0 8px;
+  color: #1e3a8a;
+  font-size: 14px;
+}
+
 .hl-result-main {
   margin-bottom: 5px;
   font-size: 19px;
@@ -273,6 +310,17 @@ body.theme-dark .hl-internal-wall {
   border-color: #1d4ed8 !important;
 }
 
+body.theme-dark .hl-wall-segments,
+body.theme-dark .hl-segment-card {
+  background: #0f172a !important;
+  border-color: #1d4ed8 !important;
+}
+
+body.theme-dark .hl-wall-segments > summary,
+body.theme-dark .hl-segment-card h5 {
+  color: #bfdbfe !important;
+}
+
 body.theme-dark .hl-room-geometry,
 body.theme-dark .hl-internal-wall-heading p {
   color: #cbd5e1 !important;
@@ -364,6 +412,18 @@ body.theme-dark .hl-result-breakdown {
 body.theme-dark .room-completion-action button {
   background: #374151 !important;
   color: #f9fafb !important;
+}
+
+@media (max-width: 1100px) {
+  .hl-room-body,
+  .hl-summary-card {
+    padding: 12px;
+  }
+
+  .hl-summary-card .field label,
+  .hl-room-body .field label {
+    line-height: 1.25;
+  }
 }
 
 @media (max-width: 700px) {

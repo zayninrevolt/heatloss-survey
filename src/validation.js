@@ -92,8 +92,11 @@
     });
 
     if (input.ventilationRequired) {
-      requiredRange('ventilation-ach', 'Air-change rate', input.ventilationAch, 0, 5,
-        'Air-change rate is outside the expected 0–5 ACH range');
+      var ventilationMaximum = finiteValue(input.ventilationAchMaximum);
+      if (ventilationMaximum === null || ventilationMaximum < 5) ventilationMaximum = 5;
+      requiredRange('ventilation-ach', 'Air-change rate', input.ventilationAch, 0,
+        ventilationMaximum,
+        'Air-change rate is outside the expected 0–' + ventilationMaximum + ' ACH range');
     } else if (input.manualAch !== null && input.manualAch !== undefined &&
         outside(input.manualAch, 0, 5)) {
       add('manual-ach', 'range', 'warning',
