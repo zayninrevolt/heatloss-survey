@@ -314,50 +314,92 @@ test('browser calculation uses signed gains, chimney ACH and room allowances', a
   expect(lounge.totalWatts).toBeCloseTo(lounge.baseTotalWatts * 1.1, 5);
 });
 
-test('new radiator sizing hides existing details and keeps like-for-like in the radiator picker', async ({ page }) => {
-  const result = await page.evaluate(async () => {
+test('assessing an existing radiator never implies like-for-like and explains incomplete heat loss', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const incomplete = await page.evaluate(async () => {
     const key = 'lounge';
-    const outcome = document.getElementById(`rad_${key}_outcome`);
-    const existingWrap = document.getElementById(`hl_${key}_existing_radiator_fields`);
-    const existingSize = document.getElementById(`rad_${key}_ex_size`);
-
-    const choose = (field, value) => {
+    const choose = (id, value) => {
+      const field = document.getElementById(id);
       field.value = value;
       field.dispatchEvent(new Event('change', { bubbles: true }));
     };
-    const waitForRender = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const waitForRender = () => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    choose(outcome, 'New radiator required');
+    choose(`rad_${key}_len`, '5');
+    choose(`rad_${key}_wid`, '5');
+    choose(`rad_${key}_outside`, '1');
+    const outcome = document.getElementById(`rad_${key}_outcome`);
+    const existingWrap = document.getElementById(`hl_${key}_existing_radiator_fields`);
+    choose(`rad_${key}_outcome`, 'New radiator required');
     await waitForRender();
     const hiddenForNewRadiator = existingWrap.hidden;
-
-    choose(outcome, 'Assess existing radiator');
+    choose(`rad_${key}_outcome`, 'Assess existing radiator');
     await waitForRender();
     const visibleForAssessment = !existingWrap.hidden;
-    const installedSize = [...existingSize.options].find(option => option.value)?.value;
-    choose(existingSize, installedSize);
+    choose(`rad_${key}_ex_size`, '600(h) x 400(w) K1');
     await waitForRender();
 
     const newSize = document.getElementById(`rad_${key}_new_size`);
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === key);
     return {
       outcomeLabels: [...outcome.options].map(option => option.textContent),
       hiddenForNewRadiator,
       visibleForAssessment,
-      newSizeLabels: newSize && newSize.tagName === 'SELECT'
-        ? [...newSize.options].map(option => option.textContent)
-        : []
+      complete: room.complete,
+      warnings: room.warnings,
+      summary: document.getElementById(`hl_${key}_summary`).textContent,
+      requiredKw: document.getElementById(`rad_${key}_kw`).value,
+      requiredKwPlaceholder: document.getElementById(`rad_${key}_kw`).placeholder,
+      existingOutput: document.getElementById(`rad_${key}_output`).value,
+      newSizeDisabled: newSize.disabled,
+      newSizeLabels: [...newSize.options].map(option => option.textContent)
     };
   });
 
-  expect(result.outcomeLabels).toEqual([
+  expect(incomplete.outcomeLabels).toEqual([
     'Size a new radiator',
     'Assess the existing radiator',
     'Replace existing radiator like for like',
     'Customer refused radiator work'
   ]);
-  expect(result.hiddenForNewRadiator).toBe(true);
-  expect(result.visibleForAssessment).toBe(true);
-  expect(result.newSizeLabels).toContain('Replace existing radiator like for like');
+  expect(incomplete.hiddenForNewRadiator).toBe(true);
+  expect(incomplete.visibleForAssessment).toBe(true);
+  expect(incomplete.complete).toBe(false);
+  expect(incomplete.warnings).toContain('Select floor construction, ceiling or loft construction');
+  expect(incomplete.summary).toBe('Incomplete heat loss');
+  expect(incomplete.requiredKw).toBe('');
+  expect(incomplete.requiredKwPlaceholder).toBe('Complete heat loss details');
+  expect(incomplete.existingOutput).toBe('0.39');
+  expect(incomplete.newSizeDisabled).toBe(true);
+  expect(incomplete.newSizeLabels).toEqual([
+    'Complete heat loss details to assess this radiator'
+  ]);
+
+  const complete = await page.evaluate(async () => {
+    const choose = (id, value) => {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    choose('hl_lounge_floor_type', 'Insulated solid ground floor');
+    choose('hl_lounge_loft_type', 'Plasterboard with 200mm insulation');
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const newSize = document.getElementById('rad_lounge_new_size');
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    return {
+      complete: room.complete,
+      requiredWatts: room.radiatorRequirementWatts,
+      requiredKw: document.getElementById('rad_lounge_kw').value,
+      newSizeDisabled: newSize.disabled,
+      newSizeLabels: Array.from(newSize.options).map((option) => option.textContent)
+    };
+  });
+  expect(complete.complete).toBe(true);
+  expect(complete.requiredKw).toBe((complete.requiredWatts / 1000).toFixed(2));
+  expect(complete.newSizeDisabled).toBe(false);
+  expect(complete.newSizeLabels.some(label => label.includes('kW'))).toBe(true);
+  expect(complete.newSizeLabels).not.toContain('Replace existing radiator like for like');
 });
 
 test('shows the radiator outcome, required kW and usable laptop input width', async ({ page }) => {
