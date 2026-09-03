@@ -148,10 +148,13 @@ test('selects the requested age and room based minimum ACH values', () => {
   assert.equal(heatLoss.roomDesignTemperature('Hall', 'K'), 21);
 });
 
-test('BBOE adds a radiator sizing allowance without changing room heat loss', () => {
+test('BBOE derates radiator output without changing the room requirement', () => {
   assert.equal(heatLoss.radiatorSizingRequirement(2000, 'TBOE'), 2000);
-  assert.equal(heatLoss.radiatorSizingRequirement(2000, 'BBOE'), 2000 / 0.9);
+  assert.equal(heatLoss.radiatorSizingRequirement(2000, 'BBOE'), 2000);
   assert.equal(heatLoss.radiatorSizingRequirement(2000, ''), 2000);
+  assert.equal(heatLoss.radiatorConnectionOutputFactor('TBOE'), 1);
+  assert.equal(heatLoss.radiatorConnectionOutputFactor('BBOE'), 0.96);
+  assert.equal(heatLoss.radiatorConnectionOutputFactor(''), 1);
 });
 
 test('preserves signed heat gains and applies percentage bridges to the complete room load', () => {

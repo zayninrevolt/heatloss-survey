@@ -210,6 +210,22 @@
   padding: 10px;
 }
 
+.hl-wall-row-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.hl-wall-row-grid .field {
+  min-width: 0;
+}
+
+.hl-wall-row-grid input {
+  width: 100%;
+  max-width: 100%;
+}
+
 .hl-segment-card h5 {
   margin: 0 0 8px;
   color: #1e3a8a;
@@ -526,7 +542,8 @@ body.theme-dark .room-completion-action button {
 
 @media (max-width: 700px) {
   .hl-summary-grid,
-  .hl-fields-grid {
+  .hl-fields-grid,
+  .hl-wall-row-grid {
     grid-template-columns: 1fr;
   }
 

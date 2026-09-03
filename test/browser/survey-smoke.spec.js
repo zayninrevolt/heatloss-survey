@@ -87,6 +87,7 @@ test('uses property age and room type for automatic ACH and defaults radiator co
   await page.evaluate(() => {
     const values = {
       hl_lounge_wall_type: 'Cavity wall, insulated',
+      hl_lounge_internal_wall_count: '0',
       hl_lounge_internal_wall_type: 'No internal wall included',
       hl_lounge_window_type: 'No windows',
       hl_lounge_window_count: '0',
@@ -131,7 +132,8 @@ test('uses property age and room type for automatic ACH and defaults radiator co
     window.heatLossResultsV60.rooms.find(room => room.roomName === 'Lounge')
   );
   expect(lounge.complete).toBe(true);
-  expect(lounge.radiatorRequirementWatts).toBeCloseTo(lounge.totalWatts / 0.9, 5);
+  expect(lounge.radiatorRequirementWatts).toBeCloseTo(lounge.totalWatts, 5);
+  expect(lounge.radiatorConnectionOutputFactor).toBe(0.96);
 });
 test('postcode lookup failure leaves manual temperatures usable', async ({ page }) => {
   await page.route('https://api.postcodes.io/**', route => route.abort());
@@ -253,6 +255,7 @@ test('construction presets include the small DHDG reference set', async ({ page 
     set('rad_lounge_len', '4');
     set('rad_lounge_wid', '3');
     set('rad_lounge_outside', '1');
+    set('hl_lounge_internal_wall_count', '0');
     set('hl_lounge_wall_type', 'Brick, open cavity, 100mm aerated block + 13mm plaster');
     set('hl_lounge_window_type', 'No windows');
     set('hl_lounge_window_count', '0');
@@ -314,7 +317,71 @@ test('browser calculation uses signed gains, chimney ACH and room allowances', a
   expect(lounge.totalWatts).toBeCloseTo(lounge.baseTotalWatts * 1.1, 5);
 });
 
-test('assessing an existing radiator never implies like-for-like and explains incomplete heat loss', async ({ page }) => {
+test('Lounge shows numbered internal walls with direct lengths and temperatures', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const result = await page.evaluate(async () => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      if (!field) throw new Error(`Missing field ${id}`);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const waitForRender = () => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    set('rad_lounge_len', '5');
+    set('rad_lounge_wid', '5');
+    set('rad_lounge_outside', '1');
+    await waitForRender();
+
+    const count = document.getElementById('hl_lounge_internal_wall_count');
+    const rows = [1, 2, 3, 4].map(index => ({
+      hidden: document.getElementById(`hl_lounge_internal_segment_${index}_wrap`).hidden,
+      lengthLabel: document.querySelector(
+        `label[for="hl_lounge_internal_segment_${index}_length"]`
+      ).textContent,
+      temperatureLabel: document.querySelector(
+        `label[for="hl_lounge_internal_segment_${index}_adjacent_temp"]`
+      ).textContent
+    }));
+
+    set('hl_lounge_internal_wall_type', 'Heated room, aerated block');
+    set('hl_lounge_internal_segment_1_length', '5');
+    set('hl_lounge_internal_segment_1_adjacent_temp', '18');
+    set('hl_lounge_internal_segment_2_length', '5');
+    set('hl_lounge_internal_segment_2_adjacent_temp', '20');
+    set('hl_lounge_internal_segment_3_length', '5');
+    set('hl_lounge_internal_segment_3_adjacent_temp', '10');
+    set('hl_lounge_floor_type', 'Insulated solid ground floor');
+    set('hl_lounge_loft_type', 'Plasterboard with 200mm insulation');
+    await waitForRender();
+
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    return {
+      count: count.value,
+      rows,
+      help: document.getElementById('hl_lounge_internal_wall_help').textContent,
+      remainingInternalWallLength: room.calculatedInternalWallLength,
+      complete: room.complete,
+      segmentCount: room.internalWallSegments.length,
+      deltas: room.internalWallSegments.map(segment => segment.deltaT),
+      internalWallWatts: room.internalWallWatts
+    };
+  });
+
+  expect(result.count).toBe('3');
+  expect(result.remainingInternalWallLength).toBe(15);
+  expect(result.help).toContain('15 m is the remaining perimeter');
+  expect(result.rows.map(row => row.hidden)).toEqual([false, false, false, true]);
+  expect(result.rows[0].lengthLabel).toBe('Wall 1 length (m)');
+  expect(result.rows[0].temperatureLabel).toBe('Wall 1 temperature on other side (°C)');
+  expect(result.complete).toBe(true);
+  expect(result.segmentCount).toBe(3);
+  expect(result.deltas).toEqual([3, 1, 11]);
+  expect(result.internalWallWatts).toBeCloseTo(147.6, 5);
+});
+
+test('Lounge assessment explains incomplete heat loss and BBOE derates radiator output', async ({ page }) => {
   await page.locator('#radsTab').click();
   const incomplete = await page.evaluate(async () => {
     const key = 'lounge';
@@ -329,6 +396,7 @@ test('assessing an existing radiator never implies like-for-like and explains in
     choose(`rad_${key}_len`, '5');
     choose(`rad_${key}_wid`, '5');
     choose(`rad_${key}_outside`, '1');
+    choose(`hl_${key}_internal_wall_count`, '0');
     const outcome = document.getElementById(`rad_${key}_outcome`);
     const existingWrap = document.getElementById(`hl_${key}_existing_radiator_fields`);
     choose(`rad_${key}_outcome`, 'New radiator required');
@@ -337,7 +405,17 @@ test('assessing an existing radiator never implies like-for-like and explains in
     choose(`rad_${key}_outcome`, 'Assess existing radiator');
     await waitForRender();
     const visibleForAssessment = !existingWrap.hidden;
-    choose(`rad_${key}_ex_size`, '600(h) x 400(w) K1');
+    choose(`rad_${key}_ex_size`, '600(h) x 1000(w) K1');
+    await waitForRender();
+    const bboeExistingWatts = window.heatLossResultsV60.rooms.find(
+      item => item.key === key
+    ).existingRadiator.watts;
+    choose('hl_radiator_connection', 'TBOE');
+    await waitForRender();
+    const tboeExistingWatts = window.heatLossResultsV60.rooms.find(
+      item => item.key === key
+    ).existingRadiator.watts;
+    choose('hl_radiator_connection', 'BBOE');
     await waitForRender();
 
     const newSize = document.getElementById(`rad_${key}_new_size`);
@@ -352,6 +430,8 @@ test('assessing an existing radiator never implies like-for-like and explains in
       requiredKw: document.getElementById(`rad_${key}_kw`).value,
       requiredKwPlaceholder: document.getElementById(`rad_${key}_kw`).placeholder,
       existingOutput: document.getElementById(`rad_${key}_output`).value,
+      bboeExistingWatts,
+      tboeExistingWatts,
       newSizeDisabled: newSize.disabled,
       newSizeLabels: [...newSize.options].map(option => option.textContent)
     };
@@ -370,7 +450,11 @@ test('assessing an existing radiator never implies like-for-like and explains in
   expect(incomplete.summary).toBe('Incomplete heat loss');
   expect(incomplete.requiredKw).toBe('');
   expect(incomplete.requiredKwPlaceholder).toBe('Complete heat loss details');
-  expect(incomplete.existingOutput).toBe('0.39');
+  expect(incomplete.existingOutput).toBe('0.94');
+  expect(incomplete.bboeExistingWatts).toBeCloseTo(
+    incomplete.tboeExistingWatts * 0.96,
+    9
+  );
   expect(incomplete.newSizeDisabled).toBe(true);
   expect(incomplete.newSizeLabels).toEqual([
     'Complete heat loss details to assess this radiator'
@@ -389,14 +473,18 @@ test('assessing an existing radiator never implies like-for-like and explains in
     const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
     return {
       complete: room.complete,
+      roomHeatLossWatts: room.totalWatts,
       requiredWatts: room.radiatorRequirementWatts,
       requiredKw: document.getElementById('rad_lounge_kw').value,
+      resultText: document.getElementById('hl_lounge_result').textContent,
       newSizeDisabled: newSize.disabled,
       newSizeLabels: Array.from(newSize.options).map((option) => option.textContent)
     };
   });
   expect(complete.complete).toBe(true);
-  expect(complete.requiredKw).toBe((complete.requiredWatts / 1000).toFixed(2));
+  expect(complete.requiredWatts).toBeCloseTo(complete.roomHeatLossWatts, 9);
+  expect(complete.requiredKw).toBe((complete.roomHeatLossWatts / 1000).toFixed(2));
+  expect(complete.resultText).toContain('BBOE output factor: ×0.96');
   expect(complete.newSizeDisabled).toBe(false);
   expect(complete.newSizeLabels.some(label => label.includes('kW'))).toBe(true);
   expect(complete.newSizeLabels).not.toContain('Replace existing radiator like for like');
@@ -418,6 +506,7 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
     rad_lounge_len: '5',
     rad_lounge_wid: '4',
     rad_lounge_outside: '1',
+    hl_lounge_internal_wall_count: '0',
     hl_lounge_wall_type: 'Cavity wall, insulated',
     hl_lounge_window_type: 'No windows',
     hl_lounge_window_count: '0',

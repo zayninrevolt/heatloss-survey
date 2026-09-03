@@ -267,7 +267,7 @@
     { label: 'Manual override', value: 'Manual override' }
   ];
   var RADIATOR_CONNECTIONS = [
-    { label: 'BBOE, 10% lower emitter output', value: 'BBOE' },
+    { label: 'BBOE, 4% lower emitter output', value: 'BBOE' },
     { label: 'TBOE, recommended reference connection', value: 'TBOE' }
   ];
   var VENTILATION_AGE_CATEGORIES = [
@@ -306,6 +306,7 @@
     'alternative_wall_length',
     'alternative_wall_type',
     'internal_wall_length',
+    'internal_wall_count',
     'internal_wall_type',
     'internal_adjacent_room',
     'internal_adjacent_space',
@@ -434,43 +435,51 @@
   }
 
   function internalWallFieldHtml(key) {
-    var id = 'hl_' + key + '_internal_wall_type';
-    var safeId = escapeHtml(id);
-    var heated = Object.keys(VALUES.internalWall).filter(function (option) {
-      return option.indexOf('Heated room') === 0;
+    var options = Object.keys(VALUES.internalWall).filter(function (option) {
+      return option.indexOf('Heated room, ') === 0;
+    }).map(function (option) {
+      return {
+        label: option.replace(/^Heated room, /, ''),
+        value: option
+      };
     });
-    var unheated = Object.keys(VALUES.internalWall).filter(function (option) {
-      return option.indexOf('Unheated space') === 0;
-    });
-    function optionHtml(option) {
-      return '<option value="' + escapeHtml(option) + '">' +
-        escapeHtml(option.replace(/^Heated room, |^Unheated space, /, '')) +
-        '</option>';
-    }
-    return '<div class="field"><label for="' + safeId +
-      '">What is on the other side?</label><select id="' + safeId +
-      '" data-id="' + safeId + '"><option value=""></option>' +
-      '<optgroup label="Heated room">' + heated.map(optionHtml).join('') +
-      '</optgroup><optgroup label="Unheated space">' +
-      unheated.map(optionHtml).join('') + '</optgroup></select>' +
-      '<small>Choose the room condition first, then the matching wall construction.</small></div>';
+    return fieldHtml('hl_' + key + '_internal_wall_type',
+      'Internal wall construction', 'select', options,
+      'This construction is used for every numbered internal wall below.');
   }
 
-  function internalWallSegmentsHtml(key, adjacentRooms) {
+  function internalWallSegmentsHtml(key) {
+    var countOptions = [0, 1, 2, 3, 4].map(function (count) {
+      return {
+        label: count === 0 ? '0, no internal walls' : String(count),
+        value: String(count)
+      };
+    });
     var rows = [1, 2, 3, 4].map(function (index) {
       var prefix = 'hl_' + key + '_internal_segment_' + index;
-      return '<div class="hl-segment-card"><h5>Wall segment ' + index + '</h5>' +
-        '<div class="hl-fields-grid">' +
-        fieldHtml(prefix + '_length', 'Length (m)', 'number') +
-        fieldHtml(prefix + '_type', 'Construction and boundary', 'select', optionsFromMap(VALUES.internalWall)) +
-        fieldHtml(prefix + '_adjacent_room', 'Heated room on other side', 'select', adjacentRooms) +
-        fieldHtml(prefix + '_adjacent_space', 'Unheated adjoining space', 'select', ADJACENT_SPACES) +
-        fieldHtml(prefix + '_adjacent_temp', 'Measured adjoining temperature (°C)', 'number', null, 'Optional. A measured value takes priority over the standard 10°C unheated-space assumption.') +
-        '</div></div>';
+      return '<div class="hl-segment-card" id="' + escapeHtml(prefix) +
+        '_wrap" hidden><h5>Wall ' + index + '</h5>' +
+        '<div class="hl-wall-row-grid">' +
+        fieldHtml(prefix + '_length', 'Wall ' + index + ' length (m)', 'number') +
+        fieldHtml(prefix + '_adjacent_temp', 'Wall ' + index +
+          ' temperature on other side (°C)', 'number') +
+        '</div>' +
+        '<input type="hidden" id="' + escapeHtml(prefix) + '_type" data-id="' +
+        escapeHtml(prefix) + '_type">' +
+        '<input type="hidden" id="' + escapeHtml(prefix) +
+        '_adjacent_room" data-id="' + escapeHtml(prefix) + '_adjacent_room">' +
+        '<input type="hidden" id="' + escapeHtml(prefix) +
+        '_adjacent_space" data-id="' + escapeHtml(prefix) + '_adjacent_space">' +
+        '</div>';
     }).join('');
-    return '<details class="hl-wall-segments"><summary>Use separate internal wall segments</summary>' +
-      '<p class="hl-help">Use this when a room borders different rooms or spaces. Leave all lengths blank to use the quick single-wall estimate above.</p>' +
-      rows + '</details>';
+    return '<div class="hl-wall-segments">' +
+      '<div class="hl-fields-grid">' +
+      fieldHtml('hl_' + key + '_internal_wall_count', 'Number of internal walls',
+        'select', countOptions,
+        'Initially estimated as four minus the outside wall count. Change it for irregular rooms.') +
+      internalWallFieldHtml(key) + '</div>' +
+      '<p class="hl-help">Enter the measured length and the temperature on the other side of each wall.</p>' +
+      rows + '</div>';
   }
 
   function sharedRadiatorFieldHtml(key) {
@@ -566,16 +575,17 @@
       '</div>' +
       '<section class="hl-internal-wall" id="hl_' + escapeHtml(key) +
       '_internal_wall" hidden><div class="hl-internal-wall-heading"><h4>Internal wall details</h4><p id="hl_' +
-      escapeHtml(key) + '_internal_wall_help"></p></div><div class="hl-fields-grid">' +
-      fieldHtml('hl_' + key + '_internal_wall_length', 'Internal wall length override (m)', 'number', null, 'When an exposed-wall length is entered, the remaining room perimeter is used automatically. Enter a value only to override that calculation for an irregular room.') +
-      internalWallFieldHtml(key) +
-      '<div id="hl_' + escapeHtml(key) + '_internal_adjacent_room_wrap" hidden>' +
-      fieldHtml('hl_' + key + '_internal_adjacent_room', 'Heated room on other side', 'select', adjacentRooms, 'Used to calculate the temperature difference through this internal wall.') +
-      '</div><div id="hl_' + escapeHtml(key) + '_internal_adjacent_space_wrap" hidden>' +
-      fieldHtml('hl_' + key + '_internal_adjacent_space', 'Unheated adjoining space', 'select', Object.keys(ADJACENT_SPACE_FACTORS), 'Used when no measured adjoining-space temperature is available.') +
-      '</div><div id="hl_' + escapeHtml(key) + '_internal_adjacent_temp_wrap" hidden>' +
-      fieldHtml('hl_' + key + '_internal_adjacent_temp', 'Unheated space temperature (°C)', 'number', null, 'Optional. Overrides the standard temperature factor for the selected unheated space.') +
-      '</div></div></section>' + internalWallSegmentsHtml(key, adjacentRooms) + '<div class="hl-fields-grid">' +
+      escapeHtml(key) + '_internal_wall_help"></p></div>' +
+      internalWallSegmentsHtml(key) +
+      '<input type="hidden" id="hl_' + escapeHtml(key) +
+      '_internal_wall_length" data-id="hl_' + escapeHtml(key) + '_internal_wall_length">' +
+      '<input type="hidden" id="hl_' + escapeHtml(key) +
+      '_internal_adjacent_room" data-id="hl_' + escapeHtml(key) + '_internal_adjacent_room">' +
+      '<input type="hidden" id="hl_' + escapeHtml(key) +
+      '_internal_adjacent_space" data-id="hl_' + escapeHtml(key) + '_internal_adjacent_space">' +
+      '<input type="hidden" id="hl_' + escapeHtml(key) +
+      '_internal_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_internal_adjacent_temp">' +
+      '</section><div class="hl-fields-grid">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_area" data-id="hl_' +
       escapeHtml(key) + '_window_area">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_width" data-id="hl_' +
@@ -669,7 +679,7 @@
       fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Estimated from postcode coordinates using Elevation API EU and Copernicus terrain data. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
       fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Uses the annual mean temperature from the nearest MCS reference station for solid ground floors.') +
       fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
-      fieldHtml('hl_radiator_connection', 'Radiator pipe connection', 'select', RADIATOR_CONNECTIONS, 'BBOE emits 10% less output than the TBOE reference, so radiator nominal output is divided by 0.9. TBOE uses the unadjusted calculated room requirement.') +
+      fieldHtml('hl_radiator_connection', 'Radiator pipe connection', 'select', RADIATOR_CONNECTIONS, 'BBOE reduces each radiator’s effective output by 4%, multiplying it by 0.96. It does not change the calculated room heat loss. TBOE uses the temperature-corrected radiator output without this connection reduction.') +
       fieldHtml('hl_radiator_plan', 'Whole-property radiator outcome', 'select', [
         { label: 'Survey radiators room by room', value: 'Room by room' },
         { label: 'Customer refused all radiator work', value: 'Customer refused all' }
@@ -1389,6 +1399,16 @@
     return installation * finish;
   }
 
+  function radiatorConnectionOutputFactor() {
+    return window.HeatLossCalculations.radiatorConnectionOutputFactor(
+      stringValue('hl_radiator_connection') || 'BBOE'
+    );
+  }
+
+  function effectiveRadiatorOutputFactor(key) {
+    return radiatorOutputFactor(key) * radiatorConnectionOutputFactor();
+  }
+
   function internalWallTemperatureFactor(selected) {
     return String(selected || '').indexOf('Unheated space') === 0 ? 0.5 : 0;
   }
@@ -1565,7 +1585,7 @@
       maxWidth: numberValue('hl_' + key + '_rad_max_width', 0),
       preferredWidth: numberValue('hl_' + key + '_rad_preferred_width', 0),
       panelType: stringValue('hl_' + key + '_rad_panel_type') || 'Any',
-      outputFactor: radiatorOutputFactor(key)
+      outputFactor: effectiveRadiatorOutputFactor(key)
     };
     var quantityChoice = stringValue('hl_' + key + '_rad_quantity') || 'Automatic';
     var currentFirstSize = legacyPairSize(currentSelection);
@@ -1697,7 +1717,7 @@
     var suffix = index > 1 ? '_' + index : '';
     var size = stringValue('rad_' + key + '_ex_size' + suffix);
     if (!size) return null;
-    var radiatorFactor = radiatorOutputFactor(key);
+    var radiatorFactor = effectiveRadiatorOutputFactor(key);
     if (size === CUSTOM_EXISTING_RADIATOR_SELECTION) {
       var customKw = numberValue('rad_' + key + '_ex_custom_kw' + suffix, 0);
       if (customKw <= 0) return null;
@@ -1853,6 +1873,25 @@
     var floorArea = length * width;
     var volume = floorArea * height;
     var outsideWallCount = Math.round(numberValue('rad_' + key + '_outside', 0));
+    var internalWallCountField = document.getElementById(
+      'hl_' + key + '_internal_wall_count');
+    var storedInternalWallCount = internalWallCountField
+      ? String(internalWallCountField.value || '') : '';
+    var internalWallCountIsManual = storedInternalWallCount !== '' &&
+      (!internalWallCountField.dataset.hlCountWired ||
+        internalWallCountField.dataset.hlCountManual === 'yes');
+    var internalWallCountText = internalWallCountIsManual ? storedInternalWallCount : '';
+    var legacySegmentCount = 0;
+    for (var legacySegmentIndex = 1; legacySegmentIndex <= 4; legacySegmentIndex += 1) {
+      if (numberValue('hl_' + key + '_internal_segment_' + legacySegmentIndex +
+          '_length', 0) > 0) {
+        legacySegmentCount = legacySegmentIndex;
+      }
+    }
+    var suggestedInternalWallCount = Math.max(0, Math.min(4, 4 - outsideWallCount));
+    var internalWallCount = internalWallCountText !== ''
+      ? Math.max(0, Math.min(4, Math.round(Number(internalWallCountText) || 0)))
+      : legacySegmentCount || suggestedInternalWallCount;
     var enteredWallLength = numberValue('hl_' + key + '_external_wall_length', 0);
     var wallLength = enteredWallLength > 0
       ? enteredWallLength
@@ -1861,11 +1900,13 @@
     var enteredInternalWallLength = Math.max(0,
       numberValue('hl_' + key + '_internal_wall_length', 0));
     var calculatedInternalWallLength = remainingInternalWallLength(length, width,
-      enteredWallLength);
-    var internalWallLength = enteredInternalWallLength > 0
-      ? enteredInternalWallLength
-      : calculatedInternalWallLength;
-    var assumedInternalWall = enteredInternalWallLength <= 0 &&
+      wallLength);
+    var internalWallLength = internalWallCount === 0
+      ? 0
+      : enteredInternalWallLength > 0
+        ? enteredInternalWallLength
+        : calculatedInternalWallLength;
+    var assumedInternalWall = internalWallCount > 0 && enteredInternalWallLength <= 0 &&
       calculatedInternalWallLength > 0;
     var windowMeasurements = openingMeasurements(key, 'window', 3);
     var windowCount = windowMeasurements.count;
@@ -1892,12 +1933,28 @@
       Math.max(0, numberValue('hl_' + key + '_alternative_wall_length', 0)));
     var alternativeWallType = stringValue('hl_' + key + '_alternative_wall_type');
     var internalWallType = stringValue('hl_' + key + '_internal_wall_type');
+    var numberedInternalWallMode = internalWallCountText !== '' || legacySegmentCount === 0;
     var internalWallSegments = [];
-    for (var segmentIndex = 1; segmentIndex <= 4; segmentIndex += 1) {
+    var internalWallMissing = [];
+    for (var segmentIndex = 1; segmentIndex <= internalWallCount; segmentIndex += 1) {
       var segmentPrefix = 'hl_' + key + '_internal_segment_' + segmentIndex;
-      var segmentLength = numberValue(segmentPrefix + '_length', 0);
-      if (segmentLength <= 0) continue;
-      var segmentType = stringValue(segmentPrefix + '_type');
+      var segmentLengthText = stringValue(segmentPrefix + '_length');
+      var segmentLength = Number(segmentLengthText);
+      var segmentAdjacentTempText = stringValue(segmentPrefix + '_adjacent_temp');
+      var segmentAdjacentTemperature = Number(segmentAdjacentTempText);
+      if (numberedInternalWallMode) {
+        if (segmentLengthText === '' || !Number.isFinite(segmentLength) || segmentLength <= 0) {
+          internalWallMissing.push('wall ' + segmentIndex + ' length');
+        }
+        if (segmentAdjacentTempText === '' || !Number.isFinite(segmentAdjacentTemperature)) {
+          internalWallMissing.push('wall ' + segmentIndex + ' temperature on the other side');
+        }
+      }
+      if (!Number.isFinite(segmentLength) || segmentLength <= 0) continue;
+      var legacySegmentType = stringValue(segmentPrefix + '_type');
+      var segmentType = mappedValue('internalWall', internalWallType) > 0
+        ? internalWallType
+        : legacySegmentType;
       var segmentAdjacentKey = stringValue(segmentPrefix + '_adjacent_room');
       var segmentAdjacentName = allRoomNames().find(function (candidate) {
         return roomKeyFromName(candidate) === segmentAdjacentKey;
@@ -1906,14 +1963,15 @@
         ? numberValue('hl_' + segmentAdjacentKey + '_indoor_temp',
           targetTemperatureForAge(segmentAdjacentName, propertyAgeBand))
         : indoor;
-      var segmentAdjacentTempText = stringValue(segmentPrefix + '_adjacent_temp');
       var segmentAdjacentSpace = stringValue(segmentPrefix + '_adjacent_space') || 'Standard';
-      var segmentDelta = isHeatedInternalWall(segmentType)
-        ? indoor - segmentAdjacentIndoor
-        : String(segmentType || '').indexOf('Unheated space') === 0
-          ? (segmentAdjacentTempText !== '' && Number.isFinite(Number(segmentAdjacentTempText))
-            ? indoor - Number(segmentAdjacentTempText) : indoor - 10)
-          : 0;
+      var segmentDelta = segmentAdjacentTempText !== '' &&
+          Number.isFinite(segmentAdjacentTemperature)
+        ? indoor - segmentAdjacentTemperature
+        : isHeatedInternalWall(segmentType)
+          ? indoor - segmentAdjacentIndoor
+          : String(segmentType || '').indexOf('Unheated space') === 0
+            ? indoor - 10
+            : 0;
       internalWallSegments.push({
         length: segmentLength,
         type: segmentType,
@@ -1921,8 +1979,9 @@
         deltaT: segmentDelta,
         adjacentRoomName: segmentAdjacentName,
         adjacentSpace: segmentAdjacentSpace,
-        adjacentTemperature: segmentAdjacentTempText !== '' && Number.isFinite(Number(segmentAdjacentTempText))
-          ? Number(segmentAdjacentTempText) : null
+        adjacentTemperature: segmentAdjacentTempText !== '' &&
+          Number.isFinite(segmentAdjacentTemperature)
+          ? segmentAdjacentTemperature : null
       });
     }
     if (internalWallSegments.length) {
@@ -2011,7 +2070,12 @@
     if (alternativeWallLength > 0 && !alternativeWallType) {
       missing.push('alternative external wall construction');
     }
-    if (internalWallSegments.length) {
+    if (numberedInternalWallMode && internalWallCount > 0) {
+      if (mappedValue('internalWall', internalWallType) === 0) {
+        missing.push('internal wall construction');
+      }
+      missing = missing.concat(internalWallMissing);
+    } else if (internalWallSegments.length) {
       internalWallSegments.forEach(function (segment, index) {
         if (!segment.type || segment.u === 0) {
           missing.push('wall segment ' + (index + 1) + ' construction');
@@ -2245,6 +2309,7 @@
       alternativeWallU: alternativeWallU,
       calculatedInternalWallLength: calculatedInternalWallLength,
       internalWallLength: internalWallLength,
+      internalWallCount: internalWallCount,
       assumedInternalWall: assumedInternalWall,
       windowArea: windowArea,
       windowCount: windowCount,
@@ -2317,6 +2382,7 @@
       factorWatts: heat.factorWatts,
       totalWatts: heat.totalWatts,
       radiatorConnection: radiatorConnection,
+      radiatorConnectionOutputFactor: radiatorConnectionOutputFactor(),
       radiatorOutputFactor: radiatorFactor,
       radiatorRequirementWatts: radiatorRequirementWatts,
       sharedRadiatorHostKey: '',
@@ -2714,15 +2780,9 @@
     var geometry = document.getElementById('hl_' + result.key + '_geometry');
     var internalSection = document.getElementById('hl_' + result.key + '_internal_wall');
     var internalHelp = document.getElementById('hl_' + result.key + '_internal_wall_help');
-    var heatedRoomWrap = document.getElementById(
-      'hl_' + result.key + '_internal_adjacent_room_wrap');
-    var unheatedSpaceWrap = document.getElementById(
-      'hl_' + result.key + '_internal_adjacent_space_wrap');
-    var unheatedTemperatureWrap = document.getElementById(
-      'hl_' + result.key + '_internal_adjacent_temp_wrap');
+    var internalCountField = document.getElementById(
+      'hl_' + result.key + '_internal_wall_count');
     var hasDimensions = result.length > 0 && result.width > 0;
-    var hasInternalWall = result.internalWallLength > 0;
-    var internalType = result.internalWallType;
     if (geometry) {
       if (!hasDimensions) {
         geometry.textContent = 'Enter the room length and width to see its wall geometry.';
@@ -2740,18 +2800,28 @@
           formatWallLength(result.perimeter) + ' m</strong></span><span>Enter an exposed-wall measurement to calculate the remaining internal walls.</span>';
       }
     }
-    if (internalSection) internalSection.hidden = !hasInternalWall;
-    if (internalHelp && hasInternalWall) {
-      internalHelp.textContent = result.assumedInternalWall
-        ? formatWallLength(result.internalWallLength) +
-          ' m is the remaining perimeter after the exposed wall. Choose whether it adjoins a heated room or unheated space.'
-        : formatWallLength(result.internalWallLength) +
-          ' m is being used from the manual internal-wall override.';
+    if (internalSection) internalSection.hidden = !hasDimensions;
+    if (internalCountField) {
+      if (!internalCountField.dataset.hlCountWired) {
+        internalCountField.dataset.hlCountWired = 'yes';
+        internalCountField.dataset.hlCountManual = internalCountField.value === '' ? 'no' : 'yes';
+        internalCountField.addEventListener('change', function () {
+          internalCountField.dataset.hlCountManual = 'yes';
+        }, true);
+      }
+      if (internalCountField.dataset.hlCountManual !== 'yes') {
+        internalCountField.value = String(result.internalWallCount);
+      }
     }
-    if (heatedRoomWrap) heatedRoomWrap.hidden = !isHeatedInternalWall(internalType);
-    var isUnheated = String(internalType || '').indexOf('Unheated space') === 0;
-    if (unheatedSpaceWrap) unheatedSpaceWrap.hidden = !isUnheated;
-    if (unheatedTemperatureWrap) unheatedTemperatureWrap.hidden = !isUnheated;
+    if (internalHelp && hasDimensions) {
+      internalHelp.textContent = formatWallLength(result.calculatedInternalWallLength) +
+        ' m is the remaining perimeter after the exposed wall. Enter each internal wall separately.';
+    }
+    for (var wallIndex = 1; wallIndex <= 4; wallIndex += 1) {
+      var wallWrap = document.getElementById('hl_' + result.key +
+        '_internal_segment_' + wallIndex + '_wrap');
+      if (wallWrap) wallWrap.hidden = wallIndex > result.internalWallCount;
+    }
     refreshOpeningMeasurementFields(result.key, 'window', 3);
     refreshOpeningMeasurementFields(result.key, 'door', 2);
   }
@@ -3062,7 +3132,12 @@
         ? ' &nbsp; Internal-wall gain: ' + Math.round(result.internalWallWatts) + ' W'
         : '';
       var radiatorFactorDetails = result.radiatorOutputFactor !== 1
-        ? ' &nbsp; Radiator output factor: ×' + result.radiatorOutputFactor.toFixed(2)
+        ? ' &nbsp; Installation/finish output factor: ×' +
+          result.radiatorOutputFactor.toFixed(2)
+        : '';
+      var connectionFactorDetails = result.radiatorConnectionOutputFactor !== 1
+        ? ' &nbsp; ' + escapeHtml(result.radiatorConnection) +
+          ' output factor: ×' + result.radiatorConnectionOutputFactor.toFixed(2)
         : '';
       resultBox.innerHTML =
         '<div class="hl-result-main"><strong>' + Math.round(result.totalWatts) +
@@ -3071,7 +3146,8 @@
         '</div><div class="hl-result-breakdown">Fabric: ' +
         Math.round(result.fabricWatts) + ' W &nbsp; Ventilation: ' +
         Math.round(result.ventilationWatts) + ' W &nbsp; Load density: ' +
-        result.wattsPerSquareMetre.toFixed(1) + ' W/m²' + factorDetails + gainDetails + radiatorFactorDetails + '<br><small>' +
+        result.wattsPerSquareMetre.toFixed(1) + ' W/m²' + factorDetails + gainDetails +
+        radiatorFactorDetails + connectionFactorDetails + '<br><small>' +
         escapeHtml(ventilationDetails) + '; effective heat-loss airflow ' +
         result.ach.toFixed(2) + ' ACH.</small></div>' + radiatorHtml +
         (result.warnings.length
@@ -3418,7 +3494,7 @@
       escapeHtml(stringValue('hl_radiator_connection') || 'BBOE') +
       (stringValue('hl_radiator_connection') === 'TBOE'
         ? ' connection'
-        : ' connection, compensates for 10% lower BBOE output (÷0.9)') + '</td></tr>' +
+        : ' connection, applies a 4% BBOE emitter-output reduction (×0.96)') + '</td></tr>' +
       '<tr><td class="label">Property altitude</td><td class="input">' +
       escapeHtml(stringValue('hl_property_altitude')) + ' m</td>' +
       '<td class="label">Ground temperature</td><td class="input">' +
@@ -3489,10 +3565,10 @@
           '<br>Heat-loss equivalent: <b>' + room.ach.toFixed(2) + ' ACH</b></td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
       '<tr><td colspan="8" class="small"><b>Survey disclaimer:</b> Some property construction materials, insulation levels and dimensions may be presumed from visible evidence or typical construction where they cannot be verified. Confirm them before equipment selection.</td></tr>' +
-      '<tr><td colspan="8" class="small">A heated internal wall uses the temperature difference between the two selected rooms for radiator sizing. This transfer is excluded from the property total. An unheated space uses the selected adjacent-space factor or a known temperature.</td></tr>' +
+      '<tr><td colspan="8" class="small">Each numbered internal wall uses its measured length, selected construction and entered temperature on the other side. Signed room-to-adjoining temperature differences are retained for room radiator sizing.</td></tr>' +
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; P+ 300/450/600/700mm = 0.776/1.106/1.409/1.597; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Myson fan-convector options use normal-fan 75/65°C outputs: Kickspace 500/600/800 = 0.755/1.023/1.707 kW; Hi-Line RC 7-4/10-6/15-10/20-14 = 0.930/1.610/2.459/3.468 kW; Hi-Line LV 7-4 = 0.930 kW. The LV is the only Myson option offered in bathroom and en-suite rooms.</td></tr>' +
-      '<tr><td colspan="8" class="small">Radiator choices meet the calculated room requirement without exceeding it by more than 50%. BBOE applies a separate 10% radiator-sizing allowance for reduced emitter output compared with the TBOE reference connection. This does not inflate the building heat-loss total. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
+      '<tr><td colspan="8" class="small">Radiator choices meet the calculated room heat loss without exceeding it by more than 50%. BBOE multiplies each radiator’s temperature-corrected output by 0.96 for the 4% connection reduction. It does not change the room or building heat loss. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
       '<tr><td colspan="8" class="small">Ventilation uses the selected MCS/CIBSE room and property-age minimum, or 0 ACH for a fully internal room. Room devices add their default airflow. MVHR applies the entered heat-recovery efficiency. PIV adds 20 m³/h across the property, shared by entered room volume. A manual room ACH overrides the automatic value.</td></tr>' +
       '<tr><td colspan="8" class="small">The detailed exposed floor perimeter is recorded for audit. The selected standard floor U-value is still used by this practical calculator. Use a certified BS EN 12831 or MCS tool where a full ISO 13370 ground-floor calculation is required.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +

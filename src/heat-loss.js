@@ -272,11 +272,12 @@
     };
   }
 
-  function radiatorSizingRequirement(roomWatts, connectionType) {
-    var watts = nonNegative(roomWatts);
-    return String(connectionType || '').toUpperCase() === 'BBOE'
-      ? watts / 0.9
-      : watts;
+  function radiatorSizingRequirement(roomWatts) {
+    return nonNegative(roomWatts);
+  }
+
+  function radiatorConnectionOutputFactor(connectionType) {
+    return String(connectionType || '').toUpperCase() === 'BBOE' ? 0.96 : 1;
   }
 
   function ventilationFlow(input) {
@@ -346,6 +347,7 @@
     estimatedWallLength: estimatedWallLength,
     floorTemperatureDifference: floorTemperatureDifference,
     minimumRoomAirChangeRate: minimumRoomAirChangeRate,
+    radiatorConnectionOutputFactor: radiatorConnectionOutputFactor,
     radiatorSizingRequirement: radiatorSizingRequirement,
     remainingInternalWallLength: remainingInternalWallLength,
     roofTemperatureDifference: roofTemperatureDifference,
