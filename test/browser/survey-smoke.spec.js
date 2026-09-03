@@ -381,6 +381,61 @@ test('Lounge shows numbered internal walls with direct lengths and temperatures'
   expect(result.internalWallWatts).toBeCloseTo(147.6, 5);
 });
 
+test('Lounge warns when entered internal walls exceed the remaining perimeter', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const result = await page.evaluate(async () => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      if (!field) throw new Error(`Missing field ${id}`);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const waitForRender = () => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    set('rad_lounge_len', '5');
+    set('rad_lounge_wid', '5');
+    set('rad_lounge_outside', '1');
+    set('hl_lounge_internal_wall_count', '3');
+    set('hl_lounge_internal_wall_type', 'Heated room, aerated block');
+    set('hl_lounge_floor_type', 'Insulated solid ground floor');
+    set('hl_lounge_loft_type', 'Plasterboard with 200mm insulation');
+    set('hl_lounge_internal_segment_1_length', '6');
+    set('hl_lounge_internal_segment_1_adjacent_temp', '18');
+    set('hl_lounge_internal_segment_2_length', '5');
+    set('hl_lounge_internal_segment_2_adjacent_temp', '20');
+    set('hl_lounge_internal_segment_3_length', '6');
+    set('hl_lounge_internal_segment_3_adjacent_temp', '10');
+    await waitForRender();
+
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    const overWarning = room.warnings.find(warning =>
+      warning.startsWith('Entered internal walls total'));
+    const warning = document.getElementById('hl_lounge_result').textContent;
+
+    set('hl_lounge_internal_segment_1_length', '5');
+    set('hl_lounge_internal_segment_3_length', '5');
+    await waitForRender();
+    const reconciled = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+
+    return {
+      enteredTotal: room.internalWallSegments.reduce((sum, s) => sum + s.length, 0),
+      remaining: room.calculatedInternalWallLength,
+      complete: room.complete,
+      overWarning: Boolean(overWarning),
+      warningVisible: warning.includes('Entered internal walls total 17 m'),
+      reconciledWarnings: reconciled.warnings
+    };
+  });
+
+  expect(result.enteredTotal).toBe(17);
+  expect(result.remaining).toBe(15);
+  expect(result.complete).toBe(true);
+  expect(result.overWarning).toBe(true);
+  expect(result.warningVisible).toBe(true);
+  expect(result.reconciledWarnings).toEqual([]);
+});
+
 test('Lounge assessment explains incomplete heat loss and BBOE derates radiator output', async ({ page }) => {
   await page.locator('#radsTab').click();
   const incomplete = await page.evaluate(async () => {

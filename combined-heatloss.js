@@ -2224,6 +2224,22 @@
     if (manualWallExceedsRectangle) {
       warnings.push('Exposed wall length exceeds the simple rectangular perimeter; check this irregular-room measurement');
     }
+    if (numberedInternalWallMode && internalWallSegments.length > 0 &&
+        calculatedInternalWallLength > 0) {
+      var enteredInternalWallTotal = internalWallSegments.reduce(function (sum, segment) {
+        return sum + segment.length;
+      }, 0);
+      if (enteredInternalWallTotal < calculatedInternalWallLength - 0.01) {
+        warnings.push(formatWallLength(calculatedInternalWallLength - enteredInternalWallTotal) +
+          ' m of internal wall has not been entered. The remaining perimeter is ' +
+          formatWallLength(calculatedInternalWallLength) +
+          ' m, so add the missing walls or check the exposed wall length.');
+      } else if (enteredInternalWallTotal > calculatedInternalWallLength + 0.01) {
+        warnings.push('Entered internal walls total ' + formatWallLength(enteredInternalWallTotal) +
+          ' m but only ' + formatWallLength(calculatedInternalWallLength) +
+          ' m remains after the exposed wall. Check for double counting or an irregular room shape.');
+      }
+    }
     var radiatorOutcome = radiatorOutcomeForRoom(key);
     var existingRadiator = existingRadiatorForRoom(key, indoor, roomName);
     var usesExistingAssessment = radiatorOutcome === 'Assess existing radiator';
