@@ -11,6 +11,7 @@
   var RADIATOR_OUTCOMES = [
     { label: 'Size a new radiator', value: 'New radiator required' },
     { label: 'Assess the existing radiator', value: 'Assess existing radiator' },
+    { label: 'Replace existing radiator like for like', value: 'Replace existing radiator like for like' },
     { label: 'Customer refused radiator work', value: 'Customer refused' }
   ];
   var DESIGN_STATIONS = [
@@ -403,7 +404,7 @@
     var control = '';
     if (type === 'select') {
       var selectOptions = (options || []).slice();
-      if (id !== 'hl_bridge_pct') {
+      if (id !== 'hl_bridge_pct' && !id.endsWith('_outcome')) {
         selectOptions.unshift({ label: '', value: '' });
       }
       control = '<select id="' + safeId + '" data-id="' + safeId + '">' +
@@ -552,6 +553,9 @@
       escapeHtml(key) + '_summary">Uses room dimensions</span></summary>' +
       '<div class="hl-room-body">' +
       '<p class="hl-room-intro">Length and width come from this room. Ceiling height comes from the top of the Rads page. Construction choices apply standard values automatically.</p>' +
+      '<section class="hl-radiator-panel"><div class="hl-radiator-panel-heading"><h4>Radiator selection</h4><p>Choose the required radiator outcome for this room. The app will show the calculated output and suitable radiator sizes below.</p></div>' +
+      fieldHtml('rad_' + key + '_outcome', roomName + ' - Radiator outcome', 'select', RADIATOR_OUTCOMES, 'Choose a new radiator, assess the installed radiator, replace it like for like, or record that the customer refused radiator work.') +
+      '<div class="hl-radiator-requirement" id="hl_' + escapeHtml(key) + '_radiator_requirement">Required radiator output: complete the room details to calculate.</div></section>' +
       '<div class="hl-room-geometry" id="hl_' + escapeHtml(key) +
       '_geometry" aria-live="polite">Enter the room length and width to see its wall geometry.</div>' +
       '<div class="hl-fields-grid">' +
@@ -2340,6 +2344,22 @@
     if (label) label.textContent = text;
   }
 
+  function updateRadiatorRequirementDisplay(result) {
+    var display = document.getElementById('hl_' + result.key + '_radiator_requirement');
+    if (!display) return;
+    if (!result.complete) {
+      display.textContent = result.started
+        ? 'Required radiator output: complete the room details to calculate.'
+        : 'Required radiator output: enter the room length and width to calculate.';
+      display.dataset.state = 'incomplete';
+      return;
+    }
+    var watts = Math.max(0, Number(result.radiatorRequirementWatts) || 0);
+    display.textContent = 'Required radiator output: ' + (watts / 1000).toFixed(2) +
+      ' kW (' + Math.round(watts) + ' W)';
+    display.dataset.state = 'complete';
+  }
+
   function clearCalculatedRadiatorFields(key) {
     ['kw', 'new_size', 'new_size_2', 'output'].forEach(function (suffix) {
       var field = document.getElementById('rad_' + key + '_' + suffix);
@@ -2596,7 +2616,7 @@
     if (result.sharedRadiatorHostName) {
       setSingleRadiatorChoice(field, 'Shared radiator',
         'Supplied by ' + result.sharedRadiatorHostName + ' radiator');
-      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - New Size');
+      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - Replacement radiator');
       field.title = result.roomName + ' heat loss is included in the radiator selected for ' +
         result.sharedRadiatorHostName + '.';
       if (secondWrap) secondWrap.hidden = true;
@@ -2605,7 +2625,7 @@
     }
     if (result.customerRefused) {
       setSingleRadiatorChoice(field, 'Refused', 'Refused');
-      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - New Size');
+      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - Replacement radiator');
       field.title = 'The customer refused radiator work for this room.';
       if (secondWrap) secondWrap.hidden = true;
       if (secondField) secondField.value = '';
@@ -2625,7 +2645,7 @@
       field.value = existingValue === REPLACE_LIKE_FOR_LIKE_SELECTION
         ? REPLACE_LIKE_FOR_LIKE_SELECTION
         : 'No new radiator required';
-      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - New Size');
+      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - Replacement radiator');
       field.title = 'Keep the adequate existing radiator, or replace it with the same size.';
       if (secondWrap) secondWrap.hidden = true;
       if (secondField) secondField.value = '';
@@ -2660,9 +2680,9 @@
       }
     }
     setRadiatorFieldLabel(result.key, 'new_size', result.roomName +
-      (usesTwo ? ' - Radiator 1' : ' - New Size'));
+      (usesTwo ? ' - Radiator 1' : ' - Replacement radiator'));
     field.setAttribute('aria-label', result.roomName +
-      (usesTwo ? ' - Radiator 1' : ' - New Size'));
+      (usesTwo ? ' - Radiator 1' : ' - Replacement radiator'));
     if (secondField) {
       if (secondWrap) secondWrap.hidden = !usesTwo;
       if (usesTwo) {
@@ -2776,6 +2796,7 @@
 
   function renderRoomResult(result) {
     renderRoomGeometry(result);
+    updateRadiatorRequirementDisplay(result);
     var resultBox = document.getElementById('hl_' + result.key + '_result');
     var summary = document.getElementById('hl_' + result.key + '_summary');
     var radKw = document.getElementById('rad_' + result.key + '_kw');
@@ -3512,22 +3533,6 @@
   roomFormHtml = function (roomName, index) {
     var key = roomKeyFromName(roomName);
     var original = previousRoomFormHtml(roomName, index);
-    var outcomeOptions = RADIATOR_OUTCOMES.map(function (option) {
-      return '<option value="' + escapeHtml(option.value) + '">' +
-        escapeHtml(option.label) + '</option>';
-    }).join('');
-    var outcomeField =
-      '<div class="field hl-radiator-outcome">' +
-      '<label for="rad_' + escapeHtml(key) + '_outcome">' +
-      escapeHtml(roomName) + ' - Radiator outcome</label>' +
-      '<select id="rad_' + escapeHtml(key) + '_outcome" data-id="rad_' +
-      escapeHtml(key) + '_outcome">' + outcomeOptions + '</select>' +
-      '<small>Assess compares the installed size with the calculated room load. Like-for-like keeps the installed size for a rusty or damaged radiator.</small>' +
-      '</div>';
-    original = original.replace(
-      /(<summary>[\s\S]*?<\/summary>)/,
-      function (summaryHtml) { return summaryHtml + outcomeField; }
-    );
     var existingSizePattern = new RegExp(
       '(<div class="field">\\s*<label for="rad_' + key +
       '_ex_size">[\\s\\S]*?<\\/div>)\\s*' +
@@ -3590,6 +3595,12 @@
     );
     var newSizeMatch = original.match(newSizePattern);
     var newSizeField = newSizeMatch ? newSizeMatch[0] : '';
+    if (newSizeField) {
+      newSizeField = newSizeField.replace(
+        escapeHtml(roomName) + ' - New Size',
+        escapeHtml(roomName) + ' - Replacement radiator'
+      );
+    }
     if (newSizeField) original = original.replace(newSizePattern, '');
     var secondRadiatorField =
       '<div class="field hl-second-radiator" id="hl_' + key +

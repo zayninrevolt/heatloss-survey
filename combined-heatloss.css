@@ -245,6 +245,89 @@
   color: #475569;
 }
 
+.hl-radiator-panel {
+  margin: 14px 0;
+  padding: 12px;
+  border: 2px solid #2563eb;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.hl-radiator-panel-heading h4 {
+  margin: 0 0 4px;
+  color: #1e3a8a;
+  font-size: 16px;
+}
+
+.hl-radiator-panel-heading p {
+  margin: 0 0 10px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.hl-radiator-panel .field {
+  margin-bottom: 10px;
+}
+
+#radsForm .hl-room-body .field {
+  padding: 0 !important;
+}
+
+#radsForm .hl-room-body .field:first-of-type,
+#radsForm .hl-room-body .field:last-of-type {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+#radsForm .hl-room-body .field input,
+#radsForm .hl-room-body .field select {
+  width: 100%;
+  max-width: 100%;
+}
+
+.hl-radiator-requirement {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.hl-radiator-requirement[data-state="complete"] {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.hl-radiator-requirement[data-state="incomplete"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+body.theme-dark .hl-radiator-panel {
+  background: #0f172a !important;
+  border-color: #60a5fa !important;
+}
+
+body.theme-dark .hl-radiator-panel-heading h4,
+body.theme-dark .hl-radiator-requirement {
+  color: #bfdbfe !important;
+}
+
+body.theme-dark .hl-radiator-panel-heading p {
+  color: #cbd5e1 !important;
+}
+
+body.theme-dark .hl-radiator-requirement {
+  background: #1e3a8a !important;
+}
+
+#radsForm .hl-radiator-outcome {
+  margin-bottom: 10px;
+}
+
 #radsForm .card > details > summary .sec-badge {
   display: inline-flex;
   align-items: center;
@@ -407,6 +490,21 @@ body.theme-dark .hl-result-breakdown {
 
 .room-completion-action button.is-complete {
   background: #4b5563;
+}
+
+@media (min-width: 1001px) {
+  .app {
+    grid-template-columns: clamp(440px, 30vw, 520px) minmax(0, 1fr);
+  }
+
+  .main {
+    min-width: 0;
+  }
+
+  .sheet-wrap {
+    min-width: 0;
+    overflow-x: auto;
+  }
 }
 
 body.theme-dark .room-completion-action button {

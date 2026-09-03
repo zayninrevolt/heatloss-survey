@@ -352,9 +352,69 @@ test('new radiator sizing hides existing details and keeps like-for-like in the 
   expect(result.outcomeLabels).toEqual([
     'Size a new radiator',
     'Assess the existing radiator',
+    'Replace existing radiator like for like',
     'Customer refused radiator work'
   ]);
   expect(result.hiddenForNewRadiator).toBe(true);
   expect(result.visibleForAssessment).toBe(true);
   expect(result.newSizeLabels).toContain('Replace existing radiator like for like');
+});
+
+test('shows the radiator outcome, required kW and usable laptop input width', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.locator('#radsTab').click();
+  await page.evaluate(() => {
+    let element = document.getElementById('rad_lounge_len');
+    while (element) {
+      if (element.tagName === 'DETAILS') element.open = true;
+      element = element.parentElement;
+    }
+    document.querySelector('details[data-hl-room="lounge"]').open = true;
+  });
+
+  const values = {
+    rad_lounge_len: '5',
+    rad_lounge_wid: '4',
+    rad_lounge_outside: '1',
+    hl_lounge_wall_type: 'Cavity wall, insulated',
+    hl_lounge_window_type: 'No windows',
+    hl_lounge_window_count: '0',
+    hl_lounge_door_type: 'No external door',
+    hl_lounge_door_count: '0',
+    hl_lounge_floor_type: 'Insulated solid ground floor',
+    hl_lounge_loft_type: 'Plasterboard with 200mm insulation',
+    hl_lounge_ventilation_mode: 'Automatic'
+  };
+  await page.evaluate((values) => {
+    for (const [id, value] of Object.entries(values)) {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, values);
+  const outcome = page.locator('#rad_lounge_outcome');
+  await expect(outcome).toBeVisible();
+  await expect(outcome).toHaveValue('New radiator required');
+  await expect(outcome.locator('option')).toHaveText([
+    'Size a new radiator',
+    'Assess the existing radiator',
+    'Replace existing radiator like for like',
+    'Customer refused radiator work'
+  ]);
+  await expect(page.locator('#hl_lounge_radiator_requirement')).toHaveText(
+    /^Required radiator output: \d+\.\d{2} kW \(\d+ W\)$/
+  );
+  await expect(page.locator('label[for="rad_lounge_new_size"]')).toContainText('Replacement radiator');
+  await expect(page.locator('#rad_lounge_new_size option').filter({ hasText: 'kW' }).first()).toBeAttached();
+
+  const metrics = await page.evaluate(() => ({
+    sidebarWidth: document.querySelector('.sidebar').getBoundingClientRect().width,
+    mainMinWidth: getComputedStyle(document.querySelector('.main')).minWidth,
+    outcomeWidth: document.getElementById('rad_lounge_outcome').getBoundingClientRect().width,
+    appColumns: getComputedStyle(document.querySelector('.app')).gridTemplateColumns
+  }));
+  expect(metrics.sidebarWidth).toBeGreaterThanOrEqual(440);
+  expect(metrics.mainMinWidth).toBe('0px');
+  expect(metrics.outcomeWidth).toBeGreaterThanOrEqual(300);
+  expect(metrics.appColumns).toMatch(/^4\d{2}px/);
 });
