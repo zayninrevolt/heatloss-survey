@@ -1,6 +1,7 @@
 /* Combined radiator survey and room heat-loss calculator. */
 (function () {
   var STORAGE_KEY = 'heatLossDataV60';
+  var pendingReviewNotes = [];
   var NO_NEW_RADIATOR_SELECTION = 'No new radiator selected';
   var REPLACE_LIKE_FOR_LIKE_SELECTION = 'Replace existing radiator like for like';
   var CUSTOM_EXISTING_RADIATOR_SELECTION = 'Custom radiator or towel rail';
@@ -1132,9 +1133,31 @@
     }
   }
 
+  function showReviewNotes(notes) {
+    if (!notes || !notes.length) return;
+    var host = document.querySelector('.buttons') || document.body;
+    var existing = document.getElementById('surveyReviewNotes');
+    if (existing) existing.remove();
+    var banner = document.createElement('div');
+    banner.id = 'surveyReviewNotes';
+    banner.className = 'app-status-message show';
+    banner.setAttribute('role', 'alert');
+    banner.textContent = notes.join(' ');
+    banner.style.background = '#fff7ed';
+    banner.style.borderColor = '#fed7aa';
+    banner.style.color = '#7c2d12';
+    host.insertAdjacentElement('afterend', banner);
+  }
+
   function storedCombinedData() {
     try {
-      return window.SurveyPersistence.decode(localStorage.getItem(STORAGE_KEY));
+      var restored = window.SurveyPersistence.decodeWithReport(localStorage.getItem(STORAGE_KEY));
+      // A saved survey that predates a calculation change must say so on screen.
+      // The notes are held until the form has been rebuilt, otherwise the notice
+      // is destroyed by the rebuild, and the shared status message is no good
+      // either because the autosave banner overwrites it during load.
+      pendingReviewNotes = restored.review;
+      return restored.data;
     } catch (error) {
       if (typeof showAppStatus === 'function') {
         showAppStatus('Saved heat-loss details could not be restored. The current form is still usable.', 'warning');
@@ -4011,4 +4034,5 @@
     }
   });
   update();
+  showReviewNotes(pendingReviewNotes);
 })();

@@ -5,8 +5,14 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  var CURRENT_SCHEMA_VERSION = 2;
+  var CURRENT_SCHEMA_VERSION = 3;
+  var CURRENT_CALC_METHOD_VERSION = 1;
   var STANDARD_ADJACENT_TEMPERATURES = ['10', '18', '21', '22', '23'];
+
+  var CALC_METHOD_REVIEW =
+    'Saved before the calculation fixes: ventilation for 1900 to 1949 properties, ' +
+    'rooflight areas and heated-transfer allowances are now calculated differently. ' +
+    'Recheck the room results before issuing this survey.';
 
   function plainObject(value) {
     return value && typeof value === 'object' && !Array.isArray(value);
@@ -102,13 +108,25 @@
           '°C, which is not a standard temperature; select 10, 18, 21, 22 or 23°C.');
       }
     });
+    data._schemaVersion = 2;
+    return data;
+  }
+
+  function migrateCalculationMethod(source, review) {
+    var data = Object.assign({}, source);
+    var stamped = Number(data._calcMethodVersion);
+    if (!Number.isFinite(stamped) || stamped < CURRENT_CALC_METHOD_VERSION) {
+      if (review) review.push(CALC_METHOD_REVIEW);
+    }
+    data._calcMethodVersion = CURRENT_CALC_METHOD_VERSION;
     data._schemaVersion = CURRENT_SCHEMA_VERSION;
     return data;
   }
 
   var migrations = {
     0: migrateLegacyFields,
-    1: migrateNumberedInternalWalls
+    1: migrateNumberedInternalWalls,
+    2: migrateCalculationMethod
   };
 
   function migrateSurvey(source, review) {
@@ -169,6 +187,7 @@
 
   return {
     CURRENT_SCHEMA_VERSION: CURRENT_SCHEMA_VERSION,
+    CURRENT_CALC_METHOD_VERSION: CURRENT_CALC_METHOD_VERSION,
     decode: decode,
     decodeWithReport: decodeWithReport,
     encode: encode,

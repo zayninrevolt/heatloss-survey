@@ -148,3 +148,26 @@ test('minimum radiator exceptions report actual oversizing and warn the surveyor
   const visible = await page.locator('body').innerText();
   expect(visible).toContain('Minimum-size radiator exception');
 });
+
+test('a survey saved before the calculation fixes warns before its results are reused', async ({ page }) => {
+  // Seeds an envelope that predates the calculation-method stamp, before the app's
+  // own scripts run, because the app re-saves the survey during load.
+  await page.addInitScript(() => {
+    const key = 'heatLossDataV60';
+    const envelope = JSON.parse(localStorage.getItem(key) || '{"data":{}}');
+    envelope.data = envelope.data || {};
+    envelope.schemaVersion = 2;
+    delete envelope.data._calcMethodVersion;
+    delete envelope.data._schemaVersion;
+    localStorage.setItem(key, JSON.stringify(envelope));
+  });
+  await page.reload();
+  const banner = page.locator('#surveyReviewNotes');
+  await expect(banner).toContainText(/saved before the calculation fixes/i);
+  await expect(banner).toContainText(/recheck/i);
+});
+
+test('a survey saved by this app version loads without that warning', async ({ page }) => {
+  await page.reload();
+  await expect(page.locator('#surveyReviewNotes')).toHaveCount(0);
+});

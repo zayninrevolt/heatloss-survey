@@ -81,6 +81,8 @@ Technical logic is being separated from the legacy single-page UI into dependenc
 - `src/mcs-fabric.js` — MCS-reference element fabric loss, effective U-values and default thermal-bridging factors
 - `src/mcs-ventilation.js` — MCS-reference infiltration, mechanical ventilation and room-minimum flows
 
+Saved surveys record two versions. The schema version describes the shape of the saved data. The calculation-method version describes what the numbers mean, so a survey saved before a calculation change loads with an on-screen notice telling the surveyor to recheck its results rather than silently returning different figures.
+
 Run `npm test` for table-driven unit tests and `npm run check` for JavaScript syntax checks. After installing development dependencies and Chromium with `npx playwright install chromium`, run `npm run test:browser` for save/restore, JSON export, failed-postcode and print smoke tests. GitHub Actions runs these checks for pushes and pull requests.
 
 The unit fixtures include hand-calculated component loads using `U-value × area × temperature difference`, ventilation using `0.33 × airflow × temperature difference`, ground-floor temperature differences, complete-100m altitude corrections, ΔT50 radiator output scaling, the 50% oversize boundary, and two-radiator selection. They are regression evidence, not independent MCS certification. The construction assumptions and manufacturer data still require checking against the cited MCS and Stelrad publications before use on a live design.

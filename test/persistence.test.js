@@ -21,7 +21,8 @@ test('migrates an unversioned survey without mutating the source', () => {
     hl_lounge_window_type: 'Older standard double glazing',
     hl_lounge_floor_type: 'Insulated solid ground floor',
     hl_lounge_internal_wall_type: 'Unheated space, single brick',
-    _schemaVersion: persistence.CURRENT_SCHEMA_VERSION
+    _schemaVersion: persistence.CURRENT_SCHEMA_VERSION,
+    _calcMethodVersion: persistence.CURRENT_CALC_METHOD_VERSION
   });
 });
 
@@ -37,7 +38,8 @@ test('current survey data round-trips through a versioned envelope', () => {
   assert.equal(envelope.schemaVersion, persistence.CURRENT_SCHEMA_VERSION);
   assert.deepEqual(persistence.decode(encoded), {
     ...source,
-    _schemaVersion: persistence.CURRENT_SCHEMA_VERSION
+    _schemaVersion: persistence.CURRENT_SCHEMA_VERSION,
+    _calcMethodVersion: persistence.CURRENT_CALC_METHOD_VERSION
   });
 });
 
@@ -74,7 +76,7 @@ test('respects an explicit zero wall count when legacy totals remain', () => {
 
   assert.equal(migrated.data.hl_lounge_internal_wall_count, '0');
   assert.equal(migrated.data.hl_lounge_internal_segment_1_length, undefined);
-  assert.equal(migrated.review.length, 0);
+  assert.doesNotMatch(migrated.review.join(' '), /converted/i);
 });
 
 test('leaves unsupported legacy wall temperatures blank and reports them', () => {
@@ -98,4 +100,36 @@ test('malformed, non-object, and future data fail explicitly', () => {
   assert.throws(() => persistence.decode({ _schemaVersion: 99 }), /newer app version/);
   assert.throws(() => persistence.decode({ schemaVersion: 99, data: {} }),
     /newer than this app supports/);
+});
+
+test('a survey saved before the calculation fixes is stamped and flagged for review', () => {
+  const migrated = persistence.decodeWithReport({
+    schemaVersion: 2,
+    data: { hl_lounge_area: '20', hl_lounge_height: '2.4' }
+  });
+
+  assert.equal(migrated.data._calcMethodVersion, persistence.CURRENT_CALC_METHOD_VERSION);
+  assert.match(migrated.review.join(' '), /saved before the calculation fixes/i);
+  assert.match(migrated.review.join(' '), /recheck/i);
+});
+
+test('a survey already on the current calculation method is not flagged', () => {
+  const alreadyStamped = persistence.encode({
+    hl_lounge_area: '20',
+    hl_lounge_height: '2.4',
+    _calcMethodVersion: persistence.CURRENT_CALC_METHOD_VERSION
+  });
+
+  const reloaded = persistence.decodeWithReport(alreadyStamped);
+  assert.equal(reloaded.data._calcMethodVersion, persistence.CURRENT_CALC_METHOD_VERSION);
+  assert.doesNotMatch(reloaded.review.join(' '), /calculation fixes/i);
+});
+
+test('a brand new survey records the calculation method without warning', () => {
+  const reloaded = persistence.decodeWithReport(
+    persistence.encode({ hl_lounge_area: '20' })
+  );
+
+  assert.equal(reloaded.data._calcMethodVersion, persistence.CURRENT_CALC_METHOD_VERSION);
+  assert.equal(reloaded.review.length, 0);
 });
