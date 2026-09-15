@@ -237,6 +237,43 @@ test('the live survey labels its legacy ventilation method honestly', async ({ p
 });
 
 
+test('records standards-reference evidence without changing the legacy boiler calculation', async ({ page }) => {
+  await setFields(page, {
+    rad_lounge_len: '4',
+    rad_lounge_wid: '3',
+    rad_lounge_outside: '1',
+    hl_lounge_wall_type: 'Brick, open cavity, 100mm aerated block + 13mm plaster',
+    hl_lounge_window_type: 'No windows',
+    hl_lounge_window_count: '0',
+    hl_lounge_door_type: 'No external door',
+    hl_lounge_door_count: '0',
+    hl_lounge_floor_type: 'Uninsulated solid ground floor, DHDG example',
+    hl_lounge_loft_type: 'Flat roof, 200mm insulation, DHDG example'
+  });
+  const before = await page.evaluate(() => window.heatLossResultsV60.totalWatts);
+
+  await page.locator('#hl_audit_evidence_details summary').click();
+  await page.locator('#hl_surveyor_name').fill('A. Surveyor');
+  await page.locator('#hl_survey_date').fill('2026-09-15');
+  await page.locator('#hl_dwelling_attachment').selectOption('Semi-detached');
+  await page.locator('#hl_airtightness_method').selectOption('Standard default');
+  await page.locator('#hl_ventilation_sheltered_sides').selectOption('2');
+  await page.locator('#hl_ventilation_evidence_notes').fill('Two facades sheltered by neighbouring homes.');
+
+  const result = await page.evaluate(() => ({
+    totalWatts: window.heatLossResultsV60.totalWatts,
+    saved: JSON.parse(localStorage.getItem('surveyWebData')),
+    print: buildPrintHtml('Audit evidence', ['Heat Loss'], 'portrait')
+  }));
+
+  expect(result.totalWatts).toBeCloseTo(before, 8);
+  expect(result.saved.hl_surveyor_name).toBe('A. Surveyor');
+  expect(result.saved.hl_dwelling_attachment).toBe('Semi-detached');
+  expect(result.print).toContain('Building-load reference inputs');
+  expect(result.print).toContain('Two facades sheltered by neighbouring homes.');
+  expect(result.print).toContain('Legacy boiler calculation');
+});
+
 test('a custom radiator rating goes stale when the design temperature changes', async ({ page }) => {
   await setFields(page, {
     rad_lounge_outcome: 'Assess existing radiator',

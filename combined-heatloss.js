@@ -411,7 +411,10 @@
   function fieldHtml(id, label, type, options, help) {
     var safeId = escapeHtml(id);
     var control = '';
-    if (type === 'select') {
+    if (type === 'textarea') {
+      control = '<textarea id="' + safeId + '" data-id="' + safeId +
+        '" rows="3"></textarea>';
+    } else if (type === 'select') {
       var selectOptions = (options || []).slice();
       if (id !== 'hl_bridge_pct' && !id.endsWith('_outcome')) {
         selectOptions.unshift({ label: '', value: '' });
@@ -426,16 +429,18 @@
         }).join('') +
         '</select>';
     } else {
+      var inputType = type || 'number';
+      var numberInput = inputType === 'number';
       control = '<input id="' + safeId + '" data-id="' + safeId +
-        '" type="number" step="any" inputmode="decimal"' +
+        '" type="' + escapeHtml(inputType) + '"' +
+        (numberInput ? ' step="any" inputmode="decimal"' : '') +
         (id === 'hl_mvhr_efficiency' ? ' max="100"' : '') +
-        (id === 'hl_outdoor_temp' || id === 'hl_property_altitude' ||
+        (numberInput && !(id === 'hl_outdoor_temp' || id === 'hl_property_altitude' ||
           id.endsWith('_internal_adjacent_temp') || id.endsWith('_floor_adjacent_temp') ||
           id.endsWith('_roof_adjacent_temp') || id.endsWith('_segment_1_adjacent_temp') ||
           id.endsWith('_segment_2_adjacent_temp') || id.endsWith('_segment_3_adjacent_temp') ||
-          id.endsWith('_segment_4_adjacent_temp')
-          ? ''
-          : ' min="0"') + '>';
+          id.endsWith('_segment_4_adjacent_temp'))
+          ? ' min="0"' : '') + '>';
     }
     return '<div class="field"><label for="' + safeId + '">' +
       escapeHtml(label) + '</label>' + control +
@@ -719,6 +724,31 @@
       fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
+      '<details class="hl-property-defaults" id="hl_audit_evidence_details"><summary>Audit record and standards-reference evidence</summary>' +
+      '<p class="hl-help"><b>Recorded for review:</b> these inputs build an auditable property record and prepare the future BS EN 12831 reference route. They do not alter the legacy boiler heat-loss calculation or radiator recommendation.</p>' +
+      '<div class="hl-summary-grid">' +
+      fieldHtml('hl_surveyor_name', 'Surveyor name', 'text') +
+      fieldHtml('hl_survey_date', 'Survey date', 'date') +
+      fieldHtml('hl_survey_reference', 'Survey reference', 'text', null, 'Your own job, quotation or case reference.') +
+      fieldHtml('hl_dwelling_attachment', 'Dwelling attachment', 'select', [
+        'Detached', 'Semi-detached', 'End terrace', 'Mid terrace', 'Enclosed end-terrace flat', 'Enclosed mid-terrace flat'
+      ], 'Used by the future reference method to determine exposed façades.') +
+      fieldHtml('hl_ventilation_storeys', 'Ventilation-zone storeys', 'select', ['1', '2', '3', '4+'], 'Record the storeys served by this ventilation zone.') +
+      fieldHtml('hl_ventilation_sheltered_sides', 'Sheltered external sides', 'select', ['0', '1', '2', '3', '4'], 'Sides sheltered by nearby buildings, trees or tall hedges. Record the observed basis below.') +
+      fieldHtml('hl_ventilation_base_height', 'Ventilation-zone base height (m)', 'number', null, 'For flats or a zone beginning above ground level.') +
+      fieldHtml('hl_airtightness_method', 'Airtightness evidence method', 'select', [
+        'Standard default', 'Measured 50 Pa permeability', 'Design infiltration ACH'
+      ], 'Use the standard default unless an air test or justified design rate is available.') +
+      fieldHtml('hl_measured_air_permeability_50', 'Measured air permeability at 50 Pa (m³/h·m²)', 'number') +
+      fieldHtml('hl_measured_envelope_area', 'Air-test envelope area (m²)', 'number', null, 'Only where it is the area recorded for the air test.') +
+      fieldHtml('hl_measured_envelope_volume', 'Air-test envelope volume (m³)', 'number', null, 'Only where it is the volume recorded for the air test.') +
+      fieldHtml('hl_design_infiltration_ach', 'Justified design infiltration ACH', 'number') +
+      '</div>' +
+      fieldHtml('hl_ventilation_evidence_notes', 'Ventilation and shelter evidence', 'textarea', null, 'Record observed vents, flues, mechanical equipment, shelter and the evidence source.') +
+      fieldHtml('hl_calculation_override_reason', 'Calculation override or review reason', 'textarea', null, 'Explain any manual temperature, U-value, ACH or other material assumption override.') +
+      '</details>' +
+      '<input type="hidden" id="hl_calculation_method_version" data-id="hl_calculation_method_version" value="legacy-boiler-v1">' +
+      '<input type="hidden" id="hl_reference_method_status" data-id="hl_reference_method_status" value="reference-inputs-recorded-not-used">' +
       '<input type="hidden" id="hl_design_postcode" data-id="hl_design_postcode">' +
       '<input type="hidden" id="hl_design_station" data-id="hl_design_station">' +
       '<input type="hidden" id="hl_design_base_temp" data-id="hl_design_base_temp">' +
@@ -3676,6 +3706,25 @@
       escapeHtml(stringValue('hl_property_age_band') || 'Unknown') + '</td>' +
       '<td class="label">Age evidence</td><td colspan="5" class="input">' +
       escapeHtml(stringValue('hl_property_age_source') || 'Unknown') + '</td></tr>' +
+      '<tr><td class="label">Survey record</td><td colspan="3" class="input">' +
+      escapeHtml(stringValue('hl_surveyor_name') || 'Not recorded') +
+      (stringValue('hl_survey_date') ? ', ' + escapeHtml(stringValue('hl_survey_date')) : '') +
+      (stringValue('hl_survey_reference') ? '<br>Reference: ' + escapeHtml(stringValue('hl_survey_reference')) : '') +
+      '</td><td class="label">Calculation basis</td><td colspan="3" class="input">Legacy boiler calculation<br><small>Reference inputs recorded, not used for sizing</small></td></tr>' +
+      '<tr><td class="label">Building-load reference inputs</td><td colspan="7" class="input">' +
+      'Attachment: ' + escapeHtml(stringValue('hl_dwelling_attachment') || 'Not recorded') +
+      '; ventilation-zone storeys: ' + escapeHtml(stringValue('hl_ventilation_storeys') || 'Not recorded') +
+      '; sheltered sides: ' + escapeHtml(stringValue('hl_ventilation_sheltered_sides') || 'Not recorded') +
+      '; base height: ' + escapeHtml(stringValue('hl_ventilation_base_height') || 'Not recorded') + ' m' +
+      '<br>Airtightness: ' + escapeHtml(stringValue('hl_airtightness_method') || 'Not recorded') +
+      (stringValue('hl_measured_air_permeability_50') ? '; measured 50 Pa permeability: ' + escapeHtml(stringValue('hl_measured_air_permeability_50')) + ' m³/h·m²' : '') +
+      (stringValue('hl_design_infiltration_ach') ? '; justified design ACH: ' + escapeHtml(stringValue('hl_design_infiltration_ach')) : '') +
+      '</td></tr>' +
+      '<tr><td class="label">Recorded evidence</td><td colspan="7" class="input">' +
+      escapeHtml(stringValue('hl_ventilation_evidence_notes') || 'No property-wide ventilation or shelter evidence recorded.') +
+      (stringValue('hl_calculation_override_reason')
+        ? '<br><b>Override / review:</b> ' + escapeHtml(stringValue('hl_calculation_override_reason'))
+        : '') + '</td></tr>' +
       '<tr><td class="label">Ventilation system</td><td colspan="5" class="input">' +
       escapeHtml(stringValue('hl_ventilation_system') || 'Natural ventilation') +
       (stringValue('hl_ventilation_system') ===
@@ -3744,7 +3793,7 @@
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; P+ 300/450/600/700mm = 0.776/1.106/1.409/1.597; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Myson fan-convector options use normal-fan 75/65°C outputs: Kickspace 500/600/800 = 0.755/1.023/1.707 kW; Hi-Line RC 7-4/10-6/15-10/20-14 = 0.930/1.610/2.459/3.468 kW; Hi-Line LV 7-4 = 0.930 kW. The LV is the only Myson option offered in bathroom and en-suite rooms.</td></tr>' +
       '<tr><td colspan="8" class="small">Normal radiator choices meet the room heat loss within a 50% oversize limit. A flagged minimum-size exception can exceed this limit and requires review. BBOE multiplies each radiator’s temperature-corrected output by 0.96 for the 4% connection reduction. It does not change the room or building heat loss. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
-      '<tr><td colspan="8" class="small">Ventilation uses the selected MCS/CIBSE room and property-age minimum, or 0 ACH for a fully internal room. Room devices add their default airflow. MVHR applies the entered heat-recovery efficiency. PIV adds 20 m³/h across the property, shared by entered room volume. A manual room ACH overrides the automatic value.</td></tr>' +
+      '<tr><td colspan="8" class="small">The live boiler calculation uses the legacy room-by-room age-table ventilation method. It is not a completed BS EN 12831 ventilation result. The property-wide reference inputs above are recorded for review and do not change the boiler or radiator result until the reference route has been benchmarked and released.</td></tr>' +
       '<tr><td colspan="8" class="small">The detailed exposed floor perimeter is recorded for audit. The selected standard floor U-value is still used by this practical calculator. Use a certified BS EN 12831 or MCS tool where a full ISO 13370 ground-floor calculation is required.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +
       '</table></div>';
