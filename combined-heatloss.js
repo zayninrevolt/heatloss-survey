@@ -746,6 +746,7 @@
       '</div>' +
       fieldHtml('hl_ventilation_evidence_notes', 'Ventilation and shelter evidence', 'textarea', null, 'Record observed vents, flues, mechanical equipment, shelter and the evidence source.') +
       fieldHtml('hl_calculation_override_reason', 'Calculation override or review reason', 'textarea', null, 'Explain any manual temperature, U-value, ACH or other material assumption override.') +
+      '<p class="hl-help" id="hl_reference_readiness" role="status">Reference inputs have not yet been assessed.</p>' +
       '</details>' +
       '<input type="hidden" id="hl_calculation_method_version" data-id="hl_calculation_method_version" value="legacy-boiler-v1">' +
       '<input type="hidden" id="hl_reference_method_status" data-id="hl_reference_method_status" value="reference-inputs-recorded-not-used">' +
@@ -3490,6 +3491,25 @@
     return summary;
   }
 
+  function refreshReferenceReadiness() {
+    var target = document.getElementById('hl_reference_readiness');
+    if (!target || !window.ReferenceMethodReadiness) return;
+    var readiness = window.ReferenceMethodReadiness.evaluate({
+      designStation: stringValue('hl_design_station'),
+      groundStation: stringValue('hl_ground_station'),
+      dwellingAttachment: stringValue('hl_dwelling_attachment'),
+      ventilationStoreys: stringValue('hl_ventilation_storeys'),
+      shelteredSides: stringValue('hl_ventilation_sheltered_sides'),
+      airtightnessMethod: stringValue('hl_airtightness_method'),
+      measuredAirPermeability50: stringValue('hl_measured_air_permeability_50'),
+      measuredEnvelopeArea: stringValue('hl_measured_envelope_area'),
+      measuredEnvelopeVolume: stringValue('hl_measured_envelope_volume'),
+      designInfiltrationAch: stringValue('hl_design_infiltration_ach')
+    });
+    target.textContent = readiness.statusText;
+    target.dataset.state = readiness.inputsComplete ? 'inputs-complete' : 'inputs-incomplete';
+  }
+
   function calculateHeatLoss() {
     var roomNames = allRoomNames();
     var ceilingHeight = numberValue('r_ceiling', 2.4);
@@ -3564,6 +3584,7 @@
       outputField.readOnly = true;
       outputField.title = 'Chosen boiler or range-rate recommendation: 12 kW minimum, or 110% of the combined selected radiator output when higher. This is not the building design heat loss and it is not a heat pump size.';
     }
+    refreshReferenceReadiness();
     return window.heatLossResultsV60;
   }
   window.hasCompletedHeatLossV63 = function () {
@@ -3719,6 +3740,7 @@
       '<br>Airtightness: ' + escapeHtml(stringValue('hl_airtightness_method') || 'Not recorded') +
       (stringValue('hl_measured_air_permeability_50') ? '; measured 50 Pa permeability: ' + escapeHtml(stringValue('hl_measured_air_permeability_50')) + ' m³/h·m²' : '') +
       (stringValue('hl_design_infiltration_ach') ? '; justified design ACH: ' + escapeHtml(stringValue('hl_design_infiltration_ach')) : '') +
+      '<br><small>Reference readiness: ' + escapeHtml((document.getElementById('hl_reference_readiness') || {}).textContent || 'Not assessed') + '</small>' +
       '</td></tr>' +
       '<tr><td class="label">Recorded evidence</td><td colspan="7" class="input">' +
       escapeHtml(stringValue('hl_ventilation_evidence_notes') || 'No property-wide ventilation or shelter evidence recorded.') +

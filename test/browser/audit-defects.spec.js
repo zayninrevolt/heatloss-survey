@@ -257,8 +257,19 @@ test('records standards-reference evidence without changing the legacy boiler ca
   await page.locator('#hl_survey_date').fill('2026-09-15');
   await page.locator('#hl_dwelling_attachment').selectOption('Semi-detached');
   await page.locator('#hl_airtightness_method').selectOption('Standard default');
+  await page.locator('#hl_ventilation_storeys').selectOption('2');
   await page.locator('#hl_ventilation_sheltered_sides').selectOption('2');
   await page.locator('#hl_ventilation_evidence_notes').fill('Two facades sheltered by neighbouring homes.');
+  await page.evaluate(() => {
+    for (const id of ['hl_design_station', 'hl_ground_station']) {
+      const field = document.getElementById(id);
+      field.value = 'Manchester';
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  await expect(page.locator('#hl_reference_readiness')).toContainText(
+    'Reference inputs complete'
+  );
 
   const result = await page.evaluate(() => ({
     totalWatts: window.heatLossResultsV60.totalWatts,
@@ -271,6 +282,7 @@ test('records standards-reference evidence without changing the legacy boiler ca
   expect(result.saved.hl_dwelling_attachment).toBe('Semi-detached');
   expect(result.print).toContain('Building-load reference inputs');
   expect(result.print).toContain('Two facades sheltered by neighbouring homes.');
+  expect(result.print).toContain('Reference inputs complete');
   expect(result.print).toContain('Legacy boiler calculation');
 });
 
