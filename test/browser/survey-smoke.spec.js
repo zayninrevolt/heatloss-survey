@@ -926,7 +926,7 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
     'Customer refused radiator work'
   ]);
   await expect(page.locator('#hl_lounge_existing_radiator_fields')).toBeVisible();
-  await page.locator('#rad_lounge_ex_size').selectOption('600(h) x 1000(w) K1');
+  await page.locator('#rad_lounge_ex_size').selectOption('600(h) x 2000(w) K3');
   const existingRecordedWithNewSizing = await page.evaluate(() => {
     const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
     return {
@@ -938,10 +938,38 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
     };
   });
   expect(existingRecordedWithNewSizing.outcome).toBe('New radiator required');
-  expect(existingRecordedWithNewSizing.existingSize).toBe('600(h) x 1000(w) K1');
+  expect(existingRecordedWithNewSizing.existingSize).toBe('600(h) x 2000(w) K3');
   expect(existingRecordedWithNewSizing.existingOutput).toBeGreaterThan(0);
   expect(existingRecordedWithNewSizing.resultText).toContain('Existing radiator:');
   expect(existingRecordedWithNewSizing.replacementAvailable).toBe(true);
+  await page.locator('#rad_lounge_outcome').selectOption('Assess existing radiator');
+  const existingSizeReplacement = await page.evaluate(() => {
+    const field = document.getElementById('rad_lounge_new_size');
+    return Array.from(field.options).map(option => ({
+      value: option.value,
+      label: option.textContent,
+      disabled: field.disabled
+    }));
+  });
+  expect(existingSizeReplacement).toContainEqual({
+    value: '600(h) x 2000(w) K3',
+    label: expect.stringContaining('existing size'),
+    disabled: false
+  });
+  await page.locator('#rad_lounge_new_size').selectOption('600(h) x 2000(w) K3');
+  const selectedExistingAsReplacement = await page.evaluate(() => {
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    return {
+      selectedSize: document.getElementById('rad_lounge_new_size').value,
+      effectiveSize: room.effectiveRadiator && room.effectiveRadiator.size,
+      existingSize: room.existingRadiator && room.existingRadiator.size
+    };
+  });
+  expect(selectedExistingAsReplacement).toEqual({
+    selectedSize: '600(h) x 2000(w) K3',
+    effectiveSize: '600(h) x 2000(w) K3',
+    existingSize: '600(h) x 2000(w) K3'
+  });
   await expect(page.locator('#hl_lounge_radiator_requirement')).toHaveText(
     /^Required radiator output: \d+\.\d{2} kW \(\d+ W\)$/
   );
