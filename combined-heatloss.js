@@ -3,7 +3,6 @@
   var STORAGE_KEY = 'heatLossDataV60';
   var pendingReviewNotes = [];
   var NO_NEW_RADIATOR_SELECTION = 'No new radiator selected';
-  var REPLACE_LIKE_FOR_LIKE_SELECTION = 'Replace existing radiator like for like';
   var CUSTOM_EXISTING_RADIATOR_SELECTION = 'Custom radiator or towel rail';
   var persistenceReady = false;
   var postcodeLookupTimer = null;
@@ -12,7 +11,6 @@
   var RADIATOR_OUTCOMES = [
     { label: 'Size a new radiator', value: 'New radiator required' },
     { label: 'Assess the existing radiator', value: 'Assess existing radiator' },
-    { label: 'Replace existing radiator like for like', value: 'Replace existing radiator like for like' },
     { label: 'Customer refused radiator work', value: 'Customer refused' }
   ];
   var DESIGN_STATIONS = [
@@ -554,10 +552,10 @@
     var key = roomKeyFromName(roomName);
     return '<section class="hl-radiator-panel" id="hl_' + escapeHtml(key) +
       '_radiator_panel"><div class="hl-radiator-panel-heading"><h4>Radiator assessment and selection</h4>' +
-      '<p>Choose the outcome, record the existing radiator where required, then select any replacement.</p></div>' +
+      '<p>Record the existing radiator if useful, choose the outcome, then select any replacement.</p></div>' +
       fieldHtml('rad_' + key + '_outcome', roomName + ' - Radiator outcome', 'select',
         RADIATOR_OUTCOMES,
-        'Choose a new radiator, assess the installed radiator, replace it like for like, or record that the customer refused radiator work.') +
+        'Size a new radiator, assess the installed radiator, or record that the customer refused radiator work. The existing size can be recorded for any outcome.') +
       '<div class="hl-radiator-requirement" id="hl_' + escapeHtml(key) +
       '_radiator_requirement">Required radiator output: complete the room details to calculate.</div>' +
       '<div class="hl-radiator-controls" id="hl_' + escapeHtml(key) +
@@ -1402,6 +1400,10 @@
       if (!stringValue('rad_' + key + '_outcome')) {
         setValue('rad_' + key + '_outcome', 'New radiator required');
       }
+      if (stringValue('rad_' + key + '_outcome') ===
+          'Replace existing radiator like for like') {
+        setValue('rad_' + key + '_outcome', 'New radiator required');
+      }
     });
     setValue('hl_temperature_defaults_v62', 'yes');
     setValue('hl_temperature_defaults_v64', 'yes');
@@ -1787,7 +1789,10 @@
     if (stringValue('hl_radiator_plan') === 'Customer refused all') {
       return 'Customer refused';
     }
-    return stringValue('rad_' + key + '_outcome') || 'New radiator required';
+    var outcome = stringValue('rad_' + key + '_outcome');
+    return outcome === 'Replace existing radiator like for like'
+      ? 'New radiator required'
+      : outcome || 'New radiator required';
   }
 
   function currentRadiatorDeltaT(indoor) {
@@ -2367,11 +2372,10 @@
       existingRadiator.watts >= radiatorRequirementWatts
     );
     var currentRadiatorSelection = stringValue('rad_' + key + '_new_size');
-    var replacesLikeForLike = radiatorOutcome === REPLACE_LIKE_FOR_LIKE_SELECTION;
     var newRadiatorDeclined = currentRadiatorSelection ===
       NO_NEW_RADIATOR_SELECTION;
     var radiator = complete && heat.totalWatts > 0 && !customerRefused &&
-      !replacesLikeForLike && !(usesExistingAssessment && existingRadiatorAdequate)
+      !(usesExistingAssessment && existingRadiatorAdequate)
       ? recommendStelradElite(radiatorRequirementWatts, indoor, currentRadiatorSelection, key,
         roomName)
       : null;
@@ -2379,12 +2383,10 @@
       ? existingRadiator
       : newRadiatorDeclined
         ? existingRadiator
-      : replacesLikeForLike
-        ? existingRadiator
         : usesExistingAssessment && existingRadiatorAdequate
           ? existingRadiator
           : radiator && radiator.selected;
-    if ((usesExistingAssessment || replacesLikeForLike) &&
+    if (usesExistingAssessment &&
         (!existingRadiator || existingRadiator.complete === false)) {
       warnings.push(existingRadiatorGuidance(key));
     }
@@ -2406,10 +2408,7 @@
         !existingRadiatorAdequate) {
       warnings.push('Existing radiator output is below the calculated room requirement');
     }
-    if (replacesLikeForLike && complete && existingRadiator &&
-        existingRadiator.watts < radiatorRequirementWatts) {
-      warnings.push('Like-for-like replacement is below the calculated room requirement');
-    }
+
     if (radiator && radiator.temperatureWarning) {
       warnings.push(radiator.flow <= radiator.returnTemperature
         ? 'Radiator flow temperature must be higher than return temperature'
@@ -2537,7 +2536,6 @@
       wattsPerSquareMetre: floorArea > 0 ? heat.totalWatts / floorArea : 0,
       radiatorOutcome: radiatorOutcome,
       customerRefused: customerRefused,
-      replacesLikeForLike: replacesLikeForLike,
       newRadiatorDeclined: newRadiatorDeclined,
       existingRadiator: existingRadiator,
       existingRadiatorAdequate: existingRadiatorAdequate,
@@ -2750,9 +2748,7 @@
   function configureExistingRadiatorSelect(result) {
     var existingFieldsWrap = document.getElementById('hl_' + result.key +
       '_existing_radiator_fields');
-    if (existingFieldsWrap) {
-      existingFieldsWrap.hidden = result.radiatorOutcome === 'New radiator required';
-    }
+    if (existingFieldsWrap) existingFieldsWrap.hidden = false;
     var quantityField = document.getElementById('rad_' + result.key +
       '_ex_quantity');
     var newQuantityField = document.getElementById('hl_' + result.key +
@@ -2807,9 +2803,7 @@
     configureExistingRadiatorSelect(result);
     var existingFieldsWrap = document.getElementById('hl_' + result.key +
       '_existing_radiator_fields');
-    if (existingFieldsWrap) {
-      existingFieldsWrap.hidden = result.radiatorOutcome === 'New radiator required';
-    }
+    if (existingFieldsWrap) existingFieldsWrap.hidden = false;
     var existingValue = field.value;
     if (field.tagName !== 'SELECT') {
       var select = document.createElement('select');
@@ -2858,15 +2852,7 @@
       if (secondField) secondField.value = '';
       return { first: field, second: secondField };
     }
-    if (result.replacesLikeForLike) {
-      setSingleRadiatorChoice(field, REPLACE_LIKE_FOR_LIKE_SELECTION,
-        'Replace existing radiator like for like');
-      setRadiatorFieldLabel(result.key, 'new_size', result.roomName + ' - Replacement radiator');
-      field.title = 'Like-for-like was selected in Radiator outcome. Record the installed radiator size above.';
-      if (secondWrap) secondWrap.hidden = true;
-      if (secondField) secondField.value = '';
-      return { first: field, second: secondField };
-    }
+
     if (result.radiatorOutcome === 'Assess existing radiator' &&
         result.existingRadiatorAdequate) {
       field.innerHTML = '';
@@ -3060,36 +3046,6 @@
       return;
     }
     configureExistingRadiatorSelect(result);
-    if (result.replacesLikeForLike && !result.complete) {
-      configureRadiatorSelect(result);
-      if (radKw) {
-        radKw.value = '';
-        radKw.placeholder = 'Complete heat loss details';
-        radKw.readOnly = true;
-      }
-      if (radOutput) {
-        radOutput.value = result.existingRadiator
-          ? (result.existingRadiator.watts / 1000).toFixed(2)
-          : '';
-        radOutput.readOnly = true;
-        radOutput.title = existingRadiatorOutputDescription(result.existingRadiator);
-      }
-      if (summary) {
-        summary.textContent = result.existingRadiator
-          ? 'Replace like for like'
-          : 'Select existing size';
-      }
-      if (resultBox) {
-        resultBox.innerHTML =
-          '<div class="hl-result-main"><strong>Like-for-like replacement</strong></div>' +
-          '<div class="hl-result-breakdown">' +
-          (result.existingRadiator
-            ? escapeHtml(result.existingRadiator.size) + ' selected. The replacement can be recorded without completing the room heat loss.'
-            : 'Select the installed height, width and panel type in Existing Size.') +
-          '</div>';
-      }
-      return;
-    }
     if (result.radiatorOutcome === 'Assess existing radiator' &&
         result.existingRadiator && !result.complete) {
       var incompleteRadiatorFields = configureRadiatorSelect(result);
@@ -3173,8 +3129,7 @@
           : 'Temperature-corrected output of the selected existing-size radiator.';
       }
     } else {
-      if (!result.sharedRadiatorHostName && !result.newRadiatorDeclined &&
-          result.radiatorOutcome !== 'Replace existing radiator like for like') {
+      if (!result.sharedRadiatorHostName && !result.newRadiatorDeclined) {
         if (radiatorFields && radiatorFields.first) radiatorFields.first.value = '';
         if (radiatorFields && radiatorFields.second) radiatorFields.second.value = '';
       }
@@ -3197,34 +3152,26 @@
         escapeHtml(result.sharedRadiatorRoomNames.join(' and ')) +
         '. ' + sharedRadiatorRequirementDescription(result) + '</div>';
     }
-    if (result.radiatorOutcome === 'Assess existing radiator') {
+    if (result.existingRadiator) {
       radiatorHtml += '<div class="hl-radiator-result"><b>Existing radiator:</b> ' +
-        (result.existingRadiator
-          ? escapeHtml(result.existingRadiator.size) + ' gives ' +
-            (result.existingRadiator.watts / 1000).toFixed(2) + ' kW. ' +
-            (result.existingRadiatorAdequate
+        escapeHtml(result.existingRadiator.size) + ' gives ' +
+          (result.existingRadiator.watts / 1000).toFixed(2) + ' kW. ' +
+          (result.existingRadiatorAdequate
+            ? (result.radiatorOutcome === 'Assess existing radiator'
               ? '<strong>No new radiator is required.</strong>'
-              : 'It is below the room requirement, so a new size is shown above.')
-          : 'Select the installed height, width and panel type in Existing Size.') +
+              : 'It meets the calculated room requirement.')
+            : 'It is below the room requirement' +
+              (result.radiatorOutcome === 'Assess existing radiator'
+                ? ', so a new size is shown above.'
+                : '.')) +
         '</div>';
-    } else if (result.radiatorOutcome === 'Replace existing radiator like for like') {
-      radiatorHtml += '<div class="hl-radiator-result"><b>Like-for-like replacement:</b> ' +
+    }
+    if (result.newRadiatorDeclined) {
+      radiatorHtml += '<div class="hl-radiator-result"><b>New radiator:</b> ' +
+        'No new radiator selected.' +
         (result.existingRadiator
-          ? escapeHtml(result.existingRadiator.size) + ' gives ' +
-            (result.existingRadiator.watts / 1000).toFixed(2) +
-            ' kW at the selected design temperature.'
-          : 'Select the installed height, width and panel type in Existing Size.') +
-        '</div>';
-    } else if (result.newRadiatorDeclined) {
-      radiatorHtml += '<div class="hl-radiator-result"><b>' +
-        (result.existingRadiator && !result.existingRadiatorAdequate
-          ? 'Radiator refused, undersized:'
-          : 'Existing radiator retained:') + '</b> ' +
-        (result.existingRadiator
-          ? escapeHtml(result.existingRadiator.size) + ' gives ' +
-            (result.existingRadiator.watts / 1000).toFixed(2) +
-            ' kW at the selected design temperature.'
-          : 'Select the installed height, width and panel type in Existing Size to record its output.') +
+          ? ' The recorded existing output remains subject to the comparison above.'
+          : ' Select the installed height, width and panel type in Existing Size to record its output.') +
         '</div>';
     } else if (result.radiator) {
       var selectedIsMyson = result.radiator.selected &&
@@ -3315,16 +3262,14 @@
   function refreshRadiatorRequirement(room) {
     var requirement = Math.max(0, Number(room.radiatorRequirementWatts) || 0);
     var isAssessment = room.radiatorOutcome === 'Assess existing radiator';
-    var likeForLike = room.radiatorOutcome ===
-      'Replace existing radiator like for like';
     room.existingRadiatorAdequate = Boolean(room.complete && room.existingRadiator &&
       room.existingRadiator.complete !== false && room.existingRadiator.watts >= requirement);
     room.radiator = room.complete && requirement > 0 && !room.customerRefused &&
-      !likeForLike && !(isAssessment && room.existingRadiatorAdequate)
+      !(isAssessment && room.existingRadiatorAdequate)
       ? recommendStelradElite(requirement, room.indoor,
         stringValue('rad_' + room.key + '_new_size'), room.key, room.roomName)
       : null;
-    room.effectiveRadiator = room.customerRefused || room.newRadiatorDeclined || likeForLike
+    room.effectiveRadiator = room.customerRefused || room.newRadiatorDeclined
       ? room.existingRadiator
       : isAssessment && room.existingRadiatorAdequate
         ? room.existingRadiator
@@ -3332,18 +3277,15 @@
     room.warnings = room.warnings.filter(function (warning) {
       return warning.indexOf('Existing radiator output is below') !== 0 &&
         warning.indexOf('Retained radiator output is below') !== 0 &&
-        warning.indexOf('Like-for-like replacement is below') !== 0 &&
         warning.indexOf('No single radiator option') !== 0 &&
         warning.indexOf('No two-radiator combination') !== 0;
     });
     if (room.customerRefused && room.existingRadiator &&
         room.existingRadiator.watts < requirement) {
       room.warnings.push('Retained radiator output is below the calculated room requirement');
-    } else if ((room.newRadiatorDeclined || isAssessment || likeForLike) &&
+    } else if ((room.newRadiatorDeclined || isAssessment) &&
         room.existingRadiator && room.existingRadiator.watts < requirement) {
-      room.warnings.push(likeForLike
-        ? 'Like-for-like replacement is below the calculated room requirement'
-        : 'Existing radiator output is below the calculated room requirement');
+      room.warnings.push('Existing radiator output is below the calculated room requirement');
     }
     if (room.radiator && !room.radiator.temperatureWarning && !room.radiator.selected) {
       room.warnings.push(room.radiator.usesTwo
@@ -3393,15 +3335,12 @@
       var host = byKey[hostKey];
       var hostSharesAnotherRadiator = host &&
         stringValue('hl_' + host.key + '_shared_radiator_with') !== '';
-      var guestHasConflictingOutcome = room.customerRefused ||
-        room.radiatorOutcome === 'Replace existing radiator like for like' ||
-        room.newRadiatorDeclined;
+      var guestHasConflictingOutcome = room.customerRefused || room.newRadiatorDeclined;
       var hostCanSupply = host && host.complete && room.complete &&
         !hostSharesAnotherRadiator && host.radiatorOutcome !== 'Customer refused' &&
-        host.radiatorOutcome !== 'Replace existing radiator like for like' &&
         (!host.newRadiatorDeclined || Boolean(host.existingRadiator));
       if (guestHasConflictingOutcome) {
-        room.warnings.push('A shared radiator cannot be used while this room is marked as refused, retained or like-for-like');
+        room.warnings.push('A shared radiator cannot be used while this room is marked as refused or retained');
         return;
       }
       if (!hostCanSupply || hostKey === room.key) return;
@@ -3852,10 +3791,17 @@
                 room.existingRadiatorAdequate
               ? '<br><small>' + escapeHtml(room.existingRadiator.size) +
                 ', existing radiator adequate</small>'
-              : room.radiatorOutcome === 'Replace existing radiator like for like' &&
-                  room.existingRadiator
-                ? '<br><small>' + escapeHtml(room.existingRadiator.size) +
-                  ', replace like for like</small>'
+              : room.radiatorOutcome === 'New radiator required' && room.existingRadiator
+                ? '<br><small>Existing radiator recorded: ' +
+                  escapeHtml(room.existingRadiator.size) + ', ' +
+                  (room.existingRadiator.watts / 1000).toFixed(2) + ' kW' +
+                  (room.existingRadiatorAdequate ? ', adequate' : ', below requirement') +
+                  '</small>' +
+                  (room.effectiveRadiator
+                    ? '<br><small>Replacement: ' +
+                      escapeHtml(room.effectiveRadiator.size) + ', ' +
+                      (room.effectiveRadiator.watts / 1000).toFixed(2) + ' kW</small>'
+                    : '')
                 : room.newRadiatorDeclined
                   ? room.existingRadiator
                     ? '<br><small>' +
