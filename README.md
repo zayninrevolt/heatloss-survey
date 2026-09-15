@@ -79,7 +79,7 @@ Technical logic is being separated from the legacy single-page UI into dependenc
 - `src/persistence.js` — schema-versioned encoding and ordered migrations for saved surveys
 - `src/validation.js` — non-blocking physical-range checks
 - `src/mcs-fabric.js` — MCS-reference element fabric loss, effective U-values and default thermal-bridging factors
-- `src/mcs-ventilation.js` — MCS-reference infiltration, mechanical ventilation and room-minimum flows
+- `src/mcs-ventilation.js` — MCS-reference ventilation structure: it keeps permeability, exposure, shelter, room minimums, mechanical and device flows distinct. It is deliberately **not wired into live surveys**. A permeability result requires an explicit normal-exposure factor and records it, because a bare `q50 ÷ 20` conversion omits the BS EN 12831 storey, façade, shelter and altitude calculation. Heatpunk Fixture A verifies its observed relative shelter factors (intensive 0.6×, normal 1.0×, none 1.4×); the full exposure coefficient table remains a validation gate.
 
 Saved surveys record two versions. The schema version describes the shape of the saved data. The calculation-method version describes what the numbers mean, so a survey saved before a calculation change loads with an on-screen notice telling the surveyor to recheck its results rather than silently returning different figures.
 

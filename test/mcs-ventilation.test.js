@@ -6,20 +6,55 @@ const ventilation = require('../src/mcs-ventilation.js');
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9,
   `expected ${actual} to be ${expected}`);
 
-test('derives whole-building infiltration from 50 Pa permeability, defaulting to the standard value', () => {
-  const property = ventilation.buildingInfiltration({
+test('does not treat permeability divided by twenty as a complete MCS infiltration result', () => {
+  assert.throws(() => ventilation.buildingInfiltration({
     envelopeArea: 100, internalVolume: 200
+  }), /normal exposure/i);
+
+  const property = ventilation.buildingInfiltration({
+    envelopeArea: 100, internalVolume: 200,
+    // A deliberately neutral comparison multiplier. Live MCS use needs a
+    // sourced value based on storeys, exposed facades and site altitude.
+    normalExposureFactor: 1,
+    shelterLevel: 'normal'
   });
   assert.equal(property.permeability50, 12);
   assert.equal(property.permeabilitySource, 'standard-default');
+  assert.equal(property.exposureSource, 'caller-provided-normal-exposure-factor');
+  close(property.normalExposureFactor, 1);
+  close(property.shelterFactor, 1);
   close(property.infiltrationFlowM3h, 12 / 20 * 100);
   close(property.infiltrationAch, 0.3);
 
   const tested = ventilation.buildingInfiltration({
-    envelopeArea: 100, internalVolume: 200, permeability50: 5
+    envelopeArea: 100, internalVolume: 200, permeability50: 5,
+    normalExposureFactor: 1, shelterLevel: 'normal'
   });
   assert.equal(tested.permeabilitySource, 'measured');
   close(tested.infiltrationFlowM3h, 5 / 20 * 100);
+});
+
+test('matches Heatpunk Fixture A shelter ratios once its normal-exposure factor is supplied', () => {
+  // Observed in Heatpunk Standard method, 4 exposed façades, one storey,
+  // q50 = 12, envelope 45.6 m², volume 28.8 m³, altitude 104 m.
+  const shared = {
+    envelopeArea: 45.6,
+    internalVolume: 28.8,
+    permeability50: 12,
+    normalExposureFactor: 1.263157894736842
+  };
+  const normal = ventilation.buildingInfiltration({ ...shared, shelterLevel: 'normal' });
+  const none = ventilation.buildingInfiltration({ ...shared, shelterLevel: 'none' });
+  const intensive = ventilation.buildingInfiltration({ ...shared, shelterLevel: 'intensive' });
+
+  close(normal.infiltrationFlowM3h, 34.56);
+  close(none.infiltrationFlowM3h, 48.384);
+  close(intensive.infiltrationFlowM3h, 20.736);
+  close(none.infiltrationFlowM3h / normal.infiltrationFlowM3h, 1.4);
+  close(intensive.infiltrationFlowM3h / normal.infiltrationFlowM3h, 0.6);
+  assert.throws(() => ventilation.buildingInfiltration({
+    ...shared, shelterLevel: 'woodland'
+  }), /shelter/i);
 });
 
 test('a design air change rate replaces the permeability route instead of adding to it', () => {
@@ -32,7 +67,7 @@ test('a design air change rate replaces the permeability route instead of adding
 });
 
 test('infiltration, intentional ventilation and the room minimum are separate flows', () => {
-  const property = ventilation.buildingInfiltration({ envelopeArea: 100, internalVolume: 200 });
+  const property = ventilation.buildingInfiltration({ envelopeArea: 100, internalVolume: 200, normalExposureFactor: 1 });
   const room = ventilation.roomVentilation({
     roomType: 'Lounge/sitting room', roomVolume: 40, hasExternalEnvelope: true,
     property: property, ventilationSystem: 'Natural ventilation'
@@ -53,7 +88,7 @@ test('infiltration, intentional ventilation and the room minimum are separate fl
 });
 
 test('mechanical ventilation flows follow the reference rates and MVHR recovery', () => {
-  const property = ventilation.buildingInfiltration({ envelopeArea: 100, internalVolume: 200 });
+  const property = ventilation.buildingInfiltration({ envelopeArea: 100, internalVolume: 200, normalExposureFactor: 1 });
   const mvhr = ventilation.roomVentilation({
     roomType: 'Lounge/sitting room', roomVolume: 40, hasExternalEnvelope: true,
     property: property, ventilationSystem: 'MVHR', mvhrEfficiency: 75
@@ -73,7 +108,7 @@ test('mechanical ventilation flows follow the reference rates and MVHR recovery'
 });
 
 test('ventilation devices add their published airflow to the governing flow', () => {
-  const property = ventilation.buildingInfiltration({ envelopeArea: 100, internalVolume: 200 });
+  const property = ventilation.buildingInfiltration({ envelopeArea: 100, internalVolume: 200, normalExposureFactor: 1 });
   const room = ventilation.roomVentilation({
     roomType: 'Lounge/sitting room', roomVolume: 40, hasExternalEnvelope: true,
     property: property, ventilationSystem: 'Natural ventilation',
@@ -97,7 +132,7 @@ test('invalid ventilation inputs fail explicitly rather than defaulting silently
 });
 
 test('terminal ventilation devices are reported separately from infiltration', () => {
-  const property = ventilation.buildingInfiltration({ envelopeArea: 100, internalVolume: 200 });
+  const property = ventilation.buildingInfiltration({ envelopeArea: 100, internalVolume: 200, normalExposureFactor: 1 });
   const room = ventilation.roomVentilation({
     roomType: 'Kitchen', roomVolume: 30, hasExternalEnvelope: true,
     property: property, ventilationSystem: 'Natural ventilation',
