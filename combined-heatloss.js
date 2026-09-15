@@ -3531,7 +3531,7 @@
     if (outputField) {
       outputField.value = String(systemOutputKw);
       outputField.readOnly = true;
-      outputField.title = '12 kW minimum, or 110% of the combined selected radiator output when higher.';
+      outputField.title = 'Chosen boiler or range-rate recommendation: 12 kW minimum, or 110% of the combined selected radiator output when higher. This is not the building design heat loss and it is not a heat pump size.';
     }
     return window.heatLossResultsV60;
   }

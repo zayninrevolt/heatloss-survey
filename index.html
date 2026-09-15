@@ -2174,7 +2174,7 @@
         let radsHtml = `<div class="card">
   <h3>Radiator Sheet</h3>
   <div class="row">${makeField(["r_address", "Address", "text"])}${makeField(["r_job", "Job Number", "text"])}</div>
-  <div class="row">${makeField(["r_ceiling", "Ceiling height (m)", "number"])}${makeField(["r_output_temp", "Calculated Output KW", "text"])}</div>
+  <div class="row">${makeField(["r_ceiling", "Ceiling height (m)", "number"])}${makeField(["r_output_temp", "Recommended system output (kW, not design heat loss)", "text"])}</div>
   </div>
   <div class="card">
   <h3>Rooms</h3>`;
@@ -4184,7 +4184,7 @@
         ${makeField(["r_ceiling", "Ceiling height (m)", "number"])}
       </div>
       <div class="field">
-        ${makeField(["r_output_temp", "Calculated Output KW", "text"])}
+        ${makeField(["r_output_temp", "Recommended system output (kW, not design heat loss)", "text"])}
       </div>
     </div>
     ${extraRoomControlsHtml()}
