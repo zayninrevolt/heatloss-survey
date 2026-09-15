@@ -5924,24 +5924,53 @@
           return missing;
         }
 
+        function unfinishedSurveyWarning() {
+          const calculation = window.heatLossResultsV60;
+          if (!calculation || !calculation.provisional) return "";
+
+          const names = (calculation.incompleteRooms || [])
+            .map(function (room) {
+              return room.roomName;
+            })
+            .filter(Boolean);
+          const which = names.length
+            ? "Incomplete rooms: " + names.join(", ") + "."
+            : "Some started rooms are still incomplete.";
+
+          return (
+            "This survey is unfinished, so the heat loss total and any equipment " +
+            "recommendations are provisional.\n\n" +
+            which +
+            " Incomplete rooms are left out of the total while their volume still " +
+            "shares out the ventilation flow."
+          );
+        }
+
         function confirmPdfIfMissing(type) {
           if (typeof window.persistSignatureCanvases === "function") {
             window.persistSignatureCanvases();
           }
 
           const missing = missingFieldsForPdf(type);
+          const unfinished = unfinishedSurveyWarning();
 
-          if (!missing.length) return true;
+          if (!missing.length && !unfinished) return true;
 
-          return confirm(
-            "Some important fields are still blank:\n\n" +
-              missing
-                .map(function (item) {
-                  return "- " + item;
-                })
-                .join("\n") +
-              "\n\nContinue saving the PDF anyway?",
-          );
+          const sections = [];
+
+          if (missing.length) {
+            sections.push(
+              "Some important fields are still blank:\n\n" +
+                missing
+                  .map(function (item) {
+                    return "- " + item;
+                  })
+                  .join("\n"),
+            );
+          }
+          if (unfinished) sections.push(unfinished);
+
+          return confirm(sections.join("\n\n") + "\n\nContinue saving the PDF anyway?");
         }
 
         function installSaveJsonStatus() {

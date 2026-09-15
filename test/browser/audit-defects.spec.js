@@ -171,3 +171,74 @@ test('a survey saved by this app version loads without that warning', async ({ p
   await page.reload();
   await expect(page.locator('#surveyReviewNotes')).toHaveCount(0);
 });
+
+// The first room that is not the fixture's lounge, discovered at runtime because
+// the room list is built dynamically.
+async function secondRoomKey(page) {
+  return page.evaluate(() =>
+    window.heatLossResultsV60.rooms.map(r => r.key).find(k => k !== 'lounge'));
+}
+
+test('an unfinished survey is labelled provisional and names what is missing', async ({ page }) => {
+  const key = await secondRoomKey(page);
+  // Dimensions but no construction details: started, but not complete.
+  await setFields(page, { ['rad_' + key + '_len']: '4', ['rad_' + key + '_wid']: '3' });
+
+  const state = await page.evaluate(() => ({
+    included: window.heatLossResultsV60.includedRooms.length,
+    incomplete: window.heatLossResultsV60.incompleteRooms.length,
+    provisional: window.heatLossResultsV60.provisional
+  }));
+  expect(state.included).toBe(1);
+  expect(state.incomplete).toBe(1);
+  expect(state.provisional).toBe(true);
+
+  const detail = await page.locator('#hl_property_detail').innerText();
+  expect(detail).toMatch(/provisional/i);
+  expect(detail).toMatch(/1 incomplete/i);
+  expect(detail).toMatch(/ventilation/i);
+});
+
+test('a complete survey is not labelled provisional', async ({ page }) => {
+  const state = await page.evaluate(() => ({
+    incomplete: window.heatLossResultsV60.incompleteRooms.length,
+    provisional: window.heatLossResultsV60.provisional
+  }));
+  expect(state.incomplete).toBe(0);
+  expect(state.provisional).toBe(false);
+  await expect(page.locator('#hl_property_detail')).not.toContainText(/provisional/i);
+});
+
+test('printing an unfinished survey warns before equipment recommendations are saved', async ({ page }) => {
+  const key = await secondRoomKey(page);
+  await setFields(page, { ['rad_' + key + '_len']: '4', ['rad_' + key + '_wid']: '3' });
+
+  const messages = [];
+  page.on('dialog', async dialog => {
+    messages.push(dialog.message());
+    await dialog.dismiss();
+  });
+  await page.evaluate(() => window.printPdfPart('front'));
+
+  expect(messages.join(' ')).toMatch(/unfinished/i);
+  expect(messages.join(' ')).toMatch(/provisional/i);
+});
+
+test('a custom radiator rating goes stale when the design temperature changes', async ({ page }) => {
+  await setFields(page, {
+    rad_lounge_outcome: 'Assess existing radiator',
+    rad_lounge_ex_size: 'Custom radiator or towel rail',
+    rad_lounge_ex_custom_kw: '1'
+  });
+  // Entered at the fixture design temperature, so nothing is stale yet.
+  expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
+
+  await setFields(page, { hl_radiator_temperature: '75' });
+  const stale = (await room(page)).warnings.join(' ');
+  expect(stale).toMatch(/design temperature/i);
+  expect(stale).toMatch(/confirm/i);
+
+  // Re-entering the figure records the new design temperature and clears it.
+  await setFields(page, { rad_lounge_ex_custom_kw: '0.8' });
+  expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
+});

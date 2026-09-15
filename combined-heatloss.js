@@ -1758,6 +1758,41 @@
     return stringValue('rad_' + key + '_outcome') || 'New radiator required';
   }
 
+  function currentRadiatorDeltaT(indoor) {
+    var flow = Number(stringValue('hl_radiator_temperature')) || 75;
+    var returnTemperature = flow - 10;
+    return (flow + returnTemperature) / 2 - indoor;
+  }
+
+  function recordCustomOutputBasis(key, indoor, index) {
+    var suffix = index > 1 ? '_' + index : '';
+    var field = document.getElementById('rad_' + key + '_ex_custom_temp' + suffix);
+    if (!field) return;
+    field.value = currentRadiatorDeltaT(indoor).toFixed(1);
+  }
+
+  // A manually entered radiator rating only means something at the design
+  // temperature it was read off. When the design temperature moves, the old figure
+  // is stale and the surveyor has to confirm it rather than inherit it silently.
+  function customOutputBasisWarning(key, indoor, existingRadiator) {
+    if (!existingRadiator || !existingRadiator.customOutput) return '';
+    var current = currentRadiatorDeltaT(indoor);
+    var stale = '';
+    ['', '_2'].forEach(function (suffix) {
+      if (stale) return;
+      var recorded = Number(stringValue('rad_' + key + '_ex_custom_temp' + suffix));
+      if (Number.isFinite(recorded) && recorded > 0 &&
+          Math.abs(current - recorded) >= 0.05) {
+        stale = recorded.toFixed(1);
+      }
+    });
+    if (!stale) return '';
+    return 'Custom radiator output was entered at a ' + stale +
+      ' K design temperature, but this room is now assessed at ' +
+      current.toFixed(1) + ' K. Confirm the manufacturer output at the selected ' +
+      'design temperature, or re-enter it.';
+  }
+
   function existingRadiatorUnitForRoom(key, indoor, roomName, index) {
     var suffix = index > 1 ? '_' + index : '';
     var size = stringValue('rad_' + key + '_ex_size' + suffix);
@@ -1777,9 +1812,7 @@
         customOutput: true
       };
     }
-    var flow = Number(stringValue('hl_radiator_temperature')) || 75;
-    var returnTemperature = flow - 10;
-    var deltaT = (flow + returnTemperature) / 2 - indoor;
+    var deltaT = currentRadiatorDeltaT(indoor);
     if (deltaT < 20 || deltaT > 65) return null;
     var correctionFactor = stelradCorrectionFactor(deltaT);
     var option = stelradIndividualOptions(correctionFactor,
@@ -1848,7 +1881,7 @@
         existingRadiator.expectedQuantity + ' existing radiators. '
       : '';
     return prefix + (existingRadiator && existingRadiator.customOutput
-      ? 'Custom output entered for the retained radiator or towel rail.'
+      ? 'Custom output entered for the retained radiator or towel rail, before installation and connection derating.'
       : 'Temperature-corrected output of the selected existing-size radiator.');
   }
 
@@ -2293,6 +2326,8 @@
     }
     var radiatorOutcome = radiatorOutcomeForRoom(key);
     var existingRadiator = existingRadiatorForRoom(key, indoor, roomName);
+    var customBasisWarning = customOutputBasisWarning(key, indoor, existingRadiator);
+    if (customBasisWarning) warnings.push(customBasisWarning);
     var usesExistingAssessment = radiatorOutcome === 'Assess existing radiator';
     var customerRefused = radiatorOutcome === 'Customer refused';
     var existingRadiatorAdequate = Boolean(
@@ -2606,6 +2641,17 @@
       locationField.dataset.existingRadiatorWired = 'yes';
       locationField.addEventListener('input', persistCombinedData);
       locationField.addEventListener('change', persistCombinedData);
+    }
+    // Stamp the design temperature the surveyor actually typed the custom rating at.
+    // No event is dispatched from here: the custom field already runs a change
+    // handler, and re-dispatching would re-enter the calculation.
+    if (customOutputField && customOutputField.dataset.customBasisWired !== 'yes') {
+      customOutputField.dataset.customBasisWired = 'yes';
+      var recordCustomBasis = function () {
+        recordCustomOutputBasis(result.key, result.indoor, index);
+      };
+      customOutputField.addEventListener('input', recordCustomBasis);
+      customOutputField.addEventListener('change', recordCustomBasis);
     }
     var flow = Number(stringValue('hl_radiator_temperature')) || 75;
     var returnTemperature = flow - 10;
@@ -3383,6 +3429,36 @@
     });
   }
 
+  function propertyDetailText(calculation) {
+    var included = calculation.includedRooms || [];
+    var incomplete = calculation.incompleteRooms || [];
+    var unstarted = calculation.unstartedRooms || [];
+    if (!included.length && !incomplete.length) {
+      return 'Enter at least one room to begin.';
+    }
+    var parts = [included.length + ' room' + (included.length === 1 ? '' : 's') + ' included'];
+    if (incomplete.length) {
+      parts.push(incomplete.length + ' incomplete (' + incomplete.map(function (room) {
+        return room.roomName;
+      }).join(', ') + ')');
+    }
+    if (unstarted.length) parts.push(unstarted.length + ' not started');
+    var summary = parts.join(', ');
+    if (!included.length) {
+      return summary + '. No room is complete yet, so there is no property total.';
+    }
+    summary += ', ' + Math.round(calculation.totalWatts) + ' W total, ' +
+      calculation.wattsPerSquareMetre.toFixed(1) + ' W/m² across entered rooms.';
+    if (calculation.provisional) {
+      summary += ' Provisional: ' + incomplete.length + ' incomplete room' +
+        (incomplete.length === 1 ? '' : 's') + ' ' +
+        (incomplete.length === 1 ? 'is' : 'are') +
+        ' excluded from the total while still sharing the ventilation flow. ' +
+        'Complete them before relying on these figures.';
+    }
+    return summary;
+  }
+
   function calculateHeatLoss() {
     var roomNames = allRoomNames();
     var ceilingHeight = numberValue('r_ceiling', 2.4);
@@ -3417,6 +3493,16 @@
     var totalArea = included.reduce(function (sum, room) {
       return sum + room.floorArea;
     }, 0);
+    var incomplete = results.filter(function (result) {
+      return result.started && !result.complete;
+    });
+    var unstarted = results.filter(function (result) {
+      return !result.started;
+    });
+    // A started but unfinished room is left out of the total, yet its volume still
+    // shares out the whole-property ventilation flow. That makes the total a
+    // provisional figure, and the surveyor has to be told before it is issued.
+    var provisional = incomplete.length > 0;
     var radiatorOutputWatts = results.reduce(function (sum, room) {
       return sum + (room.effectiveRadiator
         ? room.effectiveRadiator.watts
@@ -3426,6 +3512,9 @@
     window.heatLossResultsV60 = {
       rooms: results,
       includedRooms: included,
+      incompleteRooms: incomplete,
+      unstartedRooms: unstarted,
+      provisional: provisional,
       totalWatts: totalWatts,
       totalArea: totalArea,
       radiatorOutputWatts: radiatorOutputWatts,
@@ -3436,12 +3525,7 @@
     var detail = document.getElementById('hl_property_detail');
     if (total) total.textContent = (totalWatts / 1000).toFixed(2) + ' kW';
     if (detail) {
-      detail.textContent = included.length
-        ? included.length + ' room' + (included.length === 1 ? '' : 's') +
-          ' included, ' + Math.round(totalWatts) + ' W total, ' +
-          window.heatLossResultsV60.wattsPerSquareMetre.toFixed(1) +
-          ' W/m² across entered rooms.'
-        : 'Enter at least one room to begin.';
+      detail.textContent = propertyDetailText(window.heatLossResultsV60);
     }
     var outputField = document.getElementById('r_output_temp');
     if (outputField) {
@@ -3769,7 +3853,10 @@
           '<input id="rad_' + escapeHtml(key) + '_ex_custom_kw_' + radiatorIndex +
           '" data-id="rad_' + escapeHtml(key) + '_ex_custom_kw_' + radiatorIndex +
           '" type="number" min="0" step="0.01" inputmode="decimal" disabled>' +
-          '<small>Required for a custom radiator or towel rail. Enter its known output at the selected design temperature.</small>' +
+          '<input id="rad_' + escapeHtml(key) + '_ex_custom_temp_' + radiatorIndex +
+          '" data-id="rad_' + escapeHtml(key) + '_ex_custom_temp_' + radiatorIndex +
+          '" type="hidden">' +
+          '<small>Required for a custom radiator or towel rail. Enter the manufacturer rating for one unit at the selected design temperature, before installation and connection derating.</small>' +
           '</div></div>';
       }
       return '<div id="hl_' + escapeHtml(key) + '_existing_radiator_fields">' +
@@ -3788,7 +3875,9 @@
         '<input id="rad_' + escapeHtml(key) + '_ex_custom_kw" data-id="rad_' +
         escapeHtml(key) + '_ex_custom_kw" type="number" min="0" step="0.01" ' +
         'inputmode="decimal" disabled>' +
-        '<small>Required for a custom radiator or towel rail. Enter the output of one unit at the selected design temperature.</small>' +
+        '<input id="rad_' + escapeHtml(key) + '_ex_custom_temp" data-id="rad_' +
+        escapeHtml(key) + '_ex_custom_temp" type="hidden">' +
+        '<small>Required for a custom radiator or towel rail. Enter the manufacturer rating for one unit at the selected design temperature, before installation and connection derating.</small>' +
         '</div>' + additionalExistingFields + '</div>';
     });
     var newSizePattern = new RegExp(
