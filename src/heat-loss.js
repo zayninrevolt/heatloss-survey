@@ -31,7 +31,7 @@
   function remainingInternalWallLength(length, width, exposedWallLength) {
     var perimeter = 2 * (nonNegative(length) + nonNegative(width));
     exposedWallLength = nonNegative(exposedWallLength);
-    if (perimeter <= 0 || exposedWallLength <= 0) return 0;
+    if (perimeter <= 0) return 0;
     return Math.max(0, perimeter - Math.min(perimeter, exposedWallLength));
   }
 
@@ -341,7 +341,9 @@
     var roofDeltaT = input.roofDeltaT == null ? deltaT : signedNumber(input.roofDeltaT);
     var rooflightWatts = nonNegative(input.rooflightArea) *
       nonNegative(input.rooflightU) * roofDeltaT;
-    var roofWatts = floorArea * nonNegative(input.roofU) * roofDeltaT;
+    // Flat-ceiling model: openings replace opaque roof, rather than overlap it.
+    var netRoofArea = Math.max(0, floorArea - nonNegative(input.rooflightArea));
+    var roofWatts = netRoofArea * nonNegative(input.roofU) * roofDeltaT;
     var ventilationFlowM3h = input.ventilationFlowM3h == null
       ? nonNegative(input.ach) * volume
       : nonNegative(input.ventilationFlowM3h);

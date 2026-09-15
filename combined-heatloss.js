@@ -1460,7 +1460,7 @@
     return window.RadiatorSizing.output(model, width, correctionFactor);
   }
 
-  function minimumStelradFallback(correctionFactor, filters) {
+  function minimumStelradFallback(correctionFactor, filters, requiredWatts) {
     var model = STELRAD_ELITE_MODELS.find(function (candidate) {
       return candidate.type === 'K1' && candidate.height === 450 &&
         candidate.widths.includes(400);
@@ -1481,7 +1481,7 @@
       unitWatts: watts,
       quantity: 1,
       ratedWatts: model.wattsPerMetre * 0.4,
-      oversizePercent: 0,
+      oversizePercent: (watts / requiredWatts - 1) * 100,
       minimumSizeFallback: true,
       size: '450(h) x 400(w) K1'
     };
@@ -1574,7 +1574,7 @@
       quantity
     );
     var minimumFallback = quantity === 1
-      ? minimumStelradFallback(correctionFactor, filters)
+      ? minimumStelradFallback(correctionFactor, filters, requiredWatts)
       : null;
     if (!options.length && minimumFallback && requiredWatts < minimumFallback.watts) {
       options.push(minimumFallback);
@@ -2177,13 +2177,18 @@
       ventilationAch: effectiveAch,
       ventilationAchMaximum: 5 + chimneyAch,
       ventilationRequired: started,
+      rooflightSelected: Boolean(rooflightType && rooflightType !== 'No rooflights'),
+      rooflightArea: stringValue('hl_' + key + '_rooflight_area'),
+      grossRoofArea: floorArea,
+      heatedRoomAbove: loftType === 'Heated room above',
       uValues: [
         { label: 'External wall', value: wallU, required: wallLength > 0 },
         { label: 'Internal wall', value: internalWallU, required: internalWallSegments.length === 0 && internalWallLength > 0 },
         { label: 'Window', value: windowU, required: windowArea > 0 },
         { label: 'Door', value: doorU, required: doorArea > 0 },
         { label: 'Floor', value: floorU, required: floorU > 0 },
-        { label: 'Roof', value: roofU, required: roofU > 0 }
+        { label: 'Roof', value: roofU, required: roofU > 0 },
+        { label: 'Rooflight', value: rooflightU, required: rooflightArea > 0 }
       ],
       radiatorOutputsKw: radiatorOutputsKw
     });
@@ -2434,7 +2439,11 @@
       sharedRadiatorHostKey: '',
       sharedRadiatorHostName: '',
       sharedRadiatorRoomNames: [],
-      propertyWatts: Math.max(0, heat.totalWatts - heatedInternalWatts),
+      // Remove the same allowance-adjusted transfer that was added to the room.
+      // Age-based bridging is independent of internal transfers; percentage bridging is not.
+      propertyWatts: complete ? Math.max(0, heat.totalWatts - heatedInternalWatts *
+        (bridgeMethod === 'Percentage' ? 1 + numberValue('hl_bridge_pct', 10) / 100 : 1) *
+        heat.factorMultiplier) : 0,
       wattsPerSquareMetre: floorArea > 0 ? heat.totalWatts / floorArea : 0,
       radiatorOutcome: radiatorOutcome,
       customerRefused: customerRefused,
@@ -3370,7 +3379,15 @@
     var included = results.filter(function (result) {
       return result.started && result.complete;
     });
-    results.forEach(renderRoomResult);
+    results.forEach(function (room) {
+      // Use the final selection after shared-room and internal-transfer adjustments.
+      if (room.effectiveRadiator && room.effectiveRadiator.minimumSizeFallback) {
+        room.warnings.push('Minimum-size radiator exception: ' +
+          room.effectiveRadiator.oversizePercent.toFixed(1) +
+          '% oversized, above the normal 50% limit. Review emitter choice and room control.');
+      }
+      renderRoomResult(room);
+    });
     var totalWatts = included.reduce(function (sum, room) {
       return sum + room.propertyWatts;
     }, 0);
@@ -3610,11 +3627,15 @@
             : '') +
           '<br>Heat-loss equivalent: <b>' + room.ach.toFixed(2) + ' ACH</b></td></tr>';
       }).join('') : '<tr><td colspan="8" class="center">No completed rooms entered</td></tr>') +
+      rows.filter(function (room) { return room.warnings.length; }).map(function (room) {
+        return '<tr><td colspan="8" class="small"><b>' + escapeHtml(room.roomName) +
+          ' review:</b> ' + escapeHtml(room.warnings.join('. ')) + '</td></tr>';
+      }).join('') +
       '<tr><td colspan="8" class="small"><b>Survey disclaimer:</b> Some property construction materials, insulation levels and dimensions may be presumed from visible evidence or typical construction where they cannot be verified. Confirm them before equipment selection.</td></tr>' +
       '<tr><td colspan="8" class="small">Each numbered internal wall uses its measured length, selected construction and entered temperature on the other side. Signed room-to-adjoining temperature differences are retained for room radiator sizing.</td></tr>' +
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; P+ 300/450/600/700mm = 0.776/1.106/1.409/1.597; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Myson fan-convector options use normal-fan 75/65°C outputs: Kickspace 500/600/800 = 0.755/1.023/1.707 kW; Hi-Line RC 7-4/10-6/15-10/20-14 = 0.930/1.610/2.459/3.468 kW; Hi-Line LV 7-4 = 0.930 kW. The LV is the only Myson option offered in bathroom and en-suite rooms.</td></tr>' +
-      '<tr><td colspan="8" class="small">Radiator choices meet the calculated room heat loss without exceeding it by more than 50%. BBOE multiplies each radiator’s temperature-corrected output by 0.96 for the 4% connection reduction. It does not change the room or building heat loss. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
+      '<tr><td colspan="8" class="small">Normal radiator choices meet the room heat loss within a 50% oversize limit. A flagged minimum-size exception can exceed this limit and requires review. BBOE multiplies each radiator’s temperature-corrected output by 0.96 for the 4% connection reduction. It does not change the room or building heat loss. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
       '<tr><td colspan="8" class="small">Ventilation uses the selected MCS/CIBSE room and property-age minimum, or 0 ACH for a fully internal room. Room devices add their default airflow. MVHR applies the entered heat-recovery efficiency. PIV adds 20 m³/h across the property, shared by entered room volume. A manual room ACH overrides the automatic value.</td></tr>' +
       '<tr><td colspan="8" class="small">The detailed exposed floor perimeter is recorded for audit. The selected standard floor U-value is still used by this practical calculator. Use a certified BS EN 12831 or MCS tool where a full ISO 13370 ground-floor calculation is required.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +

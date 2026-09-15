@@ -103,6 +103,21 @@
         'Manual air-change rate is outside the expected 0–5 ACH range');
     }
 
+    if (input.rooflightSelected) {
+      var rooflightArea = finiteValue(input.rooflightArea);
+      if (rooflightArea === null || rooflightArea <= 0) {
+        add('rooflight-area', 'required', 'error',
+          'Rooflight area is required and must be greater than zero');
+      } else if (rooflightArea > Number(input.grossRoofArea)) {
+        add('rooflight-area', 'geometry', 'error',
+          'Rooflight area exceeds the roof area; correct the measurements');
+      }
+      if (input.heatedRoomAbove) {
+        add('rooflight-area', 'boundary', 'error',
+          'Rooflights cannot be assigned beneath a heated room above; check the ceiling construction');
+      }
+    }
+
     (input.radiatorOutputsKw || []).forEach(function (value) {
       if (Number(value) > 0 && outside(value, 0.05, 20)) {
         add('radiator-output', 'range', 'warning',

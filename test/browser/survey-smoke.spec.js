@@ -626,6 +626,10 @@ test('10 degree internal walls remain in the property heat loss', async ({ page 
     set('hl_lounge_internal_wall_type', 'Heated room, aerated block');
     set('hl_lounge_internal_segment_1_length', '15');
     set('hl_lounge_internal_segment_1_adjacent_temp', '10');
+    set('hl_bridge_method', 'Percentage');
+    set('hl_reheat_factor', '1');
+    set('hl_exposed_location', '1');
+    set('hl_high_ceiling_factor', '1');
     set('hl_lounge_wall_type', 'Cavity wall, insulated');
     set('hl_lounge_window_type', 'No windows');
     set('hl_lounge_door_type', 'No external door');
@@ -657,7 +661,7 @@ test('10 degree internal walls remain in the property heat loss', async ({ page 
   expect(result.unheated.internalWallWatts).toBeGreaterThan(0);
   expect(result.unheated.propertyWatts).toBeCloseTo(result.unheated.totalWatts, 9);
   expect(result.heated.propertyWatts).toBeCloseTo(
-    result.heated.totalWatts - result.heated.internalWallWatts,
+    result.heated.totalWatts - result.heated.internalWallWatts * 1.1,
     9
   );
 });
