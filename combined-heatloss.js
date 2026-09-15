@@ -687,6 +687,7 @@
       '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the design temperature, altitude and ground temperature.</div>' +
       '</div>' +
       '<p>Open Heat loss details inside each room. The room load is calculated automatically, then suitable Stelrad Elite or Myson fan-convector options can be selected in the radiator schedule.</p>' +
+      '<p class="hl-help" id="hl_calculation_method_notice"><b>Calculation method:</b> This survey currently uses the legacy room-by-room ventilation method. The MCS / BS EN 12831 reference ventilation calculation is under validation and is not yet used for equipment sizing.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The surveyor can verify the age separately before finalising the survey.') +
       fieldHtml('hl_property_age_source', 'Property age evidence', 'select', ['Title deeds or building-control record', 'Homeowner or landlord', 'Visual estimate', 'Unknown']) +
@@ -707,7 +708,7 @@
         { label: 'Survey radiators room by room', value: 'Room by room' },
         { label: 'Customer refused all radiator work', value: 'Customer refused all' }
       ], 'Refusal marks every room as Refused while leaving the boiler and materials choices available.') +
-      fieldHtml('hl_ventilation_system', 'Property ventilation system', 'select', VENTILATION_SYSTEMS, 'Automatic room ACH uses the selected MCS/CIBSE room and age minimum. MVHR reduces the mechanical ventilation loss by its heat-recovery efficiency. Additional vents and flues remain additive.') +
+      fieldHtml('hl_ventilation_system', 'Property ventilation system', 'select', VENTILATION_SYSTEMS, 'The current live calculation uses the legacy automatic room ACH table. MVHR applies its heat-recovery efficiency to that legacy ventilation loss; additional vents and flues remain additive. The separate MCS / BS EN 12831 method is under validation and is not used here yet.') +
       fieldHtml('hl_mvhr_efficiency', 'MVHR heat recovery (%)', 'number', null, 'Only used for MVHR. Enter the design efficiency, normally taken from the unit data.') +
       '</div>' +
       '<p class="hl-help hl-age-guidance">If the age is unknown, leave it as Unknown and search separately using reliable property records. Do not infer the age from neighbouring homes.</p>' +

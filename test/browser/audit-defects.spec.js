@@ -224,6 +224,19 @@ test('printing an unfinished survey warns before equipment recommendations are s
   expect(messages.join(' ')).toMatch(/provisional/i);
 });
 
+test('the live survey labels its legacy ventilation method honestly', async ({ page }) => {
+  await expect(page.locator('#hl_calculation_method_notice')).toContainText(
+    'legacy room-by-room ventilation method'
+  );
+  await expect(page.locator('#hl_calculation_method_notice')).toContainText(
+    'not yet used for equipment sizing'
+  );
+  await expect(page.locator('#hl_ventilation_system').locator('..')).toContainText(
+    'legacy automatic room ACH table'
+  );
+});
+
+
 test('a custom radiator rating goes stale when the design temperature changes', async ({ page }) => {
   await setFields(page, {
     rad_lounge_outcome: 'Assess existing radiator',
