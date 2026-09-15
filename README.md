@@ -58,7 +58,7 @@ Technical references:
 - [Elevation API EU](https://www.elevation-api.eu/)
 - [Met Office weather-station locations](https://www.metoffice.gov.uk/research/climate/maps-and-data/uk-synoptic-and-climate-stations)
 
-Construction choices are practical survey starting points and must be checked against the property. The app does not claim to be a certified MCS or BS EN 12831 design tool.
+`src/mcs-fabric.js` and `src/mcs-ventilation.js` implement the current MCS-reference method separately from the live workbook calculation. They are unit-tested but not yet connected to the survey, because the method still needs comparison against an established commercial calculator before it can be trusted on a live design. Until that comparison is recorded, the app does not claim to be a certified MCS or BS EN 12831 design tool.
 
 ## Running the app
 
@@ -78,6 +78,8 @@ Technical logic is being separated from the legacy single-page UI into dependenc
 - `src/radiator-sizing.js` — correction factors, radiator output and single/two-radiator selection
 - `src/persistence.js` — schema-versioned encoding and ordered migrations for saved surveys
 - `src/validation.js` — non-blocking physical-range checks
+- `src/mcs-fabric.js` — MCS-reference element fabric loss, effective U-values and default thermal-bridging factors
+- `src/mcs-ventilation.js` — MCS-reference infiltration, mechanical ventilation and room-minimum flows
 
 Run `npm test` for table-driven unit tests and `npm run check` for JavaScript syntax checks. After installing development dependencies and Chromium with `npx playwright install chromium`, run `npm run test:browser` for save/restore, JSON export, failed-postcode and print smoke tests. GitHub Actions runs these checks for pushes and pull requests.
 
