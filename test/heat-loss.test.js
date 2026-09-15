@@ -185,6 +185,49 @@ test('uses the DHDG ventilation age categories and chimney rates', () => {
   assert.equal(heatLoss.chimneyAirChangeRate(60, true), 2);
 });
 
+test('keeps property age bands and ventilation categories in separate vocabularies', () => {
+  // Ventilation categories are the named buckets pre-2000 / 2000-2006 / 2006+.
+  // A-M are RdSAP property age bands and must never be read as letter aliases for a
+  // ventilation category: B (1900-1929) and C (1930-1949) are pre-2000 property ages.
+  const expected = {
+    A: 'pre-2000',
+    B: 'pre-2000',
+    C: 'pre-2000',
+    D: 'pre-2000',
+    E: 'pre-2000',
+    F: 'pre-2000',
+    G: 'pre-2000',
+    H: 'pre-2000',
+    I: '2000-2006',
+    J: '2000-2006',
+    K: '2006+',
+    L: '2006+',
+    M: '2006+'
+  };
+  for (const [band, category] of Object.entries(expected)) {
+    assert.equal(heatLoss.ventilationAgeCategory(band), category, `band ${band}`);
+  }
+  assert.equal(heatLoss.ventilationAgeCategory('pre-2000'), 'pre-2000');
+  assert.equal(heatLoss.ventilationAgeCategory('2000-2006'), '2000-2006');
+  assert.equal(heatLoss.ventilationAgeCategory('2006+'), '2006+');
+  assert.equal(heatLoss.ventilationAgeCategory('old'), 'pre-2000');
+  assert.equal(heatLoss.ventilationAgeCategory('middle'), '2000-2006');
+  assert.equal(heatLoss.ventilationAgeCategory('modern'), '2006+');
+  assert.equal(heatLoss.ventilationAgeCategory('Unknown'), 'pre-2000');
+});
+
+test('keeps the older ACH table for pre-2000 age bands and the newer tables after 2000', () => {
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', 'B'), 1.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', 'C'), 1.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', 'H'), 1.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', 'pre-2000'), 1.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', 'J'), 1.0);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', '2000-2006'), 1.0);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Lounge', 'M'), 0.5);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Bathroom', 'C'), 3.0);
+  assert.equal(heatLoss.minimumRoomAirChangeRate('Bathroom', 'L'), 0.5);
+});
+
 test('applies documented additional room factors in sequence', () => {
   const result = heatLoss.applyAdditionalHeatLossFactors(2000, {
     thermalBridge: 1.1,

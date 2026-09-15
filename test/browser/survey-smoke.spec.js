@@ -293,6 +293,54 @@ test('uses property age and room type for automatic ACH and defaults radiator co
   expect(lounge.radiatorRequirementWatts).toBeCloseTo(lounge.totalWatts, 5);
   expect(lounge.radiatorConnectionOutputFactor).toBe(0.96);
 });
+
+test('older property age bands never fall back to a modern ventilation category', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  await page.evaluate(() => {
+    for (const [suffix, value] of [['len', '4'], ['wid', '3'], ['outside', '1']]) {
+      const field = document.getElementById(`rad_lounge_${suffix}`);
+      field.value = value;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    const values = {
+      hl_lounge_wall_type: 'Cavity wall, insulated',
+      hl_lounge_internal_wall_count: '0',
+      hl_lounge_internal_wall_type: 'No internal wall included',
+      hl_lounge_window_type: 'No windows',
+      hl_lounge_window_count: '0',
+      hl_lounge_door_type: 'No external door',
+      hl_lounge_door_count: '0',
+      hl_lounge_floor_type: 'Insulated solid ground floor',
+      hl_lounge_loft_type: 'Plasterboard with 200mm insulation',
+      hl_lounge_ventilation_mode: 'Automatic',
+      hl_lounge_ventilation_device: 'No additional vent or flue'
+    };
+    for (const [id, value] of Object.entries(values)) {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  const loungeFor = async () => page.evaluate(() =>
+    window.heatLossResultsV60.rooms.find(room => room.roomName === 'Lounge')
+  );
+  const readings = {};
+  for (const band of ['H', 'B', 'C', 'I', 'M']) {
+    await page.locator('#hl_property_age_band').selectOption(band);
+    const room = await loungeFor();
+    readings[band] = { ach: room.standardAch, total: room.totalWatts };
+  }
+  // B (1900-1929) and C (1930-1949) are pre-2000 property ages, so they must match H.
+  expect(readings.B.ach).toBe(1.5);
+  expect(readings.C.ach).toBe(1.5);
+  expect(readings.B.total).toBeCloseTo(readings.H.total, 5);
+  expect(readings.C.total).toBeCloseTo(readings.H.total, 5);
+  expect(readings.I.ach).toBe(1);
+  expect(readings.M.ach).toBe(0.5);
+  expect(readings.C.total).toBeGreaterThan(readings.I.total);
+  expect(readings.I.total).toBeGreaterThan(readings.M.total);
+});
 test('postcode lookup failure leaves manual temperatures usable', async ({ page }) => {
   await page.route('https://api.postcodes.io/**', route => route.abort());
   await page.locator('#site_postcode').fill('SW1A 1AA');

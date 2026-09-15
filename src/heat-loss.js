@@ -218,26 +218,56 @@
     ].includes(roomType) ? 21 : 18;
   }
 
+  // Two vocabularies live side by side and must never share aliases:
+  // - Ventilation age categories: the named buckets 'pre-2000', '2000-2006', '2006+'
+  //   (plus the legacy words old / middle / modern).
+  // - Property age bands: the RdSAP letters A-M used by PROPERTY_AGE_BANDS in
+  //   combined-heatloss.js. B is 1900-1929 and C is 1930-1949, so both are pre-2000
+  //   properties. Reading them as the legacy 'middle'/'modern' letter aliases understated
+  //   ventilation for older dwellings (a 1930-1949 lounge fell to 0.5 ACH, not 1.5).
+  // I (1996-2002) straddles the 2000 boundary and keeps its previous 2000-2006 pick.
+  var VENTILATION_AGE_BAND_CATEGORIES = {
+    A: 'pre-2000',
+    B: 'pre-2000',
+    C: 'pre-2000',
+    D: 'pre-2000',
+    E: 'pre-2000',
+    F: 'pre-2000',
+    G: 'pre-2000',
+    H: 'pre-2000',
+    I: '2000-2006',
+    J: '2000-2006',
+    K: '2006+',
+    L: '2006+',
+    M: '2006+'
+  };
+  var VENTILATION_AGE_CATEGORY_ALIASES = {
+    'PRE-2000': 'pre-2000',
+    'OLD': 'pre-2000',
+    '2000-2006': '2000-2006',
+    '1996-2002': '2000-2006',
+    'MIDDLE': '2000-2006',
+    '2006+': '2006+',
+    'MODERN': '2006+',
+    '2003-PRESENT': '2006+'
+  };
+  var VENTILATION_AGE_GROUPS = {
+    'pre-2000': 'old',
+    '2000-2006': 'middle',
+    '2006+': 'modern'
+  };
+
   function roomAirChangeAgeGroup(ageBand) {
-    var band = String(ageBand || 'Unknown').toUpperCase();
-    if (band === '2000-2006' || band === 'MIDDLE' || band === 'B' || band === 'J') return 'middle';
-    if (band === '2006+' || band === 'MODERN' || band === 'C') return 'modern';
-    if (band === 'PRE-2000' || band === 'OLD' || band === 'A') return 'old';
-    if (band === 'I' || band === '1996-2002') return 'middle';
-    if (['K', 'L', 'M'].includes(band) || band === '2003-PRESENT') {
-      return 'modern';
-    }
-    return 'old';
+    return VENTILATION_AGE_GROUPS[ventilationAgeCategory(ageBand)] || 'old';
   }
 
   function ventilationAgeCategory(ageBand) {
-    var band = String(ageBand || 'Unknown').toUpperCase();
-    if (['PRE-2000', 'OLD', 'A'].includes(band)) return 'pre-2000';
-    if (['2000-2006', 'MIDDLE', 'B', 'I', 'J', '1996-2002'].includes(band)) {
-      return '2000-2006';
+    var band = String(ageBand || 'Unknown').trim().toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(VENTILATION_AGE_BAND_CATEGORIES, band)) {
+      return VENTILATION_AGE_BAND_CATEGORIES[band];
     }
-    if (['2006+', 'MODERN', 'C', 'K', 'L', 'M', '2003-PRESENT'].includes(band)) {
-      return '2006+';
+    if (Object.prototype.hasOwnProperty.call(VENTILATION_AGE_CATEGORY_ALIASES, band)) {
+      return VENTILATION_AGE_CATEGORY_ALIASES[band];
     }
     return 'pre-2000';
   }
