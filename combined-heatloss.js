@@ -155,13 +155,17 @@
       'Rooflight, double glazed': 1.8
     },
     door: {
+      // RdSAP 10 Table 26 default U-values for external doors. A door counts as
+      // insulated only with documentary evidence of its U-value, so the
+      // uninsulated default governs by age band: 3.0 for bands A to J, 2.0 for K,
+      // 1.8 for L (1.6 in Scotland) and 1.4 for M.
+      // A door with 60% or more glazing is recorded as a window instead.
       'No external door': 0,
-      'Solid timber door': 3.0,
-      'Solid timber door, 25% single glazed': 3.5,
-      'Solid timber door, 50% single glazed': 3.9,
-      'Insulated external door': 1.8,
-      'Modern composite door': 1.4,
-      'High-performance insulated door': 1.0
+      'Uninsulated external door': 3.0,
+      'Uninsulated external door, age band K': 2.0,
+      'Insulated external door, age band L': 1.8,
+      'Insulated external door, age band M': 1.4,
+      'Door to unheated corridor or stairwell': 1.4
     },
     floor: {
       'Heated room below': 0,
@@ -1280,6 +1284,22 @@
       }
       if (data['hl_' + key + '_floor_type'] === 'Insulated ground floor') {
         setValue('hl_' + key + '_floor_type', 'Insulated solid ground floor');
+      }
+      // External door labels were replaced by the RdSAP 10 Table 26 values. The
+      // two part-glazed labels carried internal-door U-values (DHDG Table 2-42)
+      // and the high-performance label carried a Building Regulations target, so
+      // those surveys change value and are flagged by the calculation review.
+      var doorMigration = {
+        'Solid timber door': 'Uninsulated external door',
+        'Solid timber door, 25% single glazed': 'Uninsulated external door',
+        'Solid timber door, 50% single glazed': 'Uninsulated external door',
+        'Insulated external door': 'Insulated external door, age band L',
+        'Modern composite door': 'Insulated external door, age band M',
+        'High-performance insulated door': 'Insulated external door, age band M'
+      };
+      var storedDoor = data['hl_' + key + '_door_type'];
+      if (doorMigration[storedDoor]) {
+        setValue('hl_' + key + '_door_type', doorMigration[storedDoor]);
       }
       var ventilationModeId = 'hl_' + key + '_ventilation_mode';
       var manualAchId = 'hl_' + key + '_manual_ach';

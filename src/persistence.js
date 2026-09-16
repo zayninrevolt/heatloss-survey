@@ -6,12 +6,15 @@
   'use strict';
 
   var CURRENT_SCHEMA_VERSION = 3;
-  var CURRENT_CALC_METHOD_VERSION = 1;
+  var CURRENT_CALC_METHOD_VERSION = 2;
   var STANDARD_ADJACENT_TEMPERATURES = ['10', '18', '21', '22', '23'];
 
   var CALC_METHOD_REVIEW =
     'Saved before the calculation fixes: ventilation for 1900 to 1949 properties, ' +
-    'rooflight areas and heated-transfer allowances are now calculated differently. ' +
+    'rooflight areas, heated-transfer allowances and external door U-values are now ' +
+    'calculated differently. External doors now use the RdSAP 10 Table 26 defaults, ' +
+    'so any door saved as part-glazed or high-performance has been remapped and may ' +
+    'carry a different U-value. ' +
     'Recheck the room results before issuing this survey.';
 
   function plainObject(value) {

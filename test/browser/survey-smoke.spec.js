@@ -481,6 +481,73 @@ test('construction presets include the small DHDG reference set', async ({ page 
   expect(result.oneHundred.roofU).toBeCloseTo(0.17, 5);
   expect(result.oneTwentyFive.wallU).toBeCloseTo(0.77, 5);
 });
+
+test('external door presets carry the RdSAP 10 Table 26 default U-values', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const expected = {
+    'No external door': 0,
+    'Uninsulated external door': 3.0,
+    'Uninsulated external door, age band K': 2.0,
+    'Insulated external door, age band L': 1.8,
+    'Insulated external door, age band M': 1.4,
+    'Door to unheated corridor or stairwell': 1.4
+  };
+  const result = await page.evaluate((expectedValues) => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    set('rad_lounge_len', '4');
+    set('rad_lounge_wid', '3');
+    set('rad_lounge_outside', '1');
+    set('hl_lounge_internal_wall_count', '0');
+    set('hl_lounge_window_type', 'No windows');
+    set('hl_lounge_window_count', '0');
+    set('hl_lounge_door_count', '1');
+    set('hl_lounge_door_1_length', '0.9');
+    set('hl_lounge_door_1_width', '2');
+    set('hl_lounge_ventilation_mode', 'Automatic');
+    const select = document.getElementById('hl_lounge_door_type');
+    const options = Array.from(select.options)
+      .map((option) => option.value)
+      .filter((value) => value !== '');
+    const resolved = {};
+    options.forEach((option) => {
+      set('hl_lounge_door_type', option);
+      const room = window.heatLossResultsV60.rooms.find((item) => item.roomName === 'Lounge');
+      resolved[option] = room.doorU;
+    });
+    return { options: options, resolved: resolved, expected: expectedValues };
+  }, expected);
+  expect(result.options).toEqual(Object.keys(expected));
+  Object.keys(expected).forEach((label) => {
+    expect(result.resolved[label]).toBeCloseTo(expected[label], 5);
+  });
+});
+
+test('a survey saved with an old external door label is remapped on load', async ({ page }) => {
+  // The remap runs on load from stored data, so seed the envelope before the
+  // app's own scripts run, the same way the calculation-review test does.
+  await page.addInitScript(() => {
+    const key = 'heatLossDataV60';
+    const envelope = JSON.parse(localStorage.getItem(key) || '{"data":{}}');
+    envelope.data = envelope.data || {};
+    envelope.data.hl_lounge_door_type = 'Solid timber door, 50% single glazed';
+    envelope.data.hl_bath_door_type = 'High-performance insulated door';
+    envelope.data.hl_kitchen_door_type = 'Modern composite door';
+    localStorage.setItem(key, JSON.stringify(envelope));
+  });
+  await page.reload();
+  const remapped = await page.evaluate(() => ({
+    lounge: document.getElementById('hl_lounge_door_type').value,
+    bath: document.getElementById('hl_bath_door_type').value,
+    kitchen: document.getElementById('hl_kitchen_door_type').value
+  }));
+  expect(remapped.lounge).toBe('Uninsulated external door');
+  expect(remapped.bath).toBe('Insulated external door, age band M');
+  expect(remapped.kitchen).toBe('Insulated external door, age band M');
+});
 test('browser calculation uses signed gains, chimney ACH and room allowances', async ({ page }) => {
   await page.locator('#radsTab').click();
   await page.evaluate(() => {
