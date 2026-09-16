@@ -146,15 +146,20 @@
       'Unheated space, stud and plasterboard': 1.76
     },
     internalDoor: {
-      // CIBSE DHDG 2026 Table 2-42. Whole-door values for the standard
-      // internal door opening modelled below, separate from external doors.
+      // The MCS/CIBSE lookup below only specifies solid-timber leaves. Zayn's
+      // normal surveyed door is a lightweight plywood-faced hollow-core flush
+      // leaf, so use the 2.0 W/m²K internal-doorset manufacturer benchmark as
+      // the explicit survey default rather than mislabelling it as solid wood.
+      'Plywood-faced hollow-core internal door, survey default': 2.0,
+      // CIBSE DHDG 2026 Table 2-42 whole-door values, separate from external doors.
       'Solid wood internal door': 3.0,
       'Internal door, 25% single glazing': 3.5,
       'Internal door, 50% single glazing': 3.9,
       'Internal door, 75% single glazing': 4.4,
       'Internal door, 25% double glazing': 3.0,
       'Internal door, 50% double glazing': 2.9,
-      'Internal door, 75% double glazing': 2.9
+      'Internal door, 75% double glazing': 2.9,
+      'Known manufacturer/design U-value': 0
     },
     window: {
       // RdSAP 10 Table 24 default whole-window U-values, including the frame.
@@ -762,7 +767,9 @@
       fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       fieldHtml('hl_internal_door_type', 'Internal door type', 'select', optionsFromMap(VALUES.internalDoor),
-        'CIBSE DHDG Table 2-42. Applied to every room’s counted standard internal doors.') +
+        'Plywood-faced hollow-core flush doors use the 2.0 W/m²K survey default. Solid-wood and glazed options are CIBSE DHDG Table 2-42 values. Use a known U-value only with manufacturer or design evidence.') +
+      fieldHtml('hl_internal_door_known_u', 'Known internal-door U-value (W/m²K)', 'number', null,
+        'Only required when “Known manufacturer/design U-value” is selected. Record the evidence in Audit record and standards-reference evidence.' ) +
       '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
       '<details class="hl-property-defaults" id="hl_audit_evidence_details"><summary>Audit record and standards-reference evidence</summary>' +
       '<p class="hl-help"><b>Recorded for review:</b> these inputs build an auditable property record and prepare the future BS EN 12831 reference route. They do not alter the legacy boiler heat-loss calculation or radiator recommendation.</p>' +
@@ -1422,7 +1429,7 @@
       hl_default_wall: 'Cavity wall, insulated',
       hl_default_internal_wall: 'No internal wall included',
       hl_default_window: 'Older standard double glazing',
-      hl_internal_door_type: 'Solid wood internal door'
+      hl_internal_door_type: 'Plywood-faced hollow-core internal door, survey default'
     };
     Object.entries(propertyDefaults).forEach(function (entry) {
       if (!stringValue(entry[0])) setValue(entry[0], entry[1]);
@@ -2240,7 +2247,12 @@
     var requestedInternalDoorArea = internalDoorCount * STANDARD_INTERNAL_DOOR_AREA;
     var internalDoorsExceedWallArea = requestedInternalDoorArea > internalWallArea + 0.01;
     var internalDoorArea = Math.min(requestedInternalDoorArea, internalWallArea);
-    var internalDoorU = mappedValue('internalDoor', internalDoorType);
+    var internalDoorUsesKnownU = internalDoorType === 'Known manufacturer/design U-value';
+    var internalDoorKnownU = Number(stringValue('hl_internal_door_known_u'));
+    var internalDoorKnownUValid = Number.isFinite(internalDoorKnownU) && internalDoorKnownU > 0;
+    var internalDoorU = internalDoorUsesKnownU
+      ? (internalDoorKnownUValid ? internalDoorKnownU : 0)
+      : mappedValue('internalDoor', internalDoorType);
     if (internalWallSegments.length && internalWallArea > 0) {
       internalWallSegments.forEach(function (segment) {
         segment.area = segment.length * height;
@@ -2346,6 +2358,8 @@
     if (doorArea > 0 && (!doorType || doorU === 0)) missing.push('external door construction');
     if (internalDoorCount > 0 && internalWallArea <= 0) {
       missing.push('internal wall area for internal doors');
+    } else if (internalDoorCount > 0 && internalDoorUsesKnownU && !internalDoorKnownUValid) {
+      missing.push('known internal-door U-value');
     } else if (internalDoorCount > 0 && internalDoorU === 0) {
       missing.push('property-wide internal door construction');
     }

@@ -759,7 +759,7 @@ test('internal wall temperatures use the standard DHDG dropdown', async ({ page 
   ]);
 });
 
-test('internal doors use the global DHDG U-value and replace standard door area in each room', async ({ page }) => {
+test('internal doors use the global plywood-faced hollow-core survey default and replace standard door area in each room', async ({ page }) => {
   await page.locator('#radsTab').click();
   const result = await page.evaluate(async () => {
     const set = (id, value) => {
@@ -784,7 +784,7 @@ test('internal doors use the global DHDG U-value and replace standard door area 
     set('hl_lounge_door_type', 'No external door');
     set('hl_lounge_floor_type', 'Insulated solid ground floor');
     set('hl_lounge_loft_type', 'Plasterboard with 200mm insulation');
-    set('hl_internal_door_type', 'Solid wood internal door');
+    set('hl_internal_door_type', 'Plywood-faced hollow-core internal door, survey default');
     set('hl_lounge_internal_door_count', '0');
     await waitForRender();
     const noDoor = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
@@ -792,9 +792,23 @@ test('internal doors use the global DHDG U-value and replace standard door area 
     set('hl_lounge_internal_door_count', '1');
     await waitForRender();
     const withDoor = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    const withDoorResultText = document.getElementById('hl_lounge_result').textContent;
+    const withDoorPrintText = document.getElementById('preview').innerText;
+
+    set('hl_internal_door_type', 'Known manufacturer/design U-value');
+    await waitForRender();
+    const missingKnownU = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    set('hl_internal_door_known_u', '2.35');
+    await waitForRender();
+    const knownU = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
     return {
       controlLabel: document.querySelector('label[for="hl_lounge_internal_door_count"]').textContent,
-      globalType: document.getElementById('hl_internal_door_type').value,
+      globalType: withDoor.internalDoorType,
+      knownType: knownU.internalDoorType,
+      knownMissingWarnings: missingKnownU.warnings,
+      knownMissingComplete: missingKnownU.complete,
+      knownU: knownU.internalDoorU,
+      knownComplete: knownU.complete,
       noDoorWatts: noDoor.internalWallWatts,
       withDoorWatts: withDoor.internalWallWatts,
       count: withDoor.internalDoorCount,
@@ -802,24 +816,29 @@ test('internal doors use the global DHDG U-value and replace standard door area 
       u: withDoor.internalDoorU,
       deltaT: withDoor.internalWallSegments[0].deltaT,
       wallU: withDoor.internalWallSegments[0].u,
-      resultText: document.getElementById('hl_lounge_result').textContent,
-      printText: document.getElementById('preview').innerText,
+      resultText: withDoorResultText,
+      printText: withDoorPrintText,
       complete: withDoor.complete,
       warnings: withDoor.warnings
     };
   });
 
   expect(result.controlLabel).toMatch(/number of internal doors/i);
-  expect(result.globalType).toBe('Solid wood internal door');
+  expect(result.globalType).toBe('Plywood-faced hollow-core internal door, survey default');
+  expect(result.knownType).toBe('Known manufacturer/design U-value');
+  expect(result.knownMissingComplete).toBe(false);
+  expect(result.knownMissingWarnings.join(' ')).toContain('known internal-door U-value');
+  expect(result.knownU).toBe(2.35);
+  expect(result.knownComplete).toBe(true);
   expect(result.count).toBe(1);
   expect(result.area).toBeCloseTo(0.762 * 1.981, 9);
-  expect(result.u).toBe(3);
+  expect(result.u).toBe(2);
   expect(result.withDoorWatts - result.noDoorWatts).toBeCloseTo(
     result.area * (result.u - result.wallU) * result.deltaT,
     9
   );
-  expect(result.resultText).toContain('Internal doors: 1 × 1.51 m² at U 3.00');
-  expect(result.printText).toContain('Internal doors: 1 × 1.51m², U 3.00');
+  expect(result.resultText).toContain('Internal doors: 1 × 1.51 m² at U 2.00');
+  expect(result.printText).toContain('Internal doors: 1 × 1.51m², U 2.00');
   expect(result.complete).toBe(true);
   expect(result.warnings).toEqual([]);
 });
