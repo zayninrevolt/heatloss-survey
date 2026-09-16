@@ -943,33 +943,66 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
   expect(existingRecordedWithNewSizing.resultText).toContain('Existing radiator:');
   expect(existingRecordedWithNewSizing.replacementAvailable).toBe(true);
   await page.locator('#rad_lounge_outcome').selectOption('Assess existing radiator');
-  const existingSizeReplacement = await page.evaluate(() => {
+  await page.locator('#rad_lounge_ex_size').selectOption('600(h) x 1000(w) K1');
+  const undersizedOptions = await page.evaluate(() => {
     const field = document.getElementById('rad_lounge_new_size');
-    return Array.from(field.options).map(option => ({
-      value: option.value,
-      label: option.textContent,
-      disabled: field.disabled
-    }));
-  });
-  expect(existingSizeReplacement).toContainEqual({
-    value: '600(h) x 2000(w) K3',
-    label: expect.stringContaining('existing size'),
-    disabled: false
-  });
-  await page.locator('#rad_lounge_new_size').selectOption('600(h) x 2000(w) K3');
-  const selectedExistingAsReplacement = await page.evaluate(() => {
     const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
     return {
-      selectedSize: document.getElementById('rad_lounge_new_size').value,
-      effectiveSize: room.effectiveRadiator && room.effectiveRadiator.size,
-      existingSize: room.existingRadiator && room.existingRadiator.size
+      adequate: room.existingRadiatorAdequate,
+      sizeCount: Array.from(field.options).filter(
+        option => option.value && option.value !== 'No new radiator selected'
+      ).length
     };
   });
-  expect(selectedExistingAsReplacement).toEqual({
-    selectedSize: '600(h) x 2000(w) K3',
-    effectiveSize: '600(h) x 2000(w) K3',
-    existingSize: '600(h) x 2000(w) K3'
+  expect(undersizedOptions.adequate).toBe(false);
+  expect(undersizedOptions.sizeCount).toBeGreaterThan(2);
+
+  await page.locator('#rad_lounge_ex_size').selectOption('600(h) x 2000(w) K3');
+  const adequateOptions = await page.evaluate(() => {
+    const field = document.getElementById('rad_lounge_new_size');
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    return {
+      adequate: room.existingRadiatorAdequate,
+      selected: field.value,
+      options: Array.from(field.options).map(option => ({
+        value: option.value,
+        label: option.textContent
+      }))
+    };
   });
+  expect(adequateOptions.adequate).toBe(true);
+  expect(adequateOptions.selected).toBe('');
+  expect(adequateOptions.options).toHaveLength(2);
+  expect(adequateOptions.options[0].label).toMatch(/adequate/i);
+  expect(adequateOptions.options[1].value).toBe('600(h) x 2000(w) K3');
+  expect(adequateOptions.options[1].label).toContain('existing size');
+
+  await page.locator('#rad_lounge_new_size').selectOption('600(h) x 2000(w) K3');
+  const sameSizeReplacement = await page.evaluate(() => {
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    const field = document.getElementById('rad_lounge_new_size');
+    return {
+      selected: field.value,
+      stillTwoOptions: field.options.length === 2,
+      effectiveSize: room.effectiveRadiator && room.effectiveRadiator.size,
+      resultText: document.getElementById('hl_lounge_result').textContent
+    };
+  });
+  expect(sameSizeReplacement.selected).toBe('600(h) x 2000(w) K3');
+  expect(sameSizeReplacement.stillTwoOptions).toBe(true);
+  expect(sameSizeReplacement.effectiveSize).toBe('600(h) x 2000(w) K3');
+  expect(sameSizeReplacement.resultText).toContain('Same-size replacement');
+
+  await page.locator('#rad_lounge_new_size').selectOption('');
+  const keptExisting = await page.evaluate(() => {
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    return {
+      effectiveSize: room.effectiveRadiator && room.effectiveRadiator.size,
+      resultText: document.getElementById('hl_lounge_result').textContent
+    };
+  });
+  expect(keptExisting.effectiveSize).toBe('600(h) x 2000(w) K3');
+  expect(keptExisting.resultText).toContain('No new radiator is required');
   await expect(page.locator('#hl_lounge_radiator_requirement')).toHaveText(
     /^Required radiator output: \d+\.\d{2} kW \(\d+ W\)$/
   );

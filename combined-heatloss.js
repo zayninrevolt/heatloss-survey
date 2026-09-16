@@ -1671,19 +1671,6 @@
     return option;
   }
 
-  function includeExistingReplacementOption(options, existingRadiator) {
-    var existingOption = existingReplacementOption(existingRadiator);
-    if (!existingOption) return options;
-    var found = false;
-    var labelled = options.map(function (option) {
-      if (option.size !== existingOption.size) return option;
-      found = true;
-      return Object.assign({}, option, { existingReplacement: true });
-    });
-    if (!found) labelled.push(existingOption);
-    return sortRadiatorOptions(labelled, {});
-  }
-
   function recommendStelradElite(requiredWatts, indoor, currentSelection, key, roomName,
     existingReplacement) {
     var flow = Number(stringValue('hl_radiator_temperature')) || 75;
@@ -1718,10 +1705,15 @@
       var singleOptions = suitableStelradOptions(
         requiredWatts, correctionFactor, filters, 1, roomName, deltaT
       );
-      usesTwo = quantityChoice === '2' ||
-        (quantityChoice === 'Automatic' && !singleOptions.length);
+      // When the installed radiator already meets the load there is no sizing job
+      // left: the only honest answers are "keep it" or "fit the same size again".
+      // A catalogue of unrelated sizes here invites a smaller radiator than the one
+      // removed, which is what the customer complains about.
+      var existingOnly = existingReplacementOption(existingReplacement);
+      usesTwo = !existingOnly && (quantityChoice === '2' ||
+        (quantityChoice === 'Automatic' && !singleOptions.length));
       if (!usesTwo) {
-        options = includeExistingReplacementOption(singleOptions, existingReplacement);
+        options = existingOnly ? [existingOnly] : singleOptions;
         selectedFirst = options.find(function (option) {
           return option.size === currentFirstSize;
         }) || options.find(function (option) {
@@ -2901,6 +2893,31 @@
       : result.keepingExistingAdequateRadiator
         ? 'Keep the existing radiator, or choose a replacement'
         : 'Choose a suitable radiator';
+    var adequateAssessment = result.radiatorOutcome === 'Assess existing radiator' &&
+      result.existingRadiatorAdequate && result.radiator;
+    if (adequateAssessment) {
+      // Already meets the load: offer keeping it, or refitting the same size, and
+      // nothing else. A different size is a "Size a new radiator" outcome.
+      setRadiatorFieldLabel(result.key, 'new_size', result.roomName +
+        ' - Replacement radiator');
+      field.setAttribute('aria-label', result.roomName +
+        ' - Replacement radiator');
+      populateRadiatorSelect(
+        field,
+        radiator.options,
+        result.keepingExistingAdequateRadiator ? '' : existingValue,
+        'Existing radiator is adequate, no replacement required',
+        result.totalWatts,
+        false,
+        false
+      );
+      field.title = 'The recorded existing radiator already meets the calculated room ' +
+        'requirement. Keep it, or select the same size again to record a replacement ' +
+        '(for example if it is rusty, or so the new radiator is not smaller than the one removed).';
+      if (secondWrap) secondWrap.hidden = true;
+      if (secondField) secondField.value = '';
+      return { first: field, second: secondField };
+    }
     populateRadiatorSelect(
       field,
       radiator ? radiator.options : [],
@@ -3185,7 +3202,9 @@
         escapeHtml(result.sharedRadiatorRoomNames.join(' and ')) +
         '. ' + sharedRadiatorRequirementDescription(result) + '</div>';
     }
-    if (result.existingRadiator && !result.keepingExistingAdequateRadiator) {
+    var adequateAssessmentResult = result.radiatorOutcome === 'Assess existing radiator' &&
+      result.existingRadiatorAdequate;
+    if (result.existingRadiator && !adequateAssessmentResult) {
       radiatorHtml += '<div class="hl-radiator-result"><b>Existing radiator:</b> ' +
         escapeHtml(result.existingRadiator.size) + ' gives ' +
           (result.existingRadiator.watts / 1000).toFixed(2) + ' kW. ' +
@@ -3204,7 +3223,15 @@
         escapeHtml(result.existingRadiator.size) + ' gives ' +
         (result.existingRadiator.watts / 1000).toFixed(2) +
         ' kW. <strong>No new radiator is required.</strong> ' +
-        'Select the same size in the Replacement radiator dropdown to fit that size again.' +
+        'Select the same size in the Replacement radiator dropdown to record a same-size replacement.' +
+        '<small>Output adjusted for the selected design temperature at ΔT' +
+        result.radiator.deltaT.toFixed(1) + '.</small></div>';
+    } else if (adequateAssessmentResult && result.radiator && result.radiator.selected) {
+      radiatorHtml += '<div class="hl-radiator-result"><b>Same-size replacement:</b> ' +
+        escapeHtml(result.radiator.selected.size) + ' gives ' +
+        (result.radiator.selected.watts / 1000).toFixed(2) +
+        ' kW, which meets the calculated room requirement. The new radiator matches the size ' +
+        'of the one removed.' +
         '<small>Output adjusted for the selected design temperature at ΔT' +
         result.radiator.deltaT.toFixed(1) + '.</small></div>';
     } else if (result.newRadiatorDeclined) {
