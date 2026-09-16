@@ -54,7 +54,14 @@ test('Rads uses one active room editor with a persistent room navigator', async 
   expect(initial.roomButtons).toBeGreaterThan(1);
   expect(initial.loungeLength).toBe('4');
 
-  await page.locator('[data-room-completion-button="lounge"]').click();
+  const scrollRequest = await page.evaluate(() => {
+    const navigator = document.getElementById('hl_room_navigator');
+    window.__roomNavigatorScroll = null;
+    navigator.scrollIntoView = options => { window.__roomNavigatorScroll = options; };
+    document.querySelector('[data-room-completion-button="lounge"]').click();
+    return window.__roomNavigatorScroll;
+  });
+  expect(scrollRequest).toEqual({ behavior: 'smooth', block: 'start' });
   await expect(page.locator('.hl-room-editor.is-active #rad_lounge_len')).toBeVisible();
 
   await page.locator('#hl_room_navigator [data-hl-room-nav]').nth(1).click();

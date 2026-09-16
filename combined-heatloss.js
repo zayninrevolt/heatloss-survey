@@ -4448,6 +4448,12 @@
     });
   }
 
+  function scrollToRoomNavigator() {
+    var navigator = document.getElementById('hl_room_navigator');
+    if (!navigator || typeof navigator.scrollIntoView !== 'function') return;
+    navigator.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   window.completeRadiatorRoom = function (key) {
     var field = document.getElementById('rad_' + key + '_completed');
     if (!field) return;
@@ -4461,6 +4467,7 @@
     }
     refreshRoomCompletionControls();
     persistCombinedData();
+    scrollToRoomNavigator();
   };
 
   var previousRebuildRadsForm = rebuildRadsForm;
