@@ -759,6 +759,71 @@ test('internal wall temperatures use the standard DHDG dropdown', async ({ page 
   ]);
 });
 
+test('internal doors use the global DHDG U-value and replace standard door area in each room', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const result = await page.evaluate(async () => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      if (!field) throw new Error(`Missing field ${id}`);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const waitForRender = () => new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    set('rad_lounge_len', '5');
+    set('rad_lounge_wid', '4');
+    set('rad_lounge_outside', '1');
+    set('hl_lounge_external_wall_length', '5');
+    set('hl_lounge_internal_wall_count', '1');
+    set('hl_lounge_internal_wall_type', 'Heated room, aerated block');
+    set('hl_lounge_internal_segment_1_length', '13');
+    set('hl_lounge_internal_segment_1_adjacent_temp', '10');
+    set('hl_lounge_wall_type', 'Cavity wall, insulated');
+    set('hl_lounge_window_type', 'No windows');
+    set('hl_lounge_door_type', 'No external door');
+    set('hl_lounge_floor_type', 'Insulated solid ground floor');
+    set('hl_lounge_loft_type', 'Plasterboard with 200mm insulation');
+    set('hl_internal_door_type', 'Solid wood internal door');
+    set('hl_lounge_internal_door_count', '0');
+    await waitForRender();
+    const noDoor = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+
+    set('hl_lounge_internal_door_count', '1');
+    await waitForRender();
+    const withDoor = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    return {
+      controlLabel: document.querySelector('label[for="hl_lounge_internal_door_count"]').textContent,
+      globalType: document.getElementById('hl_internal_door_type').value,
+      noDoorWatts: noDoor.internalWallWatts,
+      withDoorWatts: withDoor.internalWallWatts,
+      count: withDoor.internalDoorCount,
+      area: withDoor.internalDoorArea,
+      u: withDoor.internalDoorU,
+      deltaT: withDoor.internalWallSegments[0].deltaT,
+      wallU: withDoor.internalWallSegments[0].u,
+      resultText: document.getElementById('hl_lounge_result').textContent,
+      printText: document.getElementById('preview').innerText,
+      complete: withDoor.complete,
+      warnings: withDoor.warnings
+    };
+  });
+
+  expect(result.controlLabel).toMatch(/number of internal doors/i);
+  expect(result.globalType).toBe('Solid wood internal door');
+  expect(result.count).toBe(1);
+  expect(result.area).toBeCloseTo(0.762 * 1.981, 9);
+  expect(result.u).toBe(3);
+  expect(result.withDoorWatts - result.noDoorWatts).toBeCloseTo(
+    result.area * (result.u - result.wallU) * result.deltaT,
+    9
+  );
+  expect(result.resultText).toContain('Internal doors: 1 × 1.51 m² at U 3.00');
+  expect(result.printText).toContain('Internal doors: 1 × 1.51m², U 3.00');
+  expect(result.complete).toBe(true);
+  expect(result.warnings).toEqual([]);
+});
+
 test('10 degree internal walls remain in the property heat loss', async ({ page }) => {
   await page.locator('#radsTab').click();
   const result = await page.evaluate(async () => {
@@ -1124,10 +1189,13 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
   });
   expect(adequateOptions.adequate).toBe(true);
   expect(adequateOptions.selected).toBe('');
-  expect(adequateOptions.options).toHaveLength(2);
   expect(adequateOptions.options[0].label).toMatch(/adequate/i);
-  expect(adequateOptions.options[1].value).toBe('600(h) x 2000(w) K3');
-  expect(adequateOptions.options[1].label).toContain('existing size');
+  const existingReplacement = adequateOptions.options.find(option =>
+    option.value === '600(h) x 2000(w) K3');
+  expect(existingReplacement.label).toContain('existing size');
+  const suitableRecommendation = adequateOptions.options.find(option =>
+    option.value && option.value !== '600(h) x 2000(w) K3');
+  expect(suitableRecommendation.label).toMatch(/kW/);
 
   await page.locator('#rad_lounge_new_size').selectOption('600(h) x 2000(w) K3');
   const sameSizeReplacement = await page.evaluate(() => {
@@ -1135,15 +1203,28 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
     const field = document.getElementById('rad_lounge_new_size');
     return {
       selected: field.value,
-      stillTwoOptions: field.options.length === 2,
+      suitableRecommendationCount: Array.from(field.options).filter(option =>
+        option.value && option.value !== '600(h) x 2000(w) K3'
+      ).length,
       effectiveSize: room.effectiveRadiator && room.effectiveRadiator.size,
       resultText: document.getElementById('hl_lounge_result').textContent
     };
   });
   expect(sameSizeReplacement.selected).toBe('600(h) x 2000(w) K3');
-  expect(sameSizeReplacement.stillTwoOptions).toBe(true);
+  expect(sameSizeReplacement.suitableRecommendationCount).toBeGreaterThan(0);
   expect(sameSizeReplacement.effectiveSize).toBe('600(h) x 2000(w) K3');
   expect(sameSizeReplacement.resultText).toContain('Same-size replacement');
+
+  await page.locator('#rad_lounge_new_size').selectOption(suitableRecommendation.value);
+  const recommendedReplacement = await page.evaluate(() => {
+    const room = window.heatLossResultsV60.rooms.find(item => item.key === 'lounge');
+    return {
+      effectiveSize: room.effectiveRadiator && room.effectiveRadiator.size,
+      resultText: document.getElementById('hl_lounge_result').textContent
+    };
+  });
+  expect(recommendedReplacement.effectiveSize).toBe(suitableRecommendation.value);
+  expect(recommendedReplacement.resultText).toContain('Recommended replacement');
 
   await page.locator('#rad_lounge_new_size').selectOption('');
   const keptExisting = await page.evaluate(() => {

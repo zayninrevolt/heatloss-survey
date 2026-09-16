@@ -145,6 +145,17 @@
       'Unheated space, single brick': 2.05,
       'Unheated space, stud and plasterboard': 1.76
     },
+    internalDoor: {
+      // CIBSE DHDG 2026 Table 2-42. Whole-door values for the standard
+      // internal door opening modelled below, separate from external doors.
+      'Solid wood internal door': 3.0,
+      'Internal door, 25% single glazing': 3.5,
+      'Internal door, 50% single glazing': 3.9,
+      'Internal door, 75% single glazing': 4.4,
+      'Internal door, 25% double glazing': 3.0,
+      'Internal door, 50% double glazing': 2.9,
+      'Internal door, 75% double glazing': 2.9
+    },
     window: {
       // RdSAP 10 Table 24 default whole-window U-values, including the frame.
       // They are NOT manufacturer/product U-values: documentary evidence is
@@ -253,6 +264,10 @@
     { label: 'L, 2012 to 2022', value: 'L' },
     { label: 'M, 2023 onwards', value: 'M' }
   ];
+  var STANDARD_INTERNAL_DOOR_WIDTH_METRES = 0.762;
+  var STANDARD_INTERNAL_DOOR_HEIGHT_METRES = 1.981;
+  var STANDARD_INTERNAL_DOOR_AREA = STANDARD_INTERNAL_DOOR_WIDTH_METRES *
+    STANDARD_INTERNAL_DOOR_HEIGHT_METRES;
   var DHDG_ADJACENT_TEMPERATURES = [
     { label: '10°C, unheated space or party wall', value: '10' },
     { label: '18°C, functional room', value: '18' },
@@ -339,6 +354,7 @@
     'internal_wall_length',
     'internal_wall_count',
     'internal_wall_type',
+    'internal_door_count',
     'internal_adjacent_room',
     'internal_adjacent_space',
     'internal_adjacent_temp',
@@ -513,6 +529,8 @@
       fieldHtml('hl_' + key + '_internal_wall_count', 'Number of internal walls',
         'select', countOptions,
         'Initially estimated as four minus the outside wall count. Change it for irregular rooms.') +
+      fieldHtml('hl_' + key + '_internal_door_count', 'Number of internal doors', 'number', null,
+        'Each door uses the standard 762 × 1981 mm opening (1.51 m²), deducted from the internal walls.') +
       internalWallFieldHtml(key) + '</div>' +
       '<p class="hl-help">Enter the measured length and the temperature on the other side of each wall.</p>' +
       rows + '</div>';
@@ -738,11 +756,13 @@
       '</div>' +
       '<p class="hl-help hl-age-guidance">If the age is unknown, leave it as Unknown and search separately using reliable property records. Do not infer the age from neighbouring homes.</p>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
-      '<p class="hl-help">Applies external wall, internal wall and window defaults only. Floor, loft and room ventilation devices must be selected inside each room.</p>' +
+      '<p class="hl-help">Applies external wall, internal wall and window defaults only. The internal-door choice is property-wide; each room separately records its number of standard doors. Floor, loft and room ventilation devices must be selected inside each room.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_default_wall', 'External wall', 'select', optionsFromMap(VALUES.externalWall)) +
       fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
+      fieldHtml('hl_internal_door_type', 'Internal door type', 'select', optionsFromMap(VALUES.internalDoor),
+        'CIBSE DHDG Table 2-42. Applied to every room’s counted standard internal doors.') +
       '</div><button type="button" id="hl_apply_defaults">Apply to all rooms</button></details>' +
       '<details class="hl-property-defaults" id="hl_audit_evidence_details"><summary>Audit record and standards-reference evidence</summary>' +
       '<p class="hl-help"><b>Recorded for review:</b> these inputs build an auditable property record and prepare the future BS EN 12831 reference route. They do not alter the legacy boiler heat-loss calculation or radiator recommendation.</p>' +
@@ -1244,6 +1264,10 @@
         if (entry[1]) field.dataset.restoredValue = entry[1];
         else delete field.dataset.restoredValue;
       }
+      if (field.tagName === 'SELECT' && /_new_size$/.test(field.id) && entry[1] &&
+          entry[1] !== NO_NEW_RADIATOR_SELECTION) {
+        field.dataset.userSelected = 'yes';
+      }
       field.value = entry[1];
     });
     migrateOldHeatLossValues(data || {});
@@ -1397,7 +1421,8 @@
     var propertyDefaults = {
       hl_default_wall: 'Cavity wall, insulated',
       hl_default_internal_wall: 'No internal wall included',
-      hl_default_window: 'Older standard double glazing'
+      hl_default_window: 'Older standard double glazing',
+      hl_internal_door_type: 'Solid wood internal door'
     };
     Object.entries(propertyDefaults).forEach(function (entry) {
       if (!stringValue(entry[0])) setValue(entry[0], entry[1]);
@@ -1431,6 +1456,7 @@
         indoor_temp: newIndoorDefault,
         wall_type: 'Cavity wall, insulated',
         internal_wall_type: 'No internal wall included',
+        internal_door_count: '0',
         window_count: '0',
         window_type: 'Older standard double glazing',
         door_count: '0',
@@ -1775,15 +1801,20 @@
       var singleOptions = suitableStelradOptions(
         requiredWatts, correctionFactor, filters, 1, roomName, deltaT
       );
-      // When the installed radiator already meets the load there is no sizing job
-      // left: the only honest answers are "keep it" or "fit the same size again".
-      // A catalogue of unrelated sizes here invites a smaller radiator than the one
-      // removed, which is what the customer complains about.
+      // An adequate existing radiator remains the default, and its recorded size
+      // stays selectable for a like-for-like replacement. The surveyor can also
+      // see the catalogue sizes that meet the calculated load, so a replacement
+      // can be sized deliberately rather than being limited to the old emitter.
       var existingOnly = existingReplacementOption(existingReplacement);
+      var recommendedSingleOptions = existingOnly
+        ? singleOptions.filter(function (option) {
+          return option.size !== existingOnly.size;
+        })
+        : singleOptions;
       usesTwo = !existingOnly && (quantityChoice === '2' ||
         (quantityChoice === 'Automatic' && !singleOptions.length));
       if (!usesTwo) {
-        options = existingOnly ? [existingOnly] : singleOptions;
+        options = existingOnly ? [existingOnly].concat(recommendedSingleOptions) : singleOptions;
         selectedFirst = options.find(function (option) {
           return option.size === currentFirstSize;
         }) || options.find(function (option) {
@@ -2143,6 +2174,9 @@
       Math.max(0, numberValue('hl_' + key + '_alternative_wall_length', 0)));
     var alternativeWallType = stringValue('hl_' + key + '_alternative_wall_type');
     var internalWallType = stringValue('hl_' + key + '_internal_wall_type');
+    var internalDoorType = stringValue('hl_internal_door_type');
+    var internalDoorCount = Math.max(0, Math.round(numberValue(
+      'hl_' + key + '_internal_door_count', 0)));
     var numberedInternalWallMode = internalWallCountText !== '' || legacySegmentCount === 0;
     var internalWallSegments = [];
     var internalWallMissing = [];
@@ -2202,6 +2236,17 @@
         return sum + segment.length * height;
       }, 0);
       assumedInternalWall = false;
+    }
+    var requestedInternalDoorArea = internalDoorCount * STANDARD_INTERNAL_DOOR_AREA;
+    var internalDoorsExceedWallArea = requestedInternalDoorArea > internalWallArea + 0.01;
+    var internalDoorArea = Math.min(requestedInternalDoorArea, internalWallArea);
+    var internalDoorU = mappedValue('internalDoor', internalDoorType);
+    if (internalWallSegments.length && internalWallArea > 0) {
+      internalWallSegments.forEach(function (segment) {
+        segment.area = segment.length * height;
+        segment.doorArea = internalDoorArea * segment.area / internalWallArea;
+        segment.doorU = internalDoorU;
+      });
     }
     var windowType = stringValue('hl_' + key + '_window_type');
     var doorType = stringValue('hl_' + key + '_door_type');
@@ -2299,6 +2344,11 @@
     if (doorCount > 0 && !doorMeasurements.complete) missing.push('door dimensions');
     if (windowArea > 0 && (!windowType || windowU === 0)) missing.push('window construction');
     if (doorArea > 0 && (!doorType || doorU === 0)) missing.push('external door construction');
+    if (internalDoorCount > 0 && internalWallArea <= 0) {
+      missing.push('internal wall area for internal doors');
+    } else if (internalDoorCount > 0 && internalDoorU === 0) {
+      missing.push('property-wide internal door construction');
+    }
     if (rooflightArea > 0 && (!rooflightType || rooflightU === 0)) missing.push('rooflight construction');
     if (!floorType) missing.push('floor construction');
     if (!loftType) missing.push('ceiling or loft construction');
@@ -2306,7 +2356,8 @@
     if (ventilationMode === 'Manual override' && !manualAchValid) {
       missing.push('manual air-change rate');
     }
-    var complete = dimensionsComplete && missing.length === 0 && !openingsExceedWallArea;
+    var complete = dimensionsComplete && missing.length === 0 && !openingsExceedWallArea &&
+      !internalDoorsExceedWallArea;
     var adjacentKey = stringValue('hl_' + key + '_internal_adjacent_room');
     var adjacentName = allRoomNames().find(function (candidate) {
       return roomKeyFromName(candidate) === adjacentKey;
@@ -2391,6 +2442,8 @@
       wallU: wallU,
       internalWallArea: internalWallArea,
       internalWallU: internalWallU,
+      internalDoorArea: internalDoorArea,
+      internalDoorU: internalDoorU,
       windowArea: windowArea,
       windowU: windowU,
       doorArea: doorArea,
@@ -2401,7 +2454,8 @@
       rooflightArea: rooflightArea,
       rooflightU: rooflightU,
       internalSegments: internalWallSegments.length ? internalWallSegments.map(function (segment) {
-        return { area: segment.length * height, u: segment.u, deltaT: segment.deltaT };
+        return { area: segment.area, u: segment.u, deltaT: segment.deltaT,
+          doorArea: segment.doorArea, doorU: segment.doorU };
       }) : null,
       ach: effectiveAch,
       ventilationFlowM3h: ventilationFlowM3h,
@@ -2436,6 +2490,9 @@
     }
     if (openingsExceedWallArea) {
       warnings.push('Window and door areas exceed the exposed wall area; correct the measurements before sizing a radiator');
+    }
+    if (internalDoorsExceedWallArea) {
+      warnings.push('Standard internal door area exceeds the entered internal wall area; reduce the door count or check the wall dimensions');
     }
     if (manualWallExceedsRectangle) {
       warnings.push('Exposed wall length exceeds the simple rectangular perimeter; check this irregular-room measurement');
@@ -2526,7 +2583,8 @@
       ? internalWallSegments.reduce(function (sum, segment) {
         var isUnheatedBoundary = Number(segment.adjacentTemperature) === 10;
         if (!isHeatedInternalWall(segment.type) || isUnheatedBoundary) return sum;
-        return sum + segment.length * height * segment.u * segment.deltaT;
+        return sum + (segment.area - segment.doorArea) * segment.u * segment.deltaT +
+          segment.doorArea * segment.doorU * segment.deltaT;
       }, 0)
       : isHeatedInternalWall(internalWallType)
         ? heat.internalWallWatts
@@ -2560,6 +2618,10 @@
       wallType: wallType,
       internalWallType: internalWallType,
       internalWallSegments: internalWallSegments,
+      internalDoorType: internalDoorType,
+      internalDoorCount: internalDoorCount,
+      internalDoorArea: internalDoorArea,
+      internalDoorU: internalDoorU,
       internalWallFactor: internalWallFactor,
       internalDeltaT: internalDeltaT,
       adjacentRoomName: adjacentName,
@@ -2762,6 +2824,11 @@
     if (field.dataset.existingRadiatorWired !== 'yes') {
       field.dataset.existingRadiatorWired = 'yes';
       field.addEventListener('change', function () {
+        var replacementField = document.getElementById('rad_' + result.key + '_new_size');
+        if (replacementField && radiatorOutcomeForRoom(result.key) ===
+            'Assess existing radiator') {
+          replacementField.dataset.userSelected = 'no';
+        }
         var customSelected = field.value === CUSTOM_EXISTING_RADIATOR_SELECTION;
         if (customOutputWrap) customOutputWrap.hidden = !customSelected;
         if (customOutputField) {
@@ -2925,6 +2992,7 @@
     if (field.dataset.stelradWired !== 'yes') {
       field.dataset.stelradWired = 'yes';
       field.addEventListener('change', function () {
+        field.dataset.userSelected = 'yes';
         if (typeof update === 'function') update();
         persistCombinedData();
       });
@@ -2966,8 +3034,8 @@
     var adequateAssessment = result.radiatorOutcome === 'Assess existing radiator' &&
       result.existingRadiatorAdequate && result.radiator;
     if (adequateAssessment) {
-      // Already meets the load: offer keeping it, or refitting the same size, and
-      // nothing else. A different size is a "Size a new radiator" outcome.
+      // Keep the adequate no-replacement default and recorded same-size option,
+      // while also offering catalogue choices that meet the calculated load.
       setRadiatorFieldLabel(result.key, 'new_size', result.roomName +
         ' - Replacement radiator');
       field.setAttribute('aria-label', result.roomName +
@@ -2975,15 +3043,15 @@
       populateRadiatorSelect(
         field,
         radiator.options,
-        result.keepingExistingAdequateRadiator ? '' : existingValue,
+        field.dataset.userSelected === 'yes' ? existingValue : '',
         'Existing radiator is adequate, no replacement required',
         result.totalWatts,
         false,
         false
       );
       field.title = 'The recorded existing radiator already meets the calculated room ' +
-        'requirement. Keep it, or select the same size again to record a replacement ' +
-        '(for example if it is rusty, or so the new radiator is not smaller than the one removed).';
+        'requirement. Keep it, select the same size to record a replacement, or choose ' +
+        'a listed suitable replacement that meets the required output.';
       if (secondWrap) secondWrap.hidden = true;
       if (secondField) secondField.value = '';
       return { first: field, second: secondField };
@@ -3293,15 +3361,19 @@
         escapeHtml(result.existingRadiator.size) + ' gives ' +
         (result.existingRadiator.watts / 1000).toFixed(2) +
         ' kW. <strong>No new radiator is required.</strong> ' +
-        'Select the same size in the Replacement radiator dropdown to record a same-size replacement.' +
+        'If it is replaced, choose the recorded same size or a suitable replacement that meets the required output.' +
         '<small>Output adjusted for the selected design temperature at ΔT' +
         result.radiator.deltaT.toFixed(1) + '.</small></div>';
     } else if (adequateAssessmentResult && result.radiator && result.radiator.selected) {
-      radiatorHtml += '<div class="hl-radiator-result"><b>Same-size replacement:</b> ' +
-        escapeHtml(result.radiator.selected.size) + ' gives ' +
+      var sameSizeReplacement = result.radiator.selected.existingReplacement;
+      radiatorHtml += '<div class="hl-radiator-result"><b>' +
+        (sameSizeReplacement ? 'Same-size replacement:' : 'Recommended replacement:') +
+        '</b> ' + escapeHtml(result.radiator.selected.size) + ' gives ' +
         (result.radiator.selected.watts / 1000).toFixed(2) +
-        ' kW, which meets the calculated room requirement. The new radiator matches the size ' +
-        'of the one removed.' +
+        ' kW, which meets the calculated room requirement. ' +
+        (sameSizeReplacement
+          ? 'The new radiator matches the size of the one removed.'
+          : 'This is a suitable catalogue size for the calculated output.') +
         '<small>Output adjusted for the selected design temperature at ΔT' +
         result.radiator.deltaT.toFixed(1) + '.</small></div>';
     } else if (result.newRadiatorDeclined) {
@@ -3380,6 +3452,10 @@
       var gainDetails = result.internalWallWatts < 0
         ? ' &nbsp; Internal-wall gain: ' + Math.round(result.internalWallWatts) + ' W'
         : '';
+      var internalDoorDetails = result.internalDoorCount > 0
+        ? ' &nbsp; Internal doors: ' + result.internalDoorCount + ' × ' +
+          result.internalDoorArea.toFixed(2) + ' m² at U ' + result.internalDoorU.toFixed(2)
+        : '';
       var radiatorFactorDetails = result.radiatorOutputFactor !== 1
         ? ' &nbsp; Installation/finish output factor: ×' +
           result.radiatorOutputFactor.toFixed(2)
@@ -3396,7 +3472,7 @@
         Math.round(result.fabricWatts) + ' W &nbsp; Ventilation: ' +
         Math.round(result.ventilationWatts) + ' W &nbsp; Load density: ' +
         result.wattsPerSquareMetre.toFixed(1) + ' W/m²' + factorDetails + gainDetails +
-        radiatorFactorDetails + connectionFactorDetails + '<br><small>' +
+        internalDoorDetails + radiatorFactorDetails + connectionFactorDetails + '<br><small>' +
         escapeHtml(ventilationDetails) + '; effective heat-loss airflow ' +
         result.ach.toFixed(2) + ' ACH.</small></div>' + radiatorHtml +
         (result.warnings.length
@@ -3867,6 +3943,11 @@
             ? '<br>Bridge y-value: ' + room.bridgeFactor.toFixed(2) + ' W/m²K'
             : '') + '</td>' +
           '<td>' + uValueAssumption(room.internalWallType, room.internalWallU, room.internalWallLength > 0 && room.internalWallU > 0) +
+          (room.internalDoorCount > 0
+            ? '<br>Internal doors: ' + room.internalDoorCount + ' × ' +
+              room.internalDoorArea.toFixed(2) + 'm², U ' + room.internalDoorU.toFixed(2) +
+              ' (' + escapeHtml(room.internalDoorType) + ')'
+            : '') +
           (room.adjacentRoomName ? '<br>Adjacent: ' + escapeHtml(room.adjacentRoomName) + ' (' + room.adjacentIndoor.toFixed(0) + '°C)' :
             room.internalWallLength > 0 && String(room.internalWallType).indexOf('Unheated') === 0
               ? '<br>Adjacent: ' + escapeHtml(room.adjacentSpace) +

@@ -329,11 +329,19 @@
     var wallWatts = nonNegative(input.netWallArea) * nonNegative(input.wallU) * deltaT;
     var internalSegments = Array.isArray(input.internalSegments)
       ? input.internalSegments : [];
+    var internalDoorArea = nonNegative(input.internalDoorArea);
+    var internalDoorU = nonNegative(input.internalDoorU);
     var internalWallWatts = internalSegments.length
       ? internalSegments.reduce(function (sum, segment) {
-        return sum + nonNegative(segment.area) * nonNegative(segment.u) * signedNumber(segment.deltaT);
+        var segmentArea = nonNegative(segment.area);
+        var segmentDoorArea = Math.min(segmentArea, nonNegative(segment.doorArea));
+        return sum + (segmentArea - segmentDoorArea) * nonNegative(segment.u) *
+          signedNumber(segment.deltaT) + segmentDoorArea * nonNegative(segment.doorU) *
+          signedNumber(segment.deltaT);
       }, 0)
-      : nonNegative(input.internalWallArea) * nonNegative(input.internalWallU) * internalDeltaT;
+      : Math.max(0, nonNegative(input.internalWallArea) - internalDoorArea) *
+        nonNegative(input.internalWallU) * internalDeltaT +
+        internalDoorArea * internalDoorU * internalDeltaT;
     var windowWatts = nonNegative(input.windowArea) * nonNegative(input.windowU) * deltaT;
     var doorWatts = nonNegative(input.doorArea) * nonNegative(input.doorU) * deltaT;
     var floorDeltaT = input.floorDeltaT == null ? deltaT : signedNumber(input.floorDeltaT);
