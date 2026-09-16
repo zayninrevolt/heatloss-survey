@@ -41,7 +41,7 @@ test('flat rooflights replace opaque roof area instead of adding overlapping los
   const opaque = await room(page);
   expect(opaque.complete).toBe(true);
   await setFields(page, {
-    hl_lounge_rooflight_type: 'Rooflight, double glazed', hl_lounge_rooflight_area: '2'
+    hl_lounge_rooflight_type: 'Double or triple glazed roof window, 2002 to 2021', hl_lounge_rooflight_area: '2'
   });
   const glazed = await room(page);
   expect(glazed.complete).toBe(true);
@@ -53,7 +53,7 @@ test('flat rooflights replace opaque roof area instead of adding overlapping los
 for (const area of ['', '0', '-1', '100']) {
   test(`rooflight area '${area}' blocks an incomplete or impossible survey`, async ({ page }) => {
     await setFields(page, {
-      hl_lounge_rooflight_type: 'Rooflight, double glazed', hl_lounge_rooflight_area: area
+      hl_lounge_rooflight_type: 'Double or triple glazed roof window, 2002 to 2021', hl_lounge_rooflight_area: area
     });
     const invalid = await room(page);
     expect(invalid.complete).toBe(false);
@@ -70,7 +70,7 @@ for (const area of ['', '0', '-1', '100']) {
 test('rooflights cannot be assigned underneath a heated room above', async ({ page }) => {
   await setFields(page, {
     hl_lounge_loft_type: 'Heated room above',
-    hl_lounge_rooflight_type: 'Rooflight, double glazed', hl_lounge_rooflight_area: '2'
+    hl_lounge_rooflight_type: 'Double or triple glazed roof window, 2002 to 2021', hl_lounge_rooflight_area: '2'
   });
   expect((await room(page)).complete).toBe(false);
   expect((await room(page)).warnings.join(' ')).toMatch(/rooflight.*heated room above/i);

@@ -146,25 +146,46 @@
       'Unheated space, stud and plasterboard': 1.76
     },
     window: {
+      // RdSAP 10 Table 24 default whole-window U-values, including the frame.
+      // They are NOT manufacturer/product U-values: documentary evidence is
+      // required to use an actual U-value. Pre-regulation dates are England/
+      // Wales before 2002, Scotland before 2003 and Northern Ireland before 2006.
       'No windows': 0,
-      'Single glazing': 4.8,
-      'Single glazing with secondary glazing': 2.9,
-      'Older standard double glazing': 2.8,
-      'Modern low-E double glazing': 1.6,
-      'Triple glazing': 1.1,
-      'Rooflight, double glazed': 1.8
+      'Single-glazed window, PVC or wood frame': 4.8,
+      'Single glazing with secondary glazing, normal emissivity': 2.9,
+      'Double-glazed window, pre-regulation, 6mm gap': 3.1,
+      'Double-glazed window, pre-regulation, 12mm gap': 2.8,
+      'Double-glazed window, pre-regulation, 16mm+ gap': 2.7,
+      'Triple-glazed window, pre-regulation, 6mm gaps': 2.4,
+      'Triple-glazed window, pre-regulation, 12mm gaps': 2.1,
+      'Triple-glazed window, pre-regulation, 16mm+ gaps': 2.0,
+      'Double or triple glazed window, 2002 to 2021': 2.0,
+      'Double or triple glazed window, 2022+': 1.4
+    },
+    rooflight: {
+      // RdSAP 10 Table 24 roof-window column, assumed 45 degree pitch with
+      // a PVC or wooden frame. Keep this separate from vertical windows.
+      'No rooflights': 0,
+      'Single-glazed roof window': 5.3,
+      'Double-glazed roof window, pre-regulation, 6mm gap': 3.4,
+      'Double-glazed roof window, pre-regulation, 12mm gap': 3.1,
+      'Double-glazed roof window, pre-regulation, 16mm+ gap': 3.0,
+      'Triple-glazed roof window, pre-regulation, 6mm gaps': 2.6,
+      'Triple-glazed roof window, pre-regulation, 12mm gaps': 2.3,
+      'Triple-glazed roof window, pre-regulation, 16mm+ gaps': 2.2,
+      'Double or triple glazed roof window, 2002 to 2021': 2.3,
+      'Double or triple glazed roof window, 2022+': 1.6
     },
     door: {
-      // RdSAP 10 Table 26 default U-values for external doors. A door counts as
-      // insulated only with documentary evidence of its U-value, so the
-      // uninsulated default governs by age band: 3.0 for bands A to J, 2.0 for K,
-      // 1.8 for L (1.6 in Scotland) and 1.4 for M.
-      // A door with 60% or more glazing is recorded as a window instead.
+      // RdSAP 10 Table 26 default U-values for a door opening outside. A door
+      // only counts as insulated with documentary evidence of its U-value. A
+      // door with 60% or more glazing is recorded as a window instead.
       'No external door': 0,
-      'Uninsulated external door': 3.0,
-      'Uninsulated external door, age band K': 2.0,
-      'Insulated external door, age band L': 1.8,
-      'Insulated external door, age band M': 1.4,
+      'External door, age bands A to J': 3.0,
+      'External door, age band K': 2.0,
+      'External door, age band L (England, Wales or NI)': 1.8,
+      'External door, age band L (Scotland)': 1.6,
+      'External door, age band M': 1.4,
       'Door to unheated corridor or stairwell': 1.4
     },
     floor: {
@@ -651,11 +672,8 @@
         'Roof and loft constructions use the outdoor design temperature because the loft space is already included in the U-value.') +
       '<input type="hidden" id="hl_' + escapeHtml(key) +
       '_roof_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_roof_adjacent_temp">' +
-      fieldHtml('hl_' + key + '_rooflight_type', 'Rooflights', 'select', [
-        { label: 'No rooflights', value: 'No rooflights' },
-        { label: 'Rooflight, double glazed', value: 'Rooflight, double glazed' },
-        { label: 'Rooflight, single glazed', value: 'Single glazing' }
-      ]) +
+      fieldHtml('hl_' + key + '_rooflight_type', 'Rooflights', 'select',
+        optionsFromMap(VALUES.rooflight)) +
       fieldHtml('hl_' + key + '_rooflight_area', 'Total rooflight area (m²)', 'number', null, 'Keep rooflights separate from the roof or ceiling area.') +
       fieldHtml('hl_' + key + '_assumption_quality', 'Construction evidence', 'select', ['Measured and confirmed', 'Visually estimated', 'Age-based assumption', 'General default']) +
       fieldHtml('hl_' + key + '_ventilation_mode', 'Room air-change rate', 'select', AIR_CHANGE_MODES, 'Automatic uses the MCS/CIBSE minimum for this room type and the selected property age band, or 0 ACH where the room has no external envelope.') +
@@ -1263,13 +1281,41 @@
       }
       if (!stringValue('hl_' + key + '_window_type') && oldWindow) {
         if (oldWindow === 'Single glazing') {
-          setValue('hl_' + key + '_window_type', 'Single glazing');
+          setValue('hl_' + key + '_window_type',
+            'Single-glazed window, PVC or wood frame');
         } else if (oldWindow.toLowerCase().includes('double')) {
-          setValue('hl_' + key + '_window_type', 'Older standard double glazing');
+          setValue('hl_' + key + '_window_type',
+            'Double-glazed window, pre-regulation, 12mm gap');
         }
       }
-      if (data['hl_' + key + '_window_type'] === 'Double glazing') {
-        setValue('hl_' + key + '_window_type', 'Older standard double glazing');
+      var windowMigration = {
+        'Single glazing': 'Single-glazed window, PVC or wood frame',
+        'Single glazing with secondary glazing':
+          'Single glazing with secondary glazing, normal emissivity',
+        'Older standard double glazing':
+          'Double-glazed window, pre-regulation, 12mm gap',
+        // Older vague labels cannot prove a product U-value. They are mapped
+        // to conservative RdSAP defaults and the calculation-version review
+        // tells the surveyor to verify the glazing installation date/evidence.
+        'Modern low-E double glazing':
+          'Double or triple glazed window, 2002 to 2021',
+        'Triple glazing': 'Double or triple glazed window, 2002 to 2021',
+        'Rooflight, double glazed':
+          'Double or triple glazed window, 2002 to 2021',
+        'Double glazing': 'Double-glazed window, pre-regulation, 12mm gap'
+      };
+      var storedWindow = data['hl_' + key + '_window_type'];
+      if (windowMigration[storedWindow]) {
+        setValue('hl_' + key + '_window_type', windowMigration[storedWindow]);
+      }
+      var rooflightMigration = {
+        'Rooflight, double glazed':
+          'Double or triple glazed roof window, 2002 to 2021',
+        'Single glazing': 'Single-glazed roof window'
+      };
+      var storedRooflight = data['hl_' + key + '_rooflight_type'];
+      if (rooflightMigration[storedRooflight]) {
+        setValue('hl_' + key + '_rooflight_type', rooflightMigration[storedRooflight]);
       }
       if (data['hl_' + key + '_roof_exposed'] === 'Yes' &&
           !data['hl_' + key + '_loft_type']) {
@@ -1285,17 +1331,21 @@
       if (data['hl_' + key + '_floor_type'] === 'Insulated ground floor') {
         setValue('hl_' + key + '_floor_type', 'Insulated solid ground floor');
       }
-      // External door labels were replaced by the RdSAP 10 Table 26 values. The
-      // two part-glazed labels carried internal-door U-values (DHDG Table 2-42)
-      // and the high-performance label carried a Building Regulations target, so
-      // those surveys change value and are flagged by the calculation review.
+      // External door labels were replaced by the RdSAP 10 Table 26 values.
+      // The older list mixed internal-door U-values and a notional target into
+      // an external-door control, so every saved value needs an explicit route.
       var doorMigration = {
-        'Solid timber door': 'Uninsulated external door',
-        'Solid timber door, 25% single glazed': 'Uninsulated external door',
-        'Solid timber door, 50% single glazed': 'Uninsulated external door',
-        'Insulated external door': 'Insulated external door, age band L',
-        'Modern composite door': 'Insulated external door, age band M',
-        'High-performance insulated door': 'Insulated external door, age band M'
+        'Solid timber door': 'External door, age bands A to J',
+        'Solid timber door, 25% single glazed': 'External door, age bands A to J',
+        'Solid timber door, 50% single glazed': 'External door, age bands A to J',
+        'Insulated external door': 'External door, age band L (England, Wales or NI)',
+        'Modern composite door': 'External door, age band M',
+        'High-performance insulated door': 'External door, age band M',
+        'Uninsulated external door': 'External door, age bands A to J',
+        'Uninsulated external door, age band K': 'External door, age band K',
+        'Insulated external door, age band L':
+          'External door, age band L (England, Wales or NI)',
+        'Insulated external door, age band M': 'External door, age band M'
       };
       var storedDoor = data['hl_' + key + '_door_type'];
       if (doorMigration[storedDoor]) {
@@ -2181,7 +2231,7 @@
     var rooflightType = stringValue('hl_' + key + '_rooflight_type');
     var rooflightArea = rooflightType && rooflightType !== 'No rooflights'
       ? Math.max(0, numberValue('hl_' + key + '_rooflight_area', 0)) : 0;
-    var rooflightU = mappedValue('window', rooflightType);
+    var rooflightU = mappedValue('rooflight', rooflightType);
     var hasExternalEnvelope = wallLength > 0 || windowArea > 0 || doorArea > 0 ||
       rooflightArea > 0 || floorU > 0 || roofU > 0;
     var roomAgeBand = stringValue('hl_' + key + '_element_age_band');

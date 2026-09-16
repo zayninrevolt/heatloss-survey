@@ -486,10 +486,11 @@ test('external door presets carry the RdSAP 10 Table 26 default U-values', async
   await page.locator('#radsTab').click();
   const expected = {
     'No external door': 0,
-    'Uninsulated external door': 3.0,
-    'Uninsulated external door, age band K': 2.0,
-    'Insulated external door, age band L': 1.8,
-    'Insulated external door, age band M': 1.4,
+    'External door, age bands A to J': 3.0,
+    'External door, age band K': 2.0,
+    'External door, age band L (England, Wales or NI)': 1.8,
+    'External door, age band L (Scotland)': 1.6,
+    'External door, age band M': 1.4,
     'Door to unheated corridor or stairwell': 1.4
   };
   const result = await page.evaluate((expectedValues) => {
@@ -526,7 +527,77 @@ test('external door presets carry the RdSAP 10 Table 26 default U-values', async
   });
 });
 
-test('a survey saved with an old external door label is remapped on load', async ({ page }) => {
+test('external window and rooflight presets carry the RdSAP 10 Table 24 values', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const expectedWindows = {
+    'No windows': 0,
+    'Single-glazed window, PVC or wood frame': 4.8,
+    'Single glazing with secondary glazing, normal emissivity': 2.9,
+    'Double-glazed window, pre-regulation, 6mm gap': 3.1,
+    'Double-glazed window, pre-regulation, 12mm gap': 2.8,
+    'Double-glazed window, pre-regulation, 16mm+ gap': 2.7,
+    'Triple-glazed window, pre-regulation, 6mm gaps': 2.4,
+    'Triple-glazed window, pre-regulation, 12mm gaps': 2.1,
+    'Triple-glazed window, pre-regulation, 16mm+ gaps': 2.0,
+    'Double or triple glazed window, 2002 to 2021': 2.0,
+    'Double or triple glazed window, 2022+': 1.4
+  };
+  const expectedRooflights = {
+    'No rooflights': 0,
+    'Single-glazed roof window': 5.3,
+    'Double-glazed roof window, pre-regulation, 6mm gap': 3.4,
+    'Double-glazed roof window, pre-regulation, 12mm gap': 3.1,
+    'Double-glazed roof window, pre-regulation, 16mm+ gap': 3.0,
+    'Triple-glazed roof window, pre-regulation, 6mm gaps': 2.6,
+    'Triple-glazed roof window, pre-regulation, 12mm gaps': 2.3,
+    'Triple-glazed roof window, pre-regulation, 16mm+ gaps': 2.2,
+    'Double or triple glazed roof window, 2002 to 2021': 2.3,
+    'Double or triple glazed roof window, 2022+': 1.6
+  };
+  const result = await page.evaluate(({ windows, rooflights }) => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+      if (field.value !== value) throw new Error(id + ' rejected ' + value);
+    };
+    set('rad_lounge_len', '4');
+    set('rad_lounge_wid', '3');
+    set('rad_lounge_outside', '1');
+    set('hl_lounge_internal_wall_count', '0');
+    set('hl_lounge_window_count', '1');
+    set('hl_lounge_window_1_length', '1');
+    set('hl_lounge_window_1_width', '1');
+    set('hl_lounge_door_type', 'No external door');
+    set('hl_lounge_door_count', '0');
+    set('hl_lounge_ventilation_mode', 'Automatic');
+    const resolve = (fieldId, expected) => {
+      const select = document.getElementById(fieldId);
+      const options = Array.from(select.options)
+        .map((option) => option.value)
+        .filter((value) => value !== '');
+      const resolved = {};
+      options.forEach((option) => {
+        set(fieldId, option);
+        const room = window.heatLossResultsV60.rooms.find((item) => item.roomName === 'Lounge');
+        resolved[option] = fieldId.endsWith('_rooflight_type') ? room.rooflightU : room.windowU;
+      });
+      return { options, resolved, expected };
+    };
+    return {
+      windows: resolve('hl_lounge_window_type', windows),
+      rooflights: resolve('hl_lounge_rooflight_type', rooflights)
+    };
+  }, { windows: expectedWindows, rooflights: expectedRooflights });
+  [['windows', expectedWindows], ['rooflights', expectedRooflights]].forEach(([kind, expected]) => {
+    expect(result[kind].options).toEqual(Object.keys(expected));
+    Object.keys(expected).forEach((label) => {
+      expect(result[kind].resolved[label]).toBeCloseTo(expected[label], 5);
+    });
+  });
+});
+
+test('a survey saved with old external window, rooflight and door labels is remapped on load', async ({ page }) => {
   // The remap runs on load from stored data, so seed the envelope before the
   // app's own scripts run, the same way the calculation-review test does.
   await page.addInitScript(() => {
@@ -536,17 +607,31 @@ test('a survey saved with an old external door label is remapped on load', async
     envelope.data.hl_lounge_door_type = 'Solid timber door, 50% single glazed';
     envelope.data.hl_bath_door_type = 'High-performance insulated door';
     envelope.data.hl_kitchen_door_type = 'Modern composite door';
+    envelope.data.hl_bed_1_window_type = 'Modern low-E double glazing';
+    envelope.data.hl_lounge_window_type = 'Triple glazing';
+    envelope.data.hl_kitchen_window_type = 'Rooflight, double glazed';
+    envelope.data.hl_bath_rooflight_type = 'Rooflight, double glazed';
     localStorage.setItem(key, JSON.stringify(envelope));
   });
   await page.reload();
   const remapped = await page.evaluate(() => ({
-    lounge: document.getElementById('hl_lounge_door_type').value,
-    bath: document.getElementById('hl_bath_door_type').value,
-    kitchen: document.getElementById('hl_kitchen_door_type').value
+    loungeDoor: document.getElementById('hl_lounge_door_type').value,
+    bathDoor: document.getElementById('hl_bath_door_type').value,
+    kitchenDoor: document.getElementById('hl_kitchen_door_type').value,
+    bedWindow: document.getElementById('hl_bed_1_window_type').value,
+    loungeWindow: document.getElementById('hl_lounge_window_type').value,
+    kitchenWindow: document.getElementById('hl_kitchen_window_type').value,
+    bathRooflight: document.getElementById('hl_bath_rooflight_type').value
   }));
-  expect(remapped.lounge).toBe('Uninsulated external door');
-  expect(remapped.bath).toBe('Insulated external door, age band M');
-  expect(remapped.kitchen).toBe('Insulated external door, age band M');
+  expect(remapped.loungeDoor).toBe('External door, age bands A to J');
+  expect(remapped.bathDoor).toBe('External door, age band M');
+  expect(remapped.kitchenDoor).toBe('External door, age band M');
+  expect(remapped.bedWindow).toBe('Double or triple glazed window, 2002 to 2021');
+  expect(remapped.loungeWindow).toBe('Double or triple glazed window, 2002 to 2021');
+  expect(remapped.kitchenWindow).toBe('Double or triple glazed window, 2002 to 2021');
+  expect(remapped.bathRooflight).toBe(
+    'Double or triple glazed roof window, 2002 to 2021'
+  );
 });
 test('browser calculation uses signed gains, chimney ACH and room allowances', async ({ page }) => {
   await page.locator('#radsTab').click();
