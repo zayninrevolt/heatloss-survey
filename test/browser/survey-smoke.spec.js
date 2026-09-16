@@ -1286,9 +1286,12 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
       radiatorControlsTogether: radiatorControls.every(control =>
         control && radiatorPanel.contains(control)
       ),
-      existingRadiatorControlsFirst: radiatorPanel.querySelector(
-        '.hl-radiator-controls').firstElementChild.id ===
-        'hl_lounge_existing_radiator_fields'
+      existingRadiatorControlsFirst: (() => {
+        const first = radiatorPanel.querySelector('.hl-radiator-controls').firstElementChild;
+        return first && first.classList.contains('hl-radiator-group') &&
+          first.querySelector('h5')?.textContent === 'Existing radiator' &&
+          first.contains(document.getElementById('hl_lounge_existing_radiator_fields'));
+      })()
     };
   });
   expect(metrics.sidebarWidth).toBeGreaterThanOrEqual(440);

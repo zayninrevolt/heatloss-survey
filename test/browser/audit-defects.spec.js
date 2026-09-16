@@ -37,6 +37,40 @@ test.beforeEach(async ({ page }) => {
   await setFields(page, base);
 });
 
+test('Rads uses one active room editor with a persistent room navigator', async ({ page }) => {
+  await expect(page.locator('#hl_room_navigator')).toBeVisible();
+  await expect(page.locator('.hl-room-editor.is-active')).toHaveCount(1);
+  await expect(page.locator('.hl-room-editor:visible')).toHaveCount(1);
+  await expect(page.locator('.hl-room-editor.is-active > details > summary')).toBeHidden();
+  await expect(page.locator('.hl-room-editor.is-active #rad_lounge_len')).toBeVisible();
+  await expect(page.locator('.hl-room-editor.is-active .hl-room-section')).toHaveCount(2);
+
+  const initial = await page.evaluate(() => ({
+    active: document.querySelector('.hl-room-editor.is-active').dataset.hlRoom,
+    roomButtons: document.querySelectorAll('#hl_room_navigator [data-hl-room-nav]').length,
+    loungeLength: document.getElementById('rad_lounge_len').value
+  }));
+  expect(initial.active).toBe('lounge');
+  expect(initial.roomButtons).toBeGreaterThan(1);
+  expect(initial.loungeLength).toBe('4');
+
+  await page.locator('[data-room-completion-button="lounge"]').click();
+  await expect(page.locator('.hl-room-editor.is-active #rad_lounge_len')).toBeVisible();
+
+  await page.locator('#hl_room_navigator [data-hl-room-nav]').nth(1).click();
+  const switched = await page.evaluate(() => ({
+    active: document.querySelector('.hl-room-editor.is-active').dataset.hlRoom,
+    visibleEditors: [...document.querySelectorAll('.hl-room-editor')]
+      .filter(editor => getComputedStyle(editor).display !== 'none').length,
+    loungeLength: document.getElementById('rad_lounge_len').value,
+    loungeEditorDisplay: getComputedStyle(document.querySelector('.hl-room-editor[data-hl-room="lounge"]')).display
+  }));
+  expect(switched.active).not.toBe('lounge');
+  expect(switched.visibleEditors).toBe(1);
+  expect(switched.loungeLength).toBe('4');
+  expect(switched.loungeEditorDisplay).toBe('none');
+});
+
 test('flat rooflights replace opaque roof area instead of adding overlapping loss', async ({ page }) => {
   const opaque = await room(page);
   expect(opaque.complete).toBe(true);

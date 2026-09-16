@@ -594,10 +594,238 @@ body.theme-dark .room-completion-action button {
   }
 }
 
+.hl-room-navigator {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  margin: 0 -2px 14px;
+  padding: 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  background: rgba(239, 246, 255, 0.97);
+  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.12);
+}
+
+.hl-room-navigator-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: #1e3a8a;
+}
+
+.hl-room-navigator-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hl-room-navigator-heading small {
+  color: #475569;
+  font-size: 11px;
+}
+
+#hl_room_navigator_status {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hl-room-navigator-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.hl-room-nav-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 7px 9px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e3a8a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hl-room-nav-button:hover,
+.hl-room-nav-button:focus-visible {
+  border-color: #2563eb;
+  outline: 2px solid #93c5fd;
+  outline-offset: 1px;
+}
+
+.hl-room-nav-button.is-active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  box-shadow: inset 3px 0 #2563eb;
+}
+
+.hl-room-nav-button.is-complete .hl-room-nav-name::before {
+  content: "✓ ";
+  color: #15803d;
+}
+
+.hl-room-nav-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hl-room-nav-meta {
+  flex: 0 0 auto;
+  color: #475569;
+  font-size: 10px;
+  text-align: right;
+}
+
+.hl-room-editor[hidden] {
+  display: none !important;
+}
+
+.hl-room-editor.is-active > .hl-room-dropdown {
+  display: block;
+  margin: 0 0 14px;
+  border-color: #2563eb;
+  background: #f8fbff;
+}
+
+#radsForm .hl-room-editor.is-active > details > summary,
+#radsForm .hl-room-editor > details .hl-room-dropdown > summary {
+  display: none !important;
+}
+
+#radsForm .hl-room-editor > .hl-room-dropdown > summary {
+  display: none !important;
+}
+
+.hl-room-section {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.hl-room-section > h4 {
+  margin: 0 0 10px;
+  color: #1e3a8a;
+  font-size: 15px;
+}
+
+.hl-room-section .hl-fields-grid {
+  margin: 0;
+}
+
+.hl-room-subsection {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #dbeafe;
+}
+
+.hl-room-subsection:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.hl-room-subsection > h5,
+.hl-radiator-group > h5 {
+  margin: 0 0 8px;
+  color: #1e3a8a;
+  font-size: 13px;
+}
+
+.hl-room-subsection .hl-fields-grid {
+  margin: 0;
+}
+
+.hl-radiator-group {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #bfdbfe;
+}
+
+.hl-radiator-group:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.hl-room-section-fabric {
+  margin-top: 14px;
+}
+
+
+.hl-room-editor.is-active .hl-room-body {
+  padding: 12px;
+}
+
+.hl-room-editor.is-active .hl-radiator-panel {
+  margin: 0 0 14px;
+}
+
+body.theme-dark .hl-room-navigator {
+  border-color: #1d4ed8;
+  background: rgba(23, 37, 84, 0.97);
+}
+
+body.theme-dark .hl-room-navigator-heading,
+body.theme-dark .hl-room-nav-button,
+body.theme-dark .hl-room-section > h4,
+body.theme-dark .hl-room-subsection > h5,
+body.theme-dark .hl-radiator-group > h5 {
+  color: #bfdbfe;
+}
+
+body.theme-dark .hl-room-navigator-heading small,
+body.theme-dark #hl_room_navigator_status,
+body.theme-dark .hl-room-nav-meta {
+  color: #cbd5e1;
+}
+
+body.theme-dark .hl-room-nav-button,
+body.theme-dark .hl-room-section {
+  border-color: #1d4ed8;
+  background: #0f172a;
+}
+
+body.theme-dark .hl-room-nav-button.is-active {
+  background: #1e3a8a;
+}
+
+@media (max-width: 700px) {
+  .hl-room-navigator-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .hl-room-navigator-list {
+    grid-template-columns: 1fr;
+  }
+
+  .hl-room-nav-meta {
+    font-size: 11px;
+  }
+}
+
 @media print {
   .heatloss-sheet {
     width: 100% !important;
     max-width: 285mm !important;
     min-width: 0 !important;
+  }
+
+  .hl-room-navigator {
+    display: none !important;
   }
 }

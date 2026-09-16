@@ -637,12 +637,13 @@
       '<p class="hl-room-intro">Length and width come from this room. Ceiling height comes from the top of the Rads page. Construction choices apply standard values automatically.</p>' +
       '<div class="hl-room-geometry" id="hl_' + escapeHtml(key) +
       '_geometry" aria-live="polite">Enter the room length and width to see its wall geometry.</div>' +
+      '<section class="hl-room-section hl-room-section-basics"><h4>Room basics and external walls</h4>' +
       '<div class="hl-fields-grid">' +
       fieldHtml('hl_' + key + '_indoor_temp', 'Room design temperature', 'select', temperatures) +
       sharedRadiatorFieldHtml(key) +
       fieldHtml('hl_' + key + '_external_wall_length', 'Exposed wall length (m)', 'number', null, 'Leave blank to estimate it from the outside wall count above.') +
       fieldHtml('hl_' + key + '_wall_type', 'External wall construction', 'select', optionsFromMap(VALUES.externalWall)) +
-      '</div>' +
+      '</div></section>' +
       '<section class="hl-internal-wall" id="hl_' + escapeHtml(key) +
       '_internal_wall" hidden><div class="hl-internal-wall-heading"><h4>Internal wall details</h4><p id="hl_' +
       escapeHtml(key) + '_internal_wall_help"></p></div>' +
@@ -655,7 +656,7 @@
       '_internal_adjacent_space" data-id="hl_' + escapeHtml(key) + '_internal_adjacent_space">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) +
       '_internal_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_internal_adjacent_temp">' +
-      '</section><div class="hl-fields-grid">' +
+      '</section><section class="hl-room-section hl-room-section-fabric"><h4>Openings, fabric and ventilation</h4><div class="hl-fields-grid">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_area" data-id="hl_' +
       escapeHtml(key) + '_window_area">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_width" data-id="hl_' +
@@ -709,7 +710,7 @@
       fieldHtml('hl_' + key + '_radiator_installation', 'Radiator installation', 'select', RADIATOR_INSTALLATION_FACTORS, 'The selected factor reduces actual emitter output for a shelf or enclosure.') +
       fieldHtml('hl_' + key + '_radiator_finish', 'Radiator finish', 'select', RADIATOR_FINISH_FACTORS, 'Metallic paint reduces output by 15%; factory, oil or water-based finishes use 1.00.') +
       fieldHtml('hl_' + key + '_rad_quantity', 'Number of new radiators', 'select', ['Automatic', '1', '2'], 'Automatic tries one radiator first, then two independently sized radiators if required.') +
-      '</div>' +
+      '</div></section>' +
       '<div class="hl-room-result" id="hl_' + escapeHtml(key) + '_result">' +
       '<div class="hl-result-main">Enter the room length and width</div>' +
       '</div></div></details>';
@@ -4086,6 +4087,185 @@
     return resultsSheet + renderHeatLossAssumptionsSheet(calculation);
   }
 
+  var activeRoomWorkspaceKey = '';
+
+  function roomWorkspaceResult(key) {
+    var calculation = window.heatLossResultsV60;
+    return calculation && Array.isArray(calculation.rooms)
+      ? calculation.rooms.find(function (room) { return room.key === key; })
+      : null;
+  }
+
+  function roomWorkspaceStatus(roomName, key) {
+    var result = roomWorkspaceResult(key);
+    var completed = stringValue('rad_' + key + '_completed') === 'yes';
+    var state = completed
+      ? 'Complete'
+      : result && result.complete
+        ? 'Ready to review'
+        : result && result.started
+          ? 'In progress'
+          : 'Not started';
+    var load = result && result.complete
+      ? (result.totalWatts / 1000).toFixed(2) + ' kW'
+      : 'No heat loss yet';
+    var radiator = result && result.effectiveRadiator
+      ? 'Radiator selected'
+      : result && result.existingRadiator
+        ? 'Existing radiator recorded'
+        : 'Radiator not selected';
+    return {
+      state: state,
+      load: load,
+      radiator: radiator,
+      label: roomName + ': ' + state + ', ' + load + ', ' + radiator
+    };
+  }
+
+  function roomWorkspaceNavigatorHtml(roomNames) {
+    return '<nav class="hl-room-navigator" id="hl_room_navigator" aria-label="Rooms">' +
+      '<div class="hl-room-navigator-heading"><div><b>Rooms</b><span id="hl_room_navigator_status"></span></div>' +
+      '<small>Select a room to edit it. Only one room is open at a time.</small></div>' +
+      '<div class="hl-room-navigator-list">' +
+      roomNames.map(function (roomName) {
+        var key = roomKeyFromName(roomName);
+        return '<button type="button" class="hl-room-nav-button" data-hl-room-nav="' +
+          escapeHtml(key) + '" aria-label="' + escapeHtml(roomName) + '">' +
+          '<span class="hl-room-nav-name">' + escapeHtml(roomName) + '</span>' +
+          '<span class="hl-room-nav-meta" id="hl_room_nav_meta_' + escapeHtml(key) + '"></span>' +
+          '</button>';
+      }).join('') +
+      '</div></nav>';
+  }
+
+  function refreshRoomNavigator() {
+    var navigator = document.getElementById('hl_room_navigator');
+    if (!navigator) return;
+    var roomNames = allRoomNames();
+    var keys = roomNames.map(roomKeyFromName);
+    if (!keys.includes(activeRoomWorkspaceKey)) activeRoomWorkspaceKey = keys[0] || '';
+    var activeIndex = Math.max(0, keys.indexOf(activeRoomWorkspaceKey));
+    var status = document.getElementById('hl_room_navigator_status');
+    if (status) status.textContent = keys.length
+      ? 'Room ' + (activeIndex + 1) + ' of ' + keys.length
+      : '';
+    navigator.querySelectorAll('[data-hl-room-nav]').forEach(function (button) {
+      var key = button.dataset.hlRoomNav;
+      var roomName = roomNames.find(function (name) { return roomKeyFromName(name) === key; }) || key;
+      var summary = roomWorkspaceStatus(roomName, key);
+      button.classList.toggle('is-active', key === activeRoomWorkspaceKey);
+      button.classList.toggle('is-complete', summary.state === 'Complete');
+      button.setAttribute('aria-current', key === activeRoomWorkspaceKey ? 'page' : 'false');
+      button.setAttribute('aria-label', summary.label);
+      var meta = document.getElementById('hl_room_nav_meta_' + key);
+      if (meta) meta.textContent = summary.state + ' · ' + summary.load;
+    });
+  }
+
+  function setActiveRoomWorkspace(key) {
+    var valid = allRoomNames().some(function (roomName) {
+      return roomKeyFromName(roomName) === key;
+    });
+    if (!valid) return;
+    activeRoomWorkspaceKey = key;
+    document.querySelectorAll('.hl-room-editor').forEach(function (editor) {
+      var active = editor.dataset.hlRoom === key;
+      editor.hidden = !active;
+      editor.classList.toggle('is-active', active);
+      var outerDetails = editor.querySelector(':scope > details');
+      if (outerDetails) outerDetails.open = active;
+      var details = editor.querySelector('.hl-room-dropdown');
+      if (details) details.open = active;
+    });
+    refreshRoomNavigator();
+  }
+
+  window.selectRadiatorRoomV60 = setActiveRoomWorkspace;
+
+  function tidyRoomFieldGroups(room, key) {
+    var section = room.querySelector('.hl-room-section-fabric');
+    var grid = section && section.querySelector(':scope > .hl-fields-grid');
+    if (!section || !grid || section.dataset.hlGrouped === 'yes') return;
+    var groups = [
+      { title: 'Openings', keys: ['window', 'door'] },
+      { title: 'Floor, ceiling and evidence', keys: ['floor', 'loft', 'rooflight', 'assumption_quality'] },
+      { title: 'Ventilation', keys: ['ventilation', 'manual_ach', 'chimney'] }
+    ].map(function (definition) {
+      var wrapper = document.createElement('div');
+      wrapper.className = 'hl-room-subsection';
+      var heading = document.createElement('h5');
+      heading.textContent = definition.title;
+      var fields = document.createElement('div');
+      fields.className = 'hl-fields-grid';
+      wrapper.appendChild(heading);
+      wrapper.appendChild(fields);
+      definition.wrapper = wrapper;
+      definition.fields = fields;
+      return definition;
+    });
+    Array.from(grid.children).forEach(function (child) {
+      var childId = child.id || ((child.querySelector('[id]') || {}).id || '');
+      var group = groups.find(function (definition) {
+        return definition.keys.some(function (part) {
+          return childId.indexOf('hl_' + key + '_' + part) === 0;
+        });
+      });
+      (group || groups[1]).fields.appendChild(child);
+    });
+    groups.forEach(function (group) { section.appendChild(group.wrapper); });
+    section.dataset.hlGrouped = 'yes';
+  }
+
+  function addRadiatorGroup(container, title, fields) {
+    if (!fields.length) return;
+    var group = document.createElement('section');
+    group.className = 'hl-radiator-group';
+    var heading = document.createElement('h5');
+    heading.textContent = title;
+    group.appendChild(heading);
+    fields.forEach(function (field) { group.appendChild(field); });
+    container.appendChild(group);
+  }
+
+  function installRoomWorkspace() {
+    var radsForm = document.getElementById('radsForm');
+    if (!radsForm) return;
+    var roomsCard = Array.from(radsForm.querySelectorAll('.card')).find(function (card) {
+      var heading = card.querySelector(':scope > h3');
+      return heading && heading.textContent.trim() === 'Rooms';
+    });
+    if (!roomsCard) return;
+    roomsCard.id = 'hl_rooms_card';
+    var roomDetails = Array.from(roomsCard.children).filter(function (element) {
+      return element.matches('details') &&
+        element.querySelector('details[data-hl-room]');
+    });
+    roomDetails.forEach(function (details) {
+      if (details.parentElement.classList.contains('hl-room-editor')) return;
+      var roomMarker = details.querySelector('details[data-hl-room]');
+      var key = roomMarker.dataset.hlRoom;
+      var editor = document.createElement('div');
+      editor.className = 'hl-room-editor';
+      editor.dataset.hlRoom = key;
+      roomsCard.insertBefore(editor, details);
+      editor.appendChild(details);
+    });
+    var roomNames = allRoomNames();
+    var navigator = document.getElementById('hl_room_navigator');
+    if (!navigator) {
+      var holder = document.createElement('div');
+      holder.innerHTML = roomWorkspaceNavigatorHtml(roomNames);
+      navigator = holder.firstElementChild;
+      roomsCard.insertBefore(navigator, roomsCard.children[1] || null);
+      navigator.querySelectorAll('[data-hl-room-nav]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          setActiveRoomWorkspace(button.dataset.hlRoomNav);
+        });
+      });
+    }
+    setActiveRoomWorkspace(activeRoomWorkspaceKey || roomKeyFromName(roomNames[0] || ''));
+  }
+
   var previousRoomFormHtml = roomFormHtml;
   roomFormHtml = function (roomName, index) {
     var key = roomKeyFromName(roomName);
@@ -4210,6 +4390,7 @@
     var room = holder.firstElementChild;
     var heatLossDetails = room && room.querySelector('details[data-hl-room="' + key + '"]');
     if (!room || !heatLossDetails) return assembled;
+    tidyRoomFieldGroups(room, key);
 
     var panelHolder = document.createElement('div');
     panelHolder.innerHTML = radiatorPanelHtml(roomName);
@@ -4226,15 +4407,18 @@
     var existingTrvField = fieldContainer('rad_' + key + '_ex_trv');
     if (existingFields && existingTrvField) existingFields.appendChild(existingTrvField);
 
-    if (existingFields) radiatorControls.appendChild(existingFields);
+    addRadiatorGroup(radiatorControls, 'Existing radiator', existingFields ? [existingFields] : []);
+    var radiatorSetupFields = [];
     [
       'hl_' + key + '_shared_radiator_with',
       'hl_' + key + '_radiator_installation',
       'hl_' + key + '_radiator_finish'
     ].forEach(function (id) {
       var field = fieldContainer(id);
-      if (field) radiatorControls.appendChild(field);
+      if (field) radiatorSetupFields.push(field);
     });
+    addRadiatorGroup(radiatorControls, 'Radiator setup', radiatorSetupFields);
+    var replacementFields = [];
     [
       'hl_' + key + '_rad_quantity',
       'rad_' + key + '_new_size',
@@ -4245,8 +4429,9 @@
       'rad_' + key + '_output'
     ].forEach(function (id) {
       var field = fieldContainer(id);
-      if (field) radiatorControls.appendChild(field);
+      if (field) replacementFields.push(field);
     });
+    addRadiatorGroup(radiatorControls, 'Replacement radiator', replacementFields);
     return holder.innerHTML;
   };
 
@@ -4259,7 +4444,7 @@
       button.classList.toggle('is-complete', completed);
       button.title = completed
         ? 'Reopen this room and return it to the normal progress count.'
-        : 'Mark this room complete and collapse it.';
+        : 'Mark this room complete without leaving the current editor.';
     });
   }
 
@@ -4269,7 +4454,7 @@
     var completed = field.value === 'yes';
     field.value = completed ? '' : 'yes';
     var room = field.closest('details');
-    if (room) room.open = completed;
+    if (room) room.open = true;
     if (typeof update === 'function') update();
     if (typeof window.updateSectionBadgesV58 === 'function') {
       window.updateSectionBadgesV58();
@@ -4293,6 +4478,7 @@
     wirePropertyDefaults();
     refreshVentilationControls();
     calculateHeatLoss();
+    installRoomWorkspace();
     refreshRoomCompletionControls();
     return result;
   };
@@ -4348,6 +4534,7 @@
     calculateHeatLoss();
     var result = previousUpdate.apply(this, arguments);
     refreshRoomCompletionControls();
+    refreshRoomNavigator();
     persistCombinedData();
     return result;
   };
