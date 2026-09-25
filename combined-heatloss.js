@@ -4231,7 +4231,7 @@
     var radsForm = document.getElementById('radsForm');
     if (!radsForm) return;
     var roomsCard = Array.from(radsForm.querySelectorAll('.card')).find(function (card) {
-      var heading = card.querySelector(':scope > h3');
+      var heading = card.querySelector(':scope > h2, :scope > h3');
       return heading && heading.textContent.trim() === 'Rooms';
     });
     if (!roomsCard) return;

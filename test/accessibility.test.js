@@ -13,6 +13,7 @@ test('provides a skip link and keeps the form heading hierarchy below the app H1
   assert.match(html, /<main class="main" id="preview" tabindex="-1"><\/main>/);
   assert.match(html, /<h2>Front Sheet<\/h2>/);
   assert.match(html, /<h2>Radiator Sheet<\/h2>/);
+  assert.match(app, /querySelector\(':scope > h2, :scope > h3'\)/);
 });
 
 test('traps modal keyboard focus and supports reduced motion', () => {
