@@ -829,3 +829,266 @@ body.theme-dark .hl-room-nav-button.is-active {
     display: none !important;
   }
 }
+
+/* ================================================================
+   Shared app-shell palette
+
+   This deliberately styles controls and workflow panels only. Survey
+   spreadsheets retain their white/yellow/gold document palette, including
+   when printed or exported to PDF.
+   ================================================================ */
+body.app-shell-theme {
+  --app-bg: #171512;
+  --app-panel: #24201c;
+  --app-panel-raised: #2c2722;
+  --app-input: #151310;
+  --app-border: #4d433a;
+  --app-text: #f7eee8;
+  --app-muted: #c9bbb0;
+  --app-accent: #f3a477;
+  --app-accent-strong: #ffc29c;
+  --app-success: #83c5a3;
+  --app-success-bg: #1f3d32;
+  --app-warning: #f3c474;
+  --app-danger: #ef8c87;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+body.app-shell-theme .sidebar {
+  background: var(--app-panel);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+body.app-shell-theme .main {
+  background: var(--app-bg);
+}
+
+body.app-shell-theme .title,
+body.app-shell-theme .field label,
+body.app-shell-theme details summary,
+body.app-shell-theme .pdf-card h3 {
+  color: var(--app-text);
+}
+
+body.app-shell-theme .subtitle,
+body.app-shell-theme .muted,
+body.app-shell-theme .field small,
+body.app-shell-theme .pdf-card p,
+body.app-shell-theme .signature-placeholder {
+  color: var(--app-muted);
+}
+
+body.app-shell-theme .card,
+body.app-shell-theme .pdf-card,
+body.app-shell-theme .signature-pad-wrap,
+body.app-shell-theme .extra-room-pill,
+body.app-shell-theme #radsForm details,
+body.app-shell-theme #a12aForm details,
+body.app-shell-theme #commonForm details {
+  background: var(--app-panel-raised) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text);
+}
+
+body.app-shell-theme .field input,
+body.app-shell-theme .field select,
+body.app-shell-theme .field textarea,
+body.app-shell-theme .extra-room-add input,
+body.app-shell-theme .signature-pad-wrap canvas {
+  background: var(--app-input) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+body.app-shell-theme .field input[readonly],
+body.app-shell-theme .field textarea[readonly],
+body.app-shell-theme #a_note_contractor,
+body.app-shell-theme #a_site_rules {
+  background: #1e1a17 !important;
+  color: var(--app-muted) !important;
+}
+
+body.app-shell-theme .field input:focus,
+body.app-shell-theme .field select:focus,
+body.app-shell-theme .field textarea:focus,
+body.app-shell-theme button:focus-visible,
+body.app-shell-theme summary:focus-visible {
+  outline: 2px solid var(--app-accent) !important;
+  outline-offset: 2px;
+}
+
+body.app-shell-theme .tab {
+  background: #342d27 !important;
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+body.app-shell-theme .tab.active,
+body.app-shell-theme .buttons button,
+body.app-shell-theme .pdf-card button,
+body.app-shell-theme .extra-room-add button {
+  background: var(--app-accent) !important;
+  border-color: var(--app-accent) !important;
+  color: #26170f !important;
+}
+
+body.app-shell-theme .buttons button.secondary,
+body.app-shell-theme .signature-pad-actions button,
+body.app-shell-theme .room-actions-v50 button,
+body.app-shell-theme .hidden-room-list-v50 button,
+body.app-shell-theme .room-completion-action button {
+  background: #54463b !important;
+  color: var(--app-text) !important;
+}
+
+body.app-shell-theme .buttons button.warning,
+body.app-shell-theme .extra-room-pill button,
+body.app-shell-theme .room-actions-v50 button.danger,
+body.app-shell-theme .hidden-room-list-v50 button.danger {
+  background: #8c3735 !important;
+  color: #fff7f3 !important;
+}
+
+body.app-shell-theme #radsForm details > summary,
+body.app-shell-theme #a12aForm details > summary,
+body.app-shell-theme #commonForm details > summary {
+  background: #342d27 !important;
+  color: var(--app-text) !important;
+}
+
+body.app-shell-theme #radsForm details[open] > summary,
+body.app-shell-theme #a12aForm details[open] > summary,
+body.app-shell-theme #commonForm details[open] > summary {
+  background: #473328 !important;
+  color: var(--app-accent-strong) !important;
+}
+
+body.app-shell-theme #radsForm details > summary::after,
+body.app-shell-theme #a12aForm details > summary::after,
+body.app-shell-theme #commonForm details > summary::after {
+  color: var(--app-muted) !important;
+}
+
+body.app-shell-theme .sec-badge {
+  background: #54463b !important;
+  color: var(--app-text) !important;
+}
+
+body.app-shell-theme .sec-badge.sec-complete {
+  background: var(--app-success-bg) !important;
+  color: #c5f0d9 !important;
+}
+
+body.app-shell-theme .help,
+body.app-shell-theme .validation-summary {
+  background: #3b2a20 !important;
+  border-color: #7c5540 !important;
+  color: #ffd7bf !important;
+}
+
+body.app-shell-theme .validation-summary .missing,
+body.app-shell-theme .validation-message.error,
+body.app-shell-theme #hl_postcode_lookup_status[data-state="error"] {
+  color: var(--app-danger) !important;
+}
+
+body.app-shell-theme .validation-message.success,
+body.app-shell-theme #hl_postcode_lookup_status[data-state="success"] {
+  color: var(--app-success) !important;
+}
+
+body.app-shell-theme #hl_postcode_lookup_status[data-state="loading"] {
+  color: var(--app-accent-strong) !important;
+}
+
+body.app-shell-theme .hl-summary-card,
+body.app-shell-theme .hl-property-result,
+body.app-shell-theme .hl-room-result,
+body.app-shell-theme .hl-room-navigator,
+body.app-shell-theme .hl-room-dropdown,
+body.app-shell-theme .hl-room-section,
+body.app-shell-theme .hl-property-defaults,
+body.app-shell-theme .hl-room-geometry,
+body.app-shell-theme .hl-internal-wall,
+body.app-shell-theme .hl-wall-segments,
+body.app-shell-theme .hl-segment-card,
+body.app-shell-theme .hl-radiator-panel,
+body.app-shell-theme .hl-postcode-lookup {
+  background: var(--app-panel-raised) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+body.app-shell-theme .hl-room-dropdown > summary,
+body.app-shell-theme .hl-room-nav-button {
+  background: #342d27 !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+body.app-shell-theme .hl-room-nav-button.is-active {
+  background: #473328 !important;
+  border-color: var(--app-accent) !important;
+  box-shadow: inset 3px 0 var(--app-accent);
+}
+
+body.app-shell-theme .hl-room-navigator-heading,
+body.app-shell-theme .hl-property-defaults > summary,
+body.app-shell-theme .hl-wall-segments > summary,
+body.app-shell-theme .hl-room-section > h4,
+body.app-shell-theme .hl-room-subsection > h5,
+body.app-shell-theme .hl-radiator-group > h5,
+body.app-shell-theme .hl-internal-wall-heading h4,
+body.app-shell-theme .hl-segment-card h5,
+body.app-shell-theme .hl-radiator-panel-heading h4,
+body.app-shell-theme .hl-room-geometry strong,
+body.app-shell-theme .hl-result-main strong,
+body.app-shell-theme .hl-total-number {
+  color: var(--app-accent-strong) !important;
+}
+
+body.app-shell-theme .hl-room-intro,
+body.app-shell-theme .hl-help,
+body.app-shell-theme .hl-fields-grid small,
+body.app-shell-theme .hl-room-geometry,
+body.app-shell-theme .hl-internal-wall-heading p,
+body.app-shell-theme .hl-result-breakdown,
+body.app-shell-theme .hl-radiator-result small,
+body.app-shell-theme .hl-room-navigator-heading small,
+body.app-shell-theme #hl_room_navigator_status,
+body.app-shell-theme .hl-room-nav-meta {
+  color: var(--app-muted) !important;
+}
+
+body.app-shell-theme .hl-radiator-requirement {
+  background: #473328 !important;
+  color: var(--app-accent-strong) !important;
+}
+
+body.app-shell-theme .hl-radiator-requirement[data-state="complete"] {
+  background: var(--app-success-bg) !important;
+  color: #c5f0d9 !important;
+}
+
+body.app-shell-theme .hl-radiator-requirement[data-state="incomplete"],
+body.app-shell-theme .hl-warning,
+body.app-shell-theme .hl-assumption {
+  background: #4a3820 !important;
+  color: #ffe1a3 !important;
+}
+
+body.app-shell-theme .hl-room-subsection,
+body.app-shell-theme .hl-radiator-group,
+body.app-shell-theme .room-completion-action {
+  border-color: var(--app-border) !important;
+}
+
+@media print {
+  body.app-shell-theme,
+  body.app-shell-theme .main {
+    background: #fff !important;
+    color: #111 !important;
+  }
+}
