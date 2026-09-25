@@ -208,6 +208,7 @@
         padding: 12px;
         margin: 10px 0;
       }
+      .card h2,
       .card h3 {
         margin: 0 0 10px;
         font-size: 15px;
@@ -1771,6 +1772,7 @@
 
   </head>
   <body class="app-shell-theme">
+    <a class="skip-link" href="#preview">Skip to document preview</a>
     <div class="app">
       <aside class="sidebar">
         <h1 class="title">Heating Survey Form</h1>
@@ -1825,7 +1827,7 @@
         <section class="section" id="a12aForm" role="tabpanel" aria-labelledby="a12aTab" aria-hidden="true"></section>
         <section class="section" id="profileForm" role="tabpanel" aria-labelledby="profileTab" aria-hidden="true"></section>
       </aside>
-      <main class="main" id="preview"></main>
+      <main class="main" id="preview" tabindex="-1"></main>
     </div>
     <script>
       /* ============================================================
@@ -2134,7 +2136,7 @@
       ];
       function pipeworkInsulationClauseHtml() {
         return `<section class="pipework-insulation-clause">
-  <h4>General installation requirement: Pipework insulation</h4>
+  <h3>General installation requirement: Pipework insulation</h3>
   <p>All pipework insulation shall be reasonably continuous throughout the insulated pipe run, including at bends, elbows, T-branches, pipe clips/brackets and other supports, and around valves and other obstructions wherever practicable.</p>
   <p>Insulation shall be closely fitted and joints shall be neatly butted together so that exposed pipework and gaps are kept to a minimum.</p>
   <p>Insulation must not prevent the correct operation, adjustment, maintenance or servicing of valves, controls or other components.</p>
@@ -2170,14 +2172,14 @@
       }
       function fillForm() {
         document.getElementById("frontForm").innerHTML = `<div class="card">
-  <h3>Front Sheet</h3>${frontFields.map(makeField).join("")}</div>`;
+  <h2>Front Sheet</h2>${frontFields.map(makeField).join("")}</div>`;
         let radsHtml = `<div class="card">
-  <h3>Radiator Sheet</h3>
+  <h2>Radiator Sheet</h2>
   <div class="row">${makeField(["r_address", "Address", "text"])}${makeField(["r_job", "Job Number", "text"])}</div>
   <div class="row">${makeField(["r_ceiling", "Ceiling height (m)", "number"])}${makeField(["r_output_temp", "Recommended system output (kW, not design heat loss)", "text"])}</div>
   </div>
   <div class="card">
-  <h3>Rooms</h3>`;
+  <h2>Rooms</h2>`;
         rooms.forEach((room, i) => {
           let key = room.toLowerCase().replace(/[^a-z0-9]+/g, "_");
           radsHtml += `<details>
@@ -2211,12 +2213,12 @@
         });
         radsHtml += `</div>
   <div class="card">
-  <h3>Materials</h3>${materialFields.map(makeField).join("")}</div>`;
+  <h2>Materials</h2>${materialFields.map(makeField).join("")}</div>`;
         document.getElementById("radsForm").innerHTML = radsHtml;
         document.getElementById("a12aForm").innerHTML = `<div class="card">
-  <h3>A12a Project</h3>${a12aFields.map(makeField).join("")}</div>
+  <h2>A12a Project</h2>${a12aFields.map(makeField).join("")}</div>
   <div class="card">
-  <h3>Hazards</h3>${risks
+  <h2>Hazards</h2>${risks
     .map(
       (r) => `<details>
   <summary>
@@ -2225,9 +2227,9 @@
     )
     .join("")}</div>
   <div class="card">
-  <h3>Notes</h3>${makeField(["a_note_contractor", "Note to Contractor", "textarea"])}${makeField(["a_site_rules", "Site Rules", "textarea"])}</div>`;
+  <h2>Notes</h2>${makeField(["a_note_contractor", "Note to Contractor", "textarea"])}${makeField(["a_site_rules", "Site Rules", "textarea"])}</div>`;
         document.getElementById("profileForm").innerHTML = `<div class="card">
-  <h3>Customer Profile</h3>${profileFields.map(makeField).join("")}</div>`;
+  <h2>Customer Profile</h2>${profileFields.map(makeField).join("")}</div>`;
         if (!document.documentElement.dataset.surveyUpdateListeners) {
           document.documentElement.dataset.surveyUpdateListeners = "yes";
           document.addEventListener("input", (event) => {
@@ -3639,10 +3641,54 @@
    Front/Rads prints landscape. H&S prints portrait.
    Signature canvases save into hidden form fields.
    ============================================================ */
+      function modalFocusableElements(panel) {
+        return Array.from(
+          panel.querySelectorAll(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter(function (element) {
+          const style = window.getComputedStyle(element);
+          return (
+            !element.closest('[aria-hidden="true"]') &&
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            element.getClientRects().length > 0
+          );
+        });
+      }
+
+      function trapModalFocus(event, panel) {
+        if (event.key !== "Tab") return;
+        const controls = modalFocusableElements(panel);
+        if (!controls.length) {
+          event.preventDefault();
+          panel.focus();
+          return;
+        }
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+
+      function installModalFocusTrap(panel) {
+        if (!panel || panel.dataset.focusTrapInstalled === "true") return;
+        panel.dataset.focusTrapInstalled = "true";
+        panel.addEventListener("keydown", function (event) {
+          trapModalFocus(event, panel);
+        });
+      }
+
       // One-at-a-time PDF saver to avoid popup blocking, plus per-PDF page orientation.
       function showPdfOptions() {
         const panel = document.getElementById("pdfPanel");
         if (!panel) return;
+        installModalFocusTrap(panel);
         window._pdfReturnFocus = document.activeElement;
         panel.classList.add("open");
         panel.setAttribute("aria-hidden", "false");
@@ -3667,7 +3713,7 @@
           });
         }
         document.addEventListener("keydown", function (e) {
-          if (e.key === "Escape") hidePdfOptions();
+          if (e.key === "Escape" && panel?.classList.contains("open")) hidePdfOptions();
         });
       })();
       function buildPrintHtml(title, sheetTitles, orientation) {
@@ -4174,7 +4220,7 @@
 
         let radsHtml = `
     <div class="card">
-      <h3>Radiator Sheet</h3>
+      <h2>Radiator Sheet</h2>
       <div class="field">
         <label>Address</label>
         <div class="muted">Uses the Main Property Address above.</div>
@@ -4189,7 +4235,7 @@
     </div>
     ${extraRoomControlsHtml()}
     <div class="card">
-      <h3>Rooms</h3>
+      <h2>Rooms</h2>
   `;
 
         allRoomNames().forEach((roomName, index) => {
@@ -4199,7 +4245,7 @@
         radsHtml += `
     </div>
     <div class="card">
-      <h3>Materials</h3>
+      <h2>Materials</h2>
       ${materialFields.map(makeField).join("")}
     </div>
   `;
@@ -7248,6 +7294,7 @@
           const yes = document.getElementById("clearConfirmYes");
           const no = document.getElementById("clearConfirmNo");
           const returnFocus = document.activeElement;
+          installModalFocusTrap(panel);
 
           function close() {
             panel.classList.remove("open");
@@ -7873,6 +7920,7 @@
           const panel = document.getElementById("surveyPanelV57");
           if (panel) {
             surveyPanelReturnFocusV57 = document.activeElement;
+            installModalFocusTrap(panel);
             renderSurveyListV57();
             panel.classList.add("open");
             panel.setAttribute("aria-hidden", "false");
@@ -7884,7 +7932,10 @@
           if (panel) {
             panel.classList.remove("open");
             panel.setAttribute("aria-hidden", "true");
-            if (surveyPanelReturnFocusV57?.focus) surveyPanelReturnFocusV57.focus();
+            const returnFocus = surveyPanelReturnFocusV57;
+            requestAnimationFrame(() => {
+              if (returnFocus?.focus) returnFocus.focus();
+            });
           }
         }
         window.hideSurveyPanelV57 = hideSurveyPanelV57;
@@ -7898,6 +7949,14 @@
           panel.setAttribute("aria-modal", "true");
           panel.setAttribute("aria-hidden", "true");
           panel.setAttribute("aria-labelledby", "surveyDialogTitleV57");
+          panel.setAttribute("tabindex", "-1");
+          installModalFocusTrap(panel);
+          panel.addEventListener("keydown", e => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              hideSurveyPanelV57();
+            }
+          });
           panel.addEventListener("click", e => { if (e.target === panel) hideSurveyPanelV57(); });
           panel.innerHTML = `
             <div class="pdf-card" style="max-width:480px;width:90%;max-height:80vh;overflow:auto;">
@@ -8832,12 +8891,12 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=92">
+    <link rel="stylesheet" href="combined-heatloss.css?v=93">
     <script src="src/heat-loss.js?v=7"></script>
     <script src="src/radiator-sizing.js?v=1"></script>
     <script src="src/persistence.js?v=5"></script>
     <script src="src/validation.js?v=2"></script>
     <script src="src/reference-readiness.js?v=1"></script>
-    <script src="combined-heatloss.js?v=121"></script>
+    <script src="combined-heatloss.js?v=122"></script>
   </body>
 </html>

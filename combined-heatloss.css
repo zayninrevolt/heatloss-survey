@@ -1098,4 +1098,46 @@ body.app-shell-theme .sheet-title {
     background: #fff !important;
     color: #111 !important;
   }
+
+  .skip-link {
+    display: none !important;
+  }
+}
+
+/* Keyboard shortcut to bypass the long survey form and reach the live preview. */
+.skip-link {
+  position: fixed;
+  z-index: 10000;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  border: 2px solid var(--app-accent-strong);
+  border-radius: 8px;
+  background: var(--app-panel);
+  color: var(--app-text);
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus-visible {
+  outline: 2px solid var(--app-accent-strong);
+  outline-offset: 3px;
+  transform: translateY(0);
+}
+
+body.app-shell-theme .main:focus {
+  outline: 2px solid var(--app-accent);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

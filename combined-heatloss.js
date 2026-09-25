@@ -4451,7 +4451,8 @@
   function scrollToRoomNavigator() {
     var navigator = document.getElementById('hl_room_navigator');
     if (!navigator || typeof navigator.scrollIntoView !== 'function') return;
-    navigator.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    navigator.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
   }
 
   window.completeRadiatorRoom = function (key) {
