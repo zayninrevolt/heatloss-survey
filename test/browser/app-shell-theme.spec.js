@@ -12,6 +12,7 @@ test('uses the shared warm dark app shell while preserving spreadsheet document 
   await expect(page.locator('.tab.active')).toHaveCSS('background-color', 'rgb(243, 164, 119)');
   await expect(page.locator('.sheet').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('.sheet .input').first()).toHaveCSS('background-color', 'rgb(255, 255, 102)');
+  await expect(page.locator('.sheet .input').first()).toHaveCSS('color', 'rgb(17, 17, 17)');
   expect(await page.locator('html').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/app-shell-theme-desktop.png', fullPage: false });
 });

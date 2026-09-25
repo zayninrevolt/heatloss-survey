@@ -1085,6 +1085,13 @@ body.app-shell-theme .room-completion-action {
   border-color: var(--app-border) !important;
 }
 
+/* Preserve the established spreadsheet preview and PDF document ink colour. */
+body.app-shell-theme .sheet-wrap,
+body.app-shell-theme .sheet,
+body.app-shell-theme .sheet-title {
+  color: #111 !important;
+}
+
 @media print {
   body.app-shell-theme,
   body.app-shell-theme .main {
