@@ -587,6 +587,25 @@
     return previousTargetTemperature(roomName);
   }
 
+  function windowFieldsHtml(key, maximumWindows) {
+    return '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_area" data-id="hl_' +
+      escapeHtml(key) + '_window_area">' +
+      '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_width" data-id="hl_' +
+      escapeHtml(key) + '_window_width"><input type="hidden" id="hl_' +
+      escapeHtml(key) + '_window_height" data-id="hl_' + escapeHtml(key) +
+      '_window_height">' +
+      fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
+      '<div id="hl_' + escapeHtml(key) + '_window_count_wrap" hidden>' +
+      fieldHtml('hl_' + key + '_window_count', 'Number of windows', 'select', ['0', '1', '2', '3'], 'Choose the number first. Each window can be measured separately.') +
+      '</div>' +
+      '<div class="hl-opening-measurements" id="hl_' + escapeHtml(key) +
+      '_window_measurements_wrap" hidden>' +
+      Array.from({ length: maximumWindows }, function (unused, index) {
+        return openingMeasurementFieldsHtml(key, 'window', index + 1, 'Window ' + (index + 1));
+      }).join('') +
+      '</div>';
+  }
+
   function openingMeasurementFieldsHtml(key, opening, number, label) {
     var fieldPrefix = 'hl_' + key + '_' + opening + '_' + number;
     return '<div class="hl-opening-measurement" id="' + escapeHtml(fieldPrefix) +
@@ -657,22 +676,7 @@
       '<input type="hidden" id="hl_' + escapeHtml(key) +
       '_internal_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_internal_adjacent_temp">' +
       '</section><section class="hl-room-section hl-room-section-fabric"><h4>Openings, fabric and ventilation</h4><div class="hl-fields-grid">' +
-      '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_area" data-id="hl_' +
-      escapeHtml(key) + '_window_area">' +
-      '<input type="hidden" id="hl_' + escapeHtml(key) + '_window_width" data-id="hl_' +
-      escapeHtml(key) + '_window_width"><input type="hidden" id="hl_' +
-      escapeHtml(key) + '_window_height" data-id="hl_' + escapeHtml(key) +
-      '_window_height">' +
-      fieldHtml('hl_' + key + '_window_type', 'Windows', 'select', optionsFromMap(VALUES.window)) +
-      '<div id="hl_' + escapeHtml(key) + '_window_count_wrap" hidden>' +
-      fieldHtml('hl_' + key + '_window_count', 'Number of windows', 'select', ['0', '1', '2', '3'], 'Choose the number first. Each window can be measured separately.') +
-      '</div>' +
-      '<div class="hl-opening-measurements" id="hl_' + escapeHtml(key) +
-      '_window_measurements_wrap" hidden>' +
-      openingMeasurementFieldsHtml(key, 'window', 1, 'Window 1') +
-      openingMeasurementFieldsHtml(key, 'window', 2, 'Window 2') +
-      openingMeasurementFieldsHtml(key, 'window', 3, 'Window 3') +
-      '</div>' +
+      windowFieldsHtml(key, 3) +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_door_area" data-id="hl_' +
       escapeHtml(key) + '_door_area">' +
       '<input type="hidden" id="hl_' + escapeHtml(key) + '_door_width" data-id="hl_' +
@@ -728,7 +732,7 @@
       { label: 'No thermal-bridge allowance', value: 'None' }
     ];
     return '<div class="card hl-summary-card" id="heatLossSummaryCard">' +
-      '<h3>Heat loss summary</h3>' +
+      '<h3>Property setup</h3>' +
       '<input type="hidden" id="survey_schema_version" data-id="_schemaVersion" value="' +
       window.SurveyPersistence.CURRENT_SCHEMA_VERSION + '">' +
       '<div class="hl-postcode-lookup">' +
@@ -737,7 +741,8 @@
       '</div>' +
       '<p>Open Heat loss details inside each room. The room load is calculated automatically, then suitable Stelrad Elite or Myson fan-convector options can be selected in the radiator schedule.</p>' +
       '<p class="hl-help" id="hl_calculation_method_notice"><b>Calculation method:</b> This survey currently uses the legacy room-by-room ventilation method. The MCS / BS EN 12831 reference ventilation calculation is under validation and is not yet used for equipment sizing.</p>' +
-      '<div class="hl-summary-grid">' +
+      '<div class="hl-workflow-output" aria-live="polite"><span>Calculated recommended system output</span><strong id="hl_recommended_system_output">12.00 kW</strong></div>' +
+      '<div class="hl-summary-grid" id="hl_property_setup_grid">' +
       fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The surveyor can verify the age separately before finalising the survey.') +
       fieldHtml('hl_property_age_source', 'Property age evidence', 'select', ['Title deeds or building-control record', 'Homeowner or landlord', 'Visual estimate', 'Unknown']) +
       fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
@@ -4125,6 +4130,7 @@
   function roomWorkspaceNavigatorHtml(roomNames) {
     return '<nav class="hl-room-navigator" id="hl_room_navigator" aria-label="Rooms">' +
       '<div class="hl-room-navigator-heading"><div><b>Rooms</b><span id="hl_room_navigator_status"></span></div>' +
+      '<button type="button" class="hl-workspace-toggle" id="hl_rads_focus_toggle" aria-pressed="false">Focus on form</button>' +
       '<small>Select a room to edit it. Only one room is open at a time.</small></div>' +
       '<div class="hl-room-navigator-list">' +
       roomNames.map(function (roomName) {
@@ -4136,6 +4142,103 @@
           '</button>';
       }).join('') +
       '</div></nav>';
+  }
+
+  function fieldContainerFor(id) {
+    var element = document.getElementById(id);
+    return element ? (element.closest('.field') || element) : null;
+  }
+
+  function setRadsFieldVisibility(id, visible) {
+    var field = fieldContainerFor(id);
+    if (field) field.hidden = !visible;
+  }
+
+  function refreshDependentInputVisibility() {
+    setRadsFieldVisibility('hl_mvhr_efficiency',
+      stringValue('hl_ventilation_system') === 'Mechanical ventilation with heat recovery (MVHR)');
+    setRadsFieldVisibility('hl_internal_door_known_u',
+      stringValue('hl_internal_door_type') === 'Known manufacturer/design U-value');
+    allRoomNames().forEach(function (roomName) {
+      var key = roomKeyFromName(roomName);
+      setRadsFieldVisibility('hl_' + key + '_manual_ach',
+        stringValue('hl_' + key + '_ventilation_mode') === 'Manual override');
+      setRadsFieldVisibility('hl_' + key + '_chimney_restricted',
+        stringValue('hl_' + key + '_ventilation_device') === 'Open chimney');
+      setRadsFieldVisibility('hl_' + key + '_rooflight_area',
+        stringValue('hl_' + key + '_rooflight_type') !== 'No rooflights');
+    });
+  }
+
+  function organisePropertyWorkflow() {
+    var summary = document.getElementById('heatLossSummaryCard');
+    var setupGrid = document.getElementById('hl_property_setup_grid');
+    if (!summary || !setupGrid || summary.dataset.hlWorkflowOrganised === 'yes') return;
+    var assumptions = document.createElement('details');
+    assumptions.id = 'hl_calculation_assumptions';
+    assumptions.className = 'hl-property-defaults';
+    var assumptionsSummary = document.createElement('summary');
+    assumptionsSummary.textContent = 'Calculation assumptions and adjustments';
+    var assumptionsHelp = document.createElement('p');
+    assumptionsHelp.className = 'hl-help';
+    assumptionsHelp.textContent = 'Defaults are suitable for a normal survey. Open this only to record a justified adjustment.';
+    var assumptionGrid = document.createElement('div');
+    assumptionGrid.className = 'hl-summary-grid';
+    assumptions.appendChild(assumptionsSummary);
+    assumptions.appendChild(assumptionsHelp);
+    assumptions.appendChild(assumptionGrid);
+    [
+      'hl_bridge_method', 'hl_ventilation_age_category', 'hl_exposed_location',
+      'hl_reheat_factor', 'hl_high_ceiling_factor', 'hl_property_altitude',
+      'hl_ground_temp', 'hl_radiator_connection', 'hl_radiator_plan',
+      'hl_mvhr_efficiency'
+    ].forEach(function (id) {
+      var field = fieldContainerFor(id);
+      if (field) assumptionGrid.appendChild(field);
+    });
+    var result = summary.querySelector('.hl-property-result');
+    if (result) summary.insertBefore(result, setupGrid);
+    setupGrid.insertAdjacentElement('afterend', assumptions);
+    var outputField = fieldContainerFor('r_output_temp');
+    if (outputField) outputField.hidden = true;
+    summary.dataset.hlWorkflowOrganised = 'yes';
+  }
+
+  function syncRadsWorkflowStatus() {
+    var calculation = window.heatLossResultsV60;
+    var output = document.getElementById('hl_recommended_system_output');
+    if (output && calculation) output.textContent = calculation.systemOutputKw.toFixed(2) + ' kW';
+    // The recommended output is a calculated result, not a surveyor input. Keep
+    // the original field for saved surveys and reports, but never offer it.
+    var outputField = fieldContainerFor('r_output_temp');
+    if (outputField) outputField.hidden = true;
+    var commonDetails = document.querySelector('#commonForm details');
+    var radsActive = document.getElementById('radsTab')?.classList.contains('active');
+    var complete = ['site_address', 'site_customer', 'site_surveyor', 'site_date']
+      .every(function (id) { return !!stringValue(id); });
+    if (commonDetails && radsActive && complete && !commonDetails.dataset.hlAutoCollapsed) {
+      commonDetails.open = false;
+      commonDetails.dataset.hlAutoCollapsed = 'yes';
+    }
+  }
+
+  function wireRadsWorkspaceToggle() {
+    var button = document.getElementById('hl_rads_focus_toggle');
+    if (!button || button.dataset.hlWorkspaceWired === 'yes') return;
+    button.dataset.hlWorkspaceWired = 'yes';
+    button.addEventListener('click', function () {
+      var focused = document.body.classList.toggle('hl-rads-focus-mode');
+      button.setAttribute('aria-pressed', String(focused));
+      button.textContent = focused ? 'Show preview' : 'Focus on form';
+    });
+    var radsForm = document.getElementById('radsForm');
+    if (radsForm && radsForm.dataset.hlDependentWired !== 'yes') {
+      radsForm.dataset.hlDependentWired = 'yes';
+      radsForm.addEventListener('change', function (event) {
+        if (!event.target || !event.target.id) return;
+        refreshDependentInputVisibility();
+      });
+    }
   }
 
   function refreshRoomNavigator() {
@@ -4182,38 +4285,98 @@
 
   window.selectRadiatorRoomV60 = setActiveRoomWorkspace;
 
+  function moveRoomFieldInto(room, container, id) {
+    var element = room.querySelector('#' + id);
+    if (!element) return false;
+    var field = element.closest('.field') || element;
+    container.appendChild(field);
+    return true;
+  }
+
+  function createRoomSection(title, className) {
+    var section = document.createElement('section');
+    section.className = 'hl-room-section ' + className;
+    var heading = document.createElement('h4');
+    heading.textContent = title;
+    var grid = document.createElement('div');
+    grid.className = 'hl-fields-grid';
+    section.appendChild(heading);
+    section.appendChild(grid);
+    return { section: section, grid: grid };
+  }
+
+  // The room editor is presented in the order a surveyor works through a room:
+  // dimensions first, then openings, fabric, internal boundaries, ventilation.
+  // Fields are moved by id so each input keeps a single home in the markup.
   function tidyRoomFieldGroups(room, key) {
-    var section = room.querySelector('.hl-room-section-fabric');
-    var grid = section && section.querySelector(':scope > .hl-fields-grid');
-    if (!section || !grid || section.dataset.hlGrouped === 'yes') return;
-    var groups = [
-      { title: 'Openings', keys: ['window', 'door'] },
-      { title: 'Floor, ceiling and evidence', keys: ['floor', 'loft', 'rooflight', 'assumption_quality'] },
-      { title: 'Ventilation', keys: ['ventilation', 'manual_ach', 'chimney'] }
-    ].map(function (definition) {
-      var wrapper = document.createElement('div');
-      wrapper.className = 'hl-room-subsection';
-      var heading = document.createElement('h5');
-      heading.textContent = definition.title;
-      var fields = document.createElement('div');
-      fields.className = 'hl-fields-grid';
-      wrapper.appendChild(heading);
-      wrapper.appendChild(fields);
-      definition.wrapper = wrapper;
-      definition.fields = fields;
-      return definition;
+    var dropdown = room.querySelector('details[data-hl-room="' + key + '"]');
+    if (!dropdown || dropdown.dataset.hlGrouped === 'yes') return;
+    var body = dropdown.querySelector('.hl-room-body');
+    if (!body) return;
+    var intro = body.querySelector('.hl-room-intro');
+    var geometry = body.querySelector('.hl-room-geometry');
+    var basics = body.querySelector('.hl-room-section-basics');
+    var openings = body.querySelector('.hl-room-section-fabric');
+    var internalWall = body.querySelector('.hl-internal-wall');
+    var result = body.querySelector('.hl-room-result');
+    var openingGrid = openings && openings.querySelector('.hl-fields-grid');
+    if (!openings || !openingGrid) return;
+
+    var dimensions = createRoomSection('Dimensions and exposure',
+      'hl-room-section-dimensions');
+    var fabric = createRoomSection('Floor, ceiling and evidence',
+      'hl-room-section-fabric-details');
+    var ventilation = createRoomSection('Ventilation and air change',
+      'hl-room-section-ventilation');
+
+    [
+      'rad_' + key + '_len',
+      'rad_' + key + '_wid',
+      'rad_' + key + '_walls',
+      'hl_' + key + '_indoor_temp',
+      'hl_' + key + '_external_wall_length',
+      'hl_' + key + '_wall_type',
+      // Kept in the markup here, then claimed by the radiator panel so the
+      // room basics section can be removed without losing the shared radiator.
+      'hl_' + key + '_shared_radiator_with'
+    ].forEach(function (id) {
+      moveRoomFieldInto(room, dimensions.grid, id);
     });
-    Array.from(grid.children).forEach(function (child) {
-      var childId = child.id || ((child.querySelector('[id]') || {}).id || '');
-      var group = groups.find(function (definition) {
-        return definition.keys.some(function (part) {
-          return childId.indexOf('hl_' + key + '_' + part) === 0;
-        });
-      });
-      (group || groups[1]).fields.appendChild(child);
+
+    [
+      'hl_' + key + '_floor_type',
+      'hl_' + key + '_floor_adjacent_temp',
+      'hl_' + key + '_loft_type',
+      'hl_' + key + '_roof_adjacent_temp',
+      'hl_' + key + '_rooflight_type',
+      'hl_' + key + '_rooflight_area',
+      'hl_' + key + '_assumption_quality'
+    ].forEach(function (id) {
+      moveRoomFieldInto(room, fabric.grid, id);
     });
-    groups.forEach(function (group) { section.appendChild(group.wrapper); });
-    section.dataset.hlGrouped = 'yes';
+
+    [
+      'hl_' + key + '_ventilation_mode',
+      'hl_' + key + '_manual_ach',
+      'hl_' + key + '_ventilation_device',
+      'hl_' + key + '_chimney_restricted'
+    ].forEach(function (id) {
+      moveRoomFieldInto(room, ventilation.grid, id);
+    });
+
+    var openingHeading = openings.querySelector('h4');
+    if (openingHeading) openingHeading.textContent = 'Windows and external doors';
+    openings.classList.add('hl-room-section-openings');
+    var internalHeading = internalWall && internalWall.querySelector('h4');
+    if (internalHeading) internalHeading.textContent = 'Internal boundaries';
+
+    if (basics && basics.parentElement === body) body.removeChild(basics);
+
+    [intro, geometry, dimensions.section, openings, fabric.section, internalWall,
+      ventilation.section, result].forEach(function (element) {
+      if (element) body.appendChild(element);
+    });
+    dropdown.dataset.hlGrouped = 'yes';
   }
 
   function addRadiatorGroup(container, title, fields) {
@@ -4263,11 +4426,20 @@
         });
       });
     }
+    var summary = document.getElementById('heatLossSummaryCard');
+    if (summary && roomsCard.previousElementSibling !== summary) {
+      summary.insertAdjacentElement('afterend', roomsCard);
+    }
     setActiveRoomWorkspace(activeRoomWorkspaceKey || roomKeyFromName(roomNames[0] || ''));
+    wireRadsWorkspaceToggle();
   }
 
   var previousRoomFormHtml = roomFormHtml;
   roomFormHtml = function (roomName, index) {
+    return buildRoomFormHtml(roomName, index);
+  };
+
+  function buildRoomFormHtml(roomName, index) {
     var key = roomKeyFromName(roomName);
     var original = previousRoomFormHtml(roomName, index);
     var existingSizePattern = new RegExp(
@@ -4358,8 +4530,8 @@
     var outputMatch = original.match(outputPattern);
     var outputField = outputMatch ? outputMatch[0] : '';
     if (outputField) original = original.replace(outputPattern, '');
-    var heatLossAndRadiatorFields = roomDropdownHtml(roomName) + newSizeField +
-      secondRadiatorField;
+    var heatLossAndRadiatorFields = roomDropdownHtml(roomName) +
+      newSizeField + secondRadiatorField;
     var newLocationPattern = new RegExp(
       '(<div class="field">\\s*<label for="rad_' + key +
       '_new_loc">[\\s\\S]*?<\\/div>)'
@@ -4405,14 +4577,14 @@
 
     var existingFields = room.querySelector('#hl_' + key + '_existing_radiator_fields');
     var existingTrvField = fieldContainer('rad_' + key + '_ex_trv');
-    if (existingFields && existingTrvField) existingFields.appendChild(existingTrvField);
-
+    if (existingFields) existingFields.appendChild(existingTrvField);
     addRadiatorGroup(radiatorControls, 'Existing radiator', existingFields ? [existingFields] : []);
     var radiatorSetupFields = [];
     [
       'hl_' + key + '_shared_radiator_with',
       'hl_' + key + '_radiator_installation',
-      'hl_' + key + '_radiator_finish'
+      'hl_' + key + '_radiator_finish',
+      'hl_' + key + '_rad_quantity'
     ].forEach(function (id) {
       var field = fieldContainer(id);
       if (field) radiatorSetupFields.push(field);
@@ -4420,7 +4592,6 @@
     addRadiatorGroup(radiatorControls, 'Radiator setup', radiatorSetupFields);
     var replacementFields = [];
     [
-      'hl_' + key + '_rad_quantity',
       'rad_' + key + '_new_size',
       'rad_' + key + '_new_size_2',
       'rad_' + key + '_new_loc',
@@ -4478,6 +4649,7 @@
       : (typeof getData === 'function' ? getData() : storedSurveyData());
     var result = previousRebuildRadsForm.apply(this, arguments);
     installSummaryCard();
+    organisePropertyWorkflow();
     restoreValues(saved);
     applyDefaults();
     wireHeatLossFields();
@@ -4488,6 +4660,8 @@
     calculateHeatLoss();
     installRoomWorkspace();
     refreshRoomCompletionControls();
+    refreshDependentInputVisibility();
+    syncRadsWorkflowStatus();
     return result;
   };
 
@@ -4543,6 +4717,8 @@
     var result = previousUpdate.apply(this, arguments);
     refreshRoomCompletionControls();
     refreshRoomNavigator();
+    refreshDependentInputVisibility();
+    syncRadsWorkflowStatus();
     persistCombinedData();
     return result;
   };

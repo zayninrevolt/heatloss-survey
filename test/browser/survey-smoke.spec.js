@@ -432,6 +432,10 @@ test('routes ordinary typing directly to the deferred preview scheduler', async 
 test('tablet layout exposes DHDG controls with touch-sized fields', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.locator('#radsTab').click();
+  // Calculation allowances live in one collapsed group so the default view stays
+  // short; opening it must still expose every DHDG control at tablet size.
+  await expect(page.locator('#hl_calculation_assumptions')).not.toHaveAttribute('open', '');
+  await page.locator('#hl_calculation_assumptions > summary').click();
   await expect(page.locator('#hl_ventilation_age_category')).toBeVisible();
   await expect(page.locator('#hl_reheat_factor')).toBeVisible();
   await expect(page.locator('#hl_high_ceiling_factor')).toBeVisible();
@@ -1297,7 +1301,11 @@ test('shows the radiator outcome, required kW and usable laptop input width', as
   expect(metrics.sidebarWidth).toBeGreaterThanOrEqual(440);
   expect(metrics.mainMinWidth).toBe('0px');
   expect(metrics.outcomeWidth).toBeGreaterThanOrEqual(300);
-  expect(metrics.appColumns).toMatch(/^4\d{2}px/);
+  // The input column must stay wide enough for side-by-side fields without
+  // squeezing the spreadsheet preview out of a usable width.
+  const [inputColumn, previewColumn] = metrics.appColumns.split(' ').map(parseFloat);
+  expect(inputColumn).toBeGreaterThanOrEqual(500);
+  expect(previewColumn).toBeGreaterThanOrEqual(400);
   expect(metrics.radiatorPanelOutsideHeatLoss).toBe(true);
   expect(metrics.heatLossBeforeRadiatorPanel).toBe(true);
   expect(metrics.radiatorControlsTogether).toBe(true);

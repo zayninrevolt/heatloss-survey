@@ -43,7 +43,13 @@ test('Rads uses one active room editor with a persistent room navigator', async 
   await expect(page.locator('.hl-room-editor:visible')).toHaveCount(1);
   await expect(page.locator('.hl-room-editor.is-active > details > summary')).toBeHidden();
   await expect(page.locator('.hl-room-editor.is-active #rad_lounge_len')).toBeVisible();
-  await expect(page.locator('.hl-room-editor.is-active .hl-room-section')).toHaveCount(2);
+  // The room editor is ordered the way a room is surveyed.
+  await expect(page.locator('.hl-room-editor.is-active .hl-room-section h4')).toHaveText([
+    'Dimensions and exposure',
+    'Windows and external doors',
+    'Floor, ceiling and evidence',
+    'Ventilation and air change'
+  ]);
 
   const initial = await page.evaluate(() => ({
     active: document.querySelector('.hl-room-editor.is-active').dataset.hlRoom,
@@ -76,6 +82,71 @@ test('Rads uses one active room editor with a persistent room navigator', async 
   expect(switched.visibleEditors).toBe(1);
   expect(switched.loungeLength).toBe('4');
   expect(switched.loungeEditorDisplay).toBe('none');
+});
+
+test('Rads prioritises rooms and reveals only the inputs relevant to the survey choice', async ({ page }) => {
+  const initial = await page.evaluate(() => {
+    const rooms = document.getElementById('hl_rooms_card');
+    const summary = document.getElementById('heatLossSummaryCard');
+    const fieldWrap = id => document.getElementById(id)?.closest('.field') || null;
+    return {
+      roomsImmediatelyAfterSetup: rooms.previousElementSibling === summary,
+      assumptionsClosed: document.getElementById('hl_calculation_assumptions')?.open === false,
+      focusButton: document.getElementById('hl_rads_focus_toggle')?.textContent.trim(),
+      outputIsResult: fieldWrap('r_output_temp')?.hidden === true &&
+        document.getElementById('hl_recommended_system_output')?.textContent.trim(),
+      manualAchHidden: fieldWrap('hl_lounge_manual_ach')?.hidden,
+      chimneyHidden: fieldWrap('hl_lounge_chimney_restricted')?.hidden,
+      rooflightAreaHidden: fieldWrap('hl_lounge_rooflight_area')?.hidden,
+      knownDoorUHidden: fieldWrap('hl_internal_door_known_u')?.hidden,
+      mvhrHidden: fieldWrap('hl_mvhr_efficiency')?.hidden,
+      radiatorControlsGrouped: [
+        'hl_lounge_shared_radiator_with',
+        'hl_lounge_radiator_installation',
+        'hl_lounge_radiator_finish',
+        'hl_lounge_rad_quantity'
+      ].every(id => document.querySelector('#hl_lounge_radiator_panel')
+        ?.contains(document.getElementById(id)))
+    };
+  });
+  expect(initial.roomsImmediatelyAfterSetup).toBe(true);
+  expect(initial.assumptionsClosed).toBe(true);
+  expect(initial.focusButton).toBe('Focus on form');
+  expect(initial.outputIsResult).toMatch(/12\.00 kW/);
+  expect(initial.manualAchHidden).toBe(true);
+  expect(initial.chimneyHidden).toBe(true);
+  expect(initial.rooflightAreaHidden).toBe(true);
+  expect(initial.knownDoorUHidden).toBe(true);
+  expect(initial.mvhrHidden).toBe(true);
+  expect(initial.radiatorControlsGrouped).toBe(true);
+
+  await page.evaluate(() => {
+    const set = (id, value) => {
+      const field = document.getElementById(id);
+      field.value = value;
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    set('hl_lounge_ventilation_mode', 'Manual override');
+    set('hl_lounge_ventilation_device', 'Open chimney');
+    set('hl_lounge_rooflight_type', 'Double or triple glazed roof window, 2002 to 2021');
+    set('hl_internal_door_type', 'Known manufacturer/design U-value');
+    set('hl_ventilation_system', 'Mechanical ventilation with heat recovery (MVHR)');
+  });
+  const revealed = await page.evaluate(() => {
+    const fieldWrap = id => document.getElementById(id)?.closest('.field') || null;
+    return {
+      manualAch: !fieldWrap('hl_lounge_manual_ach').hidden,
+      chimney: !fieldWrap('hl_lounge_chimney_restricted').hidden,
+      rooflightArea: !fieldWrap('hl_lounge_rooflight_area').hidden,
+      knownDoorU: !fieldWrap('hl_internal_door_known_u').hidden,
+      mvhr: !fieldWrap('hl_mvhr_efficiency').hidden
+    };
+  });
+  expect(revealed).toEqual({ manualAch: true, chimney: true, rooflightArea: true, knownDoorU: true, mvhr: true });
+
+  await page.locator('#hl_rads_focus_toggle').click();
+  await expect(page.locator('body')).toHaveClass(/hl-rads-focus-mode/);
+  await expect(page.locator('#hl_rads_focus_toggle')).toHaveText('Show preview');
 });
 
 test('flat rooflights replace opaque roof area instead of adding overlapping loss', async ({ page }) => {
