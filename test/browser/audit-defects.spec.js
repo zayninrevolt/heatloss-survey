@@ -369,8 +369,50 @@ test('the live survey labels its legacy ventilation method honestly', async ({ p
 });
 
 
+test('derives the audit survey record from canonical property and job inputs', async ({ page }) => {
+  await setFields(page, {
+    site_surveyor: 'Richard Chamberlain',
+    site_date: '2026-09-25',
+    r_job: 'Q-2026-091'
+  });
+
+  await expect(page.locator('#hl_surveyor_name')).toHaveValue('Richard Chamberlain');
+  await expect(page.locator('#hl_survey_date')).toHaveValue('2026-09-25');
+  await expect(page.locator('#hl_survey_reference')).toHaveValue('Q-2026-091');
+
+  const result = await page.evaluate(() => ({
+    surveyorReadOnly: document.getElementById('hl_surveyor_name').readOnly,
+    dateReadOnly: document.getElementById('hl_survey_date').readOnly,
+    referenceReadOnly: document.getElementById('hl_survey_reference').readOnly,
+    print: buildPrintHtml('Audit metadata', ['Heat Loss'], 'portrait')
+  }));
+
+  expect(result.surveyorReadOnly).toBe(true);
+  expect(result.dateReadOnly).toBe(true);
+  expect(result.referenceReadOnly).toBe(true);
+  expect(result.print).toContain('Richard Chamberlain, 2026-09-25');
+  expect(result.print).toContain('Reference: Q-2026-091');
+});
+
+test('migrates a legacy audit survey record into blank canonical inputs', async ({ page }) => {
+  await page.evaluate(() => {
+    setData({
+      hl_surveyor_name: 'Legacy Surveyor',
+      hl_survey_date: '2026-03-01',
+      hl_survey_reference: 'LEG-301'
+    });
+  });
+
+  await expect(page.locator('#site_surveyor')).toHaveValue('Legacy Surveyor');
+  await expect(page.locator('#site_date')).toHaveValue('2026-03-01');
+  await expect(page.locator('#r_job')).toHaveValue('LEG-301');
+});
+
 test('records standards-reference evidence without changing the legacy boiler calculation', async ({ page }) => {
   await setFields(page, {
+    site_surveyor: 'A. Surveyor',
+    site_date: '2026-09-15',
+    r_job: 'CASE-15',
     rad_lounge_len: '4',
     rad_lounge_wid: '3',
     rad_lounge_outside: '1',
@@ -385,8 +427,6 @@ test('records standards-reference evidence without changing the legacy boiler ca
   const before = await page.evaluate(() => window.heatLossResultsV60.totalWatts);
 
   await page.locator('#hl_audit_evidence_details summary').click();
-  await page.locator('#hl_surveyor_name').fill('A. Surveyor');
-  await page.locator('#hl_survey_date').fill('2026-09-15');
   await page.locator('#hl_dwelling_attachment').selectOption('Semi-detached');
   await page.locator('#hl_airtightness_method').selectOption('Standard default');
   await page.locator('#hl_ventilation_storeys').selectOption('2');

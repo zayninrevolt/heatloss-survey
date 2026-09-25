@@ -491,6 +491,14 @@
       (help ? '<small>' + escapeHtml(help) + '</small>' : '') + '</div>';
   }
 
+  function derivedSurveyRecordFieldHtml(id, label, type, sourceDescription) {
+    var safeId = escapeHtml(id);
+    return '<div class="field hl-derived-survey-record"><label for="' + safeId + '">' +
+      escapeHtml(label) + '</label><input id="' + safeId + '" data-id="' + safeId +
+      '" type="' + escapeHtml(type || 'text') + '" readonly aria-readonly="true">' +
+      '<small>' + escapeHtml(sourceDescription) + '</small></div>';
+  }
+
   function internalWallFieldHtml(key) {
     var options = Object.keys(VALUES.internalWall).filter(function (option) {
       return option.indexOf('Heated room, ') === 0;
@@ -780,9 +788,12 @@
       '<details class="hl-property-defaults" id="hl_audit_evidence_details"><summary>Audit record and standards-reference evidence</summary>' +
       '<p class="hl-help"><b>Recorded for review:</b> these inputs build an auditable property record and prepare the future BS EN 12831 reference route. They do not alter the legacy boiler heat-loss calculation or radiator recommendation.</p>' +
       '<div class="hl-summary-grid">' +
-      fieldHtml('hl_surveyor_name', 'Surveyor name', 'text') +
-      fieldHtml('hl_survey_date', 'Survey date', 'date') +
-      fieldHtml('hl_survey_reference', 'Survey reference', 'text', null, 'Your own job, quotation or case reference.') +
+      derivedSurveyRecordFieldHtml('hl_surveyor_name', 'Surveyor name', 'text',
+        'Taken from Main Property Details → Surveyor.') +
+      derivedSurveyRecordFieldHtml('hl_survey_date', 'Survey date', 'date',
+        'Taken from Main Property Details → Survey date.') +
+      derivedSurveyRecordFieldHtml('hl_survey_reference', 'Survey reference', 'text',
+        'Taken from Property setup → Job Number.') +
       fieldHtml('hl_dwelling_attachment', 'Dwelling attachment', 'select', [
         'Detached', 'Semi-detached', 'End terrace', 'Mid terrace', 'Enclosed end-terrace flat', 'Enclosed mid-terrace flat'
       ], 'Used by the future reference method to determine exposed façades.') +
@@ -1284,6 +1295,49 @@
       field.value = entry[1];
     });
     migrateOldHeatLossValues(data || {});
+  }
+
+  function auditSurveyRecordValue(sourceId, auditId) {
+    return stringValue(sourceId) || stringValue(auditId);
+  }
+
+  function syncDerivedAuditSurveyRecord() {
+    [
+      { source: 'site_surveyor', audit: 'hl_surveyor_name' },
+      { source: 'site_date', audit: 'hl_survey_date' },
+      { source: 'r_job', audit: 'hl_survey_reference' }
+    ].forEach(function (mapping) {
+      setValue(mapping.audit, stringValue(mapping.source));
+    });
+  }
+
+  function migrateLegacyAuditSurveyRecord() {
+    [
+      { source: 'site_surveyor', audit: 'hl_surveyor_name' },
+      { source: 'site_date', audit: 'hl_survey_date' },
+      { source: 'r_job', audit: 'hl_survey_reference' }
+    ].forEach(function (mapping) {
+      var source = document.getElementById(mapping.source);
+      var audit = document.getElementById(mapping.audit);
+      if (source && audit && !String(source.value || '').trim() &&
+          String(audit.value || '').trim()) {
+        source.value = audit.value;
+      }
+    });
+  }
+
+  function wireDerivedAuditSurveyRecord() {
+    ['site_surveyor', 'site_date', 'r_job'].forEach(function (id) {
+      var field = document.getElementById(id);
+      if (!field || field.dataset.hlAuditRecordWired === 'yes') return;
+      field.dataset.hlAuditRecordWired = 'yes';
+      ['input', 'change'].forEach(function (eventName) {
+        field.addEventListener(eventName, function () {
+          syncDerivedAuditSurveyRecord();
+          persistCombinedData();
+        });
+      });
+    });
   }
 
   function migrateOldHeatLossValues(data) {
@@ -3921,9 +3975,11 @@
       '<td class="label">Age evidence</td><td colspan="5" class="input">' +
       escapeHtml(stringValue('hl_property_age_source') || 'Unknown') + '</td></tr>' +
       '<tr><td class="label">Survey record</td><td colspan="3" class="input">' +
-      escapeHtml(stringValue('hl_surveyor_name') || 'Not recorded') +
-      (stringValue('hl_survey_date') ? ', ' + escapeHtml(stringValue('hl_survey_date')) : '') +
-      (stringValue('hl_survey_reference') ? '<br>Reference: ' + escapeHtml(stringValue('hl_survey_reference')) : '') +
+      escapeHtml(auditSurveyRecordValue('site_surveyor', 'hl_surveyor_name') || 'Not recorded') +
+      (auditSurveyRecordValue('site_date', 'hl_survey_date') ? ', ' +
+        escapeHtml(auditSurveyRecordValue('site_date', 'hl_survey_date')) : '') +
+      (auditSurveyRecordValue('r_job', 'hl_survey_reference') ? '<br>Reference: ' +
+        escapeHtml(auditSurveyRecordValue('r_job', 'hl_survey_reference')) : '') +
       '</td><td class="label">Calculation basis</td><td colspan="3" class="input">Legacy boiler calculation<br><small>Reference inputs recorded, not used for sizing</small></td></tr>' +
       '<tr><td class="label">Building-load reference inputs</td><td colspan="7" class="input">' +
       'Attachment: ' + escapeHtml(stringValue('hl_dwelling_attachment') || 'Not recorded') +
@@ -4664,8 +4720,11 @@
     installSummaryCard();
     organisePropertyWorkflow();
     restoreValues(saved);
+    migrateLegacyAuditSurveyRecord();
+    syncDerivedAuditSurveyRecord();
     applyDefaults();
     wireHeatLossFields();
+    wireDerivedAuditSurveyRecord();
     wireRadiatorTemperature();
     wirePostcodeLookup();
     wirePropertyDefaults();
@@ -4693,6 +4752,8 @@
     rebuildRadsForm(migratedData);
     var result = previousSetData.call(this, migratedData);
     restoreValues(migratedData);
+    migrateLegacyAuditSurveyRecord();
+    syncDerivedAuditSurveyRecord();
     applyDefaults();
     calculateHeatLoss();
     persistCombinedData();
