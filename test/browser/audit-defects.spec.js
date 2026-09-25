@@ -149,6 +149,26 @@ test('Rads prioritises rooms and reveals only the inputs relevant to the survey 
   await expect(page.locator('#hl_rads_focus_toggle')).toHaveText('Show preview');
 });
 
+test('Rads focus mode is left when switching to another survey tab', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  await page.locator('#hl_rads_focus_toggle').click();
+  await expect(page.locator('body')).toHaveClass(/hl-rads-focus-mode/);
+  await expect(page.locator('.main')).toBeHidden();
+
+  await page.locator('#frontTab').click();
+  await expect(page.locator('body')).not.toHaveClass(/hl-rads-focus-mode/);
+  await expect(page.locator('.main')).toBeVisible();
+  await expect(page.getByRole('tabpanel', { name: 'Front' })).toBeVisible();
+});
+
+test('Rads keeps the external wall count with the room dimensions', async ({ page }) => {
+  await page.locator('#radsTab').click();
+  const wallCount = page.locator('#rad_lounge_outside');
+  await expect(wallCount).toBeVisible();
+  await expect(wallCount.locator('xpath=ancestor::section[contains(@class, "hl-room-section-dimensions")]'))
+    .toHaveCount(1);
+});
+
 test('flat rooflights replace opaque roof area instead of adding overlapping loss', async ({ page }) => {
   const opaque = await room(page);
   expect(opaque.complete).toBe(true);

@@ -4222,15 +4222,28 @@
     }
   }
 
+  function setRadsFocusMode(focused) {
+    document.body.classList.toggle('hl-rads-focus-mode', focused);
+    var button = document.getElementById('hl_rads_focus_toggle');
+    if (!button) return;
+    button.setAttribute('aria-pressed', String(focused));
+    button.textContent = focused ? 'Show preview' : 'Focus on form';
+  }
+
   function wireRadsWorkspaceToggle() {
     var button = document.getElementById('hl_rads_focus_toggle');
     if (!button || button.dataset.hlWorkspaceWired === 'yes') return;
     button.dataset.hlWorkspaceWired = 'yes';
     button.addEventListener('click', function () {
-      var focused = document.body.classList.toggle('hl-rads-focus-mode');
-      button.setAttribute('aria-pressed', String(focused));
-      button.textContent = focused ? 'Show preview' : 'Focus on form';
+      setRadsFocusMode(!document.body.classList.contains('hl-rads-focus-mode'));
     });
+    if (document.body.dataset.hlRadsFocusExitWired !== 'yes') {
+      document.body.dataset.hlRadsFocusExitWired = 'yes';
+      document.addEventListener('click', function (event) {
+        var tab = event.target.closest('[role="tab"]');
+        if (tab && tab.id !== 'radsTab') setRadsFocusMode(false);
+      });
+    }
     var radsForm = document.getElementById('radsForm');
     if (radsForm && radsForm.dataset.hlDependentWired !== 'yes') {
       radsForm.dataset.hlDependentWired = 'yes';
@@ -4332,7 +4345,7 @@
     [
       'rad_' + key + '_len',
       'rad_' + key + '_wid',
-      'rad_' + key + '_walls',
+      'rad_' + key + '_outside',
       'hl_' + key + '_indoor_temp',
       'hl_' + key + '_external_wall_length',
       'hl_' + key + '_wall_type',
@@ -4577,7 +4590,7 @@
 
     var existingFields = room.querySelector('#hl_' + key + '_existing_radiator_fields');
     var existingTrvField = fieldContainer('rad_' + key + '_ex_trv');
-    if (existingFields) existingFields.appendChild(existingTrvField);
+    if (existingFields && existingTrvField) existingFields.appendChild(existingTrvField);
     addRadiatorGroup(radiatorControls, 'Existing radiator', existingFields ? [existingFields] : []);
     var radiatorSetupFields = [];
     [
