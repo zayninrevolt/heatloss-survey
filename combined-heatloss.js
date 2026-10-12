@@ -2581,8 +2581,7 @@
     if (manualWallExceedsRectangle) {
       warnings.push('Exposed wall length exceeds the simple rectangular perimeter; check this irregular-room measurement');
     }
-    if (numberedInternalWallMode && internalWallSegments.length > 0 &&
-        calculatedInternalWallLength > 0) {
+    if (numberedInternalWallMode && internalWallSegments.length > 0) {
       var enteredInternalWallTotal = internalWallSegments.reduce(function (sum, segment) {
         return sum + segment.length;
       }, 0);

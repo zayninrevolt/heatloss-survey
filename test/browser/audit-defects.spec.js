@@ -535,6 +535,25 @@ test('the second active custom radiator requires its own recorded basis', async 
   expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
 });
 
+test('internal wall reconciliation warns when no internal perimeter remains', async ({ page }) => {
+  await setFields(page, {
+    rad_lounge_outside: '4',
+    hl_lounge_internal_wall_count: '1',
+    hl_lounge_internal_wall_type: 'Heated room, single brick',
+    hl_lounge_internal_segment_1_length: '11',
+    hl_lounge_internal_segment_1_adjacent_temp: '10'
+  });
+  const result = await room(page);
+  expect(result.calculatedInternalWallLength).toBe(0);
+  expect(result.internalWallLength).toBe(11);
+  expect(result.complete).toBe(true); // Irregular-room geometry remains advisory.
+  expect(result.warnings.join(' ')).toMatch(/11 m but only 0 m remains/i);
+  expect(await page.evaluate(() => buildPrintHtml('Geometry review', ['Heat Loss'], 'portrait')))
+    .toMatch(/11 m but only 0 m remains/i);
+  await setFields(page, { hl_lounge_internal_wall_count: '0' });
+  expect((await room(page)).warnings.join(' ')).not.toMatch(/internal walls total/i);
+});
+
 for (const quantity of ['1', '2']) {
   test(`inactive second custom metadata does not warn with quantity ${quantity}`, async ({ page }) => {
     await setFields(page, {
