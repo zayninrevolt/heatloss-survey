@@ -476,3 +476,18 @@ test('a custom radiator rating goes stale when the design temperature changes', 
   await setFields(page, { rad_lounge_ex_custom_kw: '0.8' });
   expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
 });
+
+test('re-entering a custom rating uses the current room temperature', async ({ page }) => {
+  await setFields(page, {
+    rad_lounge_outcome: 'Assess existing radiator',
+    rad_lounge_ex_size: 'Custom radiator or towel rail',
+    rad_lounge_ex_custom_kw: '1'
+  });
+  await expect(page.locator('#rad_lounge_ex_custom_temp')).toHaveValue('29.0');
+  await setFields(page, { hl_lounge_indoor_temp: '18' });
+  expect((await room(page)).warnings.join(' ')).toMatch(/design temperature/i);
+  await setFields(page, { rad_lounge_ex_custom_kw: '1.1' });
+  await expect(page.locator('#rad_lounge_ex_custom_temp')).toHaveValue('32.0');
+  expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
+  expect((await room(page)).existingRadiator.watts).toBeCloseTo(1100 * 0.96, 8);
+});

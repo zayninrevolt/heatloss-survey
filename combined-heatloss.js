@@ -1998,7 +1998,8 @@
     var suffix = index > 1 ? '_' + index : '';
     var field = document.getElementById('rad_' + key + '_ex_custom_temp' + suffix);
     if (!field) return;
-    field.value = currentRadiatorDeltaT(indoor).toFixed(1);
+    var currentIndoor = numberValue('hl_' + key + '_indoor_temp', indoor);
+    field.value = currentRadiatorDeltaT(currentIndoor).toFixed(1);
   }
 
   // A manually entered radiator rating only means something at the design
