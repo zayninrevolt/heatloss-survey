@@ -2008,20 +2008,29 @@
   function customOutputBasisWarning(key, indoor, existingRadiator) {
     if (!existingRadiator || !existingRadiator.customOutput) return '';
     var current = currentRadiatorDeltaT(indoor);
-    var stale = '';
-    ['', '_2'].forEach(function (suffix) {
-      if (stale) return;
-      var recorded = Number(stringValue('rad_' + key + '_ex_custom_temp' + suffix));
-      if (Number.isFinite(recorded) && recorded > 0 &&
-          Math.abs(current - recorded) >= 0.05) {
-        stale = recorded.toFixed(1);
+    var quantity = Math.max(1, Math.min(2,
+      Math.round(numberValue('rad_' + key + '_ex_quantity', 1)) || 1));
+    var warnings = [];
+    for (var index = 1; index <= quantity; index += 1) {
+      var suffix = index > 1 ? '_' + index : '';
+      if (stringValue('rad_' + key + '_ex_size' + suffix) !==
+          CUSTOM_EXISTING_RADIATOR_SELECTION ||
+          numberValue('rad_' + key + '_ex_custom_kw' + suffix, 0) <= 0) continue;
+      var recordedText = stringValue('rad_' + key + '_ex_custom_temp' + suffix);
+      var recorded = Number(recordedText);
+      var label = 'Custom radiator' + (quantity > 1 ? ' ' + index : '') + ' output';
+      if (recordedText.trim() === '' || !Number.isFinite(recorded) || recorded <= 0) {
+        warnings.push(label + ' has no recorded design temperature. Confirm the ' +
+          'manufacturer output at the current ' + current.toFixed(1) +
+          ' K design temperature, or re-enter it.');
+      } else if (Math.abs(current - recorded) >= 0.05) {
+        warnings.push(label + ' was entered at a ' + recorded.toFixed(1) +
+          ' K design temperature, but this room is now assessed at ' +
+          current.toFixed(1) + ' K. Confirm the manufacturer output at the selected ' +
+          'design temperature, or re-enter it.');
       }
-    });
-    if (!stale) return '';
-    return 'Custom radiator output was entered at a ' + stale +
-      ' K design temperature, but this room is now assessed at ' +
-      current.toFixed(1) + ' K. Confirm the manufacturer output at the selected ' +
-      'design temperature, or re-enter it.';
+    }
+    return warnings.join(' ');
   }
 
   function existingRadiatorUnitForRoom(key, indoor, roomName, index) {

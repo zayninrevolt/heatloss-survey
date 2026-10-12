@@ -491,3 +491,63 @@ test('re-entering a custom rating uses the current room temperature', async ({ p
   expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
   expect((await room(page)).existingRadiator.watts).toBeCloseTo(1100 * 0.96, 8);
 });
+
+for (const basis of ['', 'invalid']) {
+  test(`a saved custom rating with ${basis || 'missing'} basis requires review`, async ({ page }) => {
+    await setFields(page, {
+      rad_lounge_outcome: 'Assess existing radiator',
+      rad_lounge_ex_size: 'Custom radiator or towel rail',
+      rad_lounge_ex_custom_kw: '1'
+    });
+    const before = (await room(page)).totalWatts;
+    await page.evaluate(basis => {
+      const saved = getData();
+      saved.rad_lounge_ex_custom_temp = basis;
+      setData(saved);
+    }, basis);
+    const result = await room(page);
+    expect(result.complete).toBe(true);
+    expect(result.totalWatts).toBeCloseTo(before, 8);
+    expect(result.warnings.join(' ')).toMatch(/no recorded design temperature/i);
+    expect(await page.evaluate(() => buildPrintHtml('Review', ['Heat Loss'], 'portrait')))
+      .toMatch(/no recorded design temperature/i);
+    await setFields(page, { rad_lounge_ex_custom_kw: '1' });
+    await expect(page.locator('#rad_lounge_ex_custom_temp')).toHaveValue('29.0');
+    expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
+  });
+}
+
+test('the second active custom radiator requires its own recorded basis', async ({ page }) => {
+  await setFields(page, {
+    rad_lounge_ex_quantity: '2',
+    rad_lounge_ex_size: '600(h) x 1000(w) K2',
+    rad_lounge_ex_size_2: 'Custom radiator or towel rail',
+    rad_lounge_ex_custom_kw_2: '1'
+  });
+  await page.evaluate(() => {
+    const saved = getData();
+    saved.rad_lounge_ex_custom_temp_2 = '';
+    setData(saved);
+  });
+  expect((await room(page)).warnings.join(' ')).toMatch(/radiator 2 output has no recorded design temperature/i);
+  await setFields(page, { hl_lounge_indoor_temp: '18', rad_lounge_ex_custom_kw_2: '1.1' });
+  await expect(page.locator('#rad_lounge_ex_custom_temp_2')).toHaveValue('32.0');
+  expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
+});
+
+for (const quantity of ['1', '2']) {
+  test(`inactive second custom metadata does not warn with quantity ${quantity}`, async ({ page }) => {
+    await setFields(page, {
+      rad_lounge_ex_quantity: quantity,
+      rad_lounge_ex_size: 'Custom radiator or towel rail',
+      rad_lounge_ex_custom_kw: '1',
+      rad_lounge_ex_size_2: '600(h) x 1000(w) K2'
+    });
+    await page.evaluate(() => {
+      const saved = getData();
+      saved.rad_lounge_ex_custom_temp_2 = '50.0';
+      setData(saved);
+    });
+    expect((await room(page)).warnings.join(' ')).not.toMatch(/design temperature/i);
+  });
+}
