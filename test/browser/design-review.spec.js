@@ -37,12 +37,19 @@ test.beforeEach(async ({ page }) => {
 test('the heat-pump design review reports the separate figures and its limits', async ({ page }) => {
   const review = await page.evaluate(() => window.DesignReview.computeDesignReview());
   expect(review.complete).toBe(true);
-  // Emitter demand is the room peak; the whole-building figure must be lower, because
-  // BS EN 12831 does not sum room ventilation peaks into the plant load.
-  expect(review.roomEmitterDemandKw).toBeGreaterThan(review.buildingDemandKw);
+  // No heated-room transfer exists in this fixture. The recorded-method building
+  // and room loads must agree; this report implements no ventilation diversity.
+  const results = await page.evaluate(() => ({
+    totalWatts: window.heatLossResultsV60.totalWatts,
+    emitterRequirementWatts: window.heatLossResultsV60.includedRooms.reduce((sum, room) => sum + room.radiatorRequirementWatts, 0)
+  }));
+  expect(review.buildingDemandKw).toBeCloseTo(results.totalWatts / 1000, 10);
+  expect(review.roomEmitterDemandKw).toBeCloseTo(results.emitterRequirementWatts / 1000, 10);
+  expect(review.fabricDemandKw + review.ventilationDemandKw).toBeCloseTo(review.buildingDemandKw, 10);
   expect(review.fabricDemandKw).toBeGreaterThan(0);
   expect(review.exposure).toEqual({ exposedFacades: 3, shielding: 'normal' });
-  expect(review.implemented.join(' ')).toMatch(/without the ventilation-diversity reduction/);
+  expect(review.implemented.join(' ')).toMatch(/including bridging and recorded room allowances/);
+  expect(review.implemented.join(' ')).toMatch(/No ventilation-diversity reduction/);
   expect(review.outstanding.join(' ')).toMatch(/infiltration exposure flow/);
   // The whole review lives in a collapsed <details> by default, like every other
   // property-level report block; open it the way the surveyor would.
@@ -50,11 +57,19 @@ test('the heat-pump design review reports the separate figures and its limits', 
   await page.locator('#hl_design_review > summary').click();
   await expect(page.locator('#hl_design_review_summary')).toBeVisible();
   await expect(page.locator('#hl_design_review_summary')).toContainText('kW');
+  await expect(page.locator('#hl_design_review_summary')).toContainText('including bridging and recorded room allowances');
+  await expect(page.locator('#hl_design_review_summary')).toContainText('exposure coefficient is recorded, not applied');
+  await expect(page.locator('#hl_design_review_summary')).toContainText('not a validated heat-pump sizing calculation');
   await expect(page.locator('#hl_design_review_limits')).toContainText('not an MCS design');
   // The surveyor reads the printed sheet, not the screen.
   const printed = await page.evaluate(() => buildPrintHtml('Design review', ['Heat Loss'], 'portrait'));
   expect(printed).toContain('Heat-pump design review (report only');
   expect(printed).toContain('infiltration exposure flow');
+  expect(printed).toContain('including bridging and recorded room allowances');
+  expect(printed).toContain('exposure coefficient is recorded, not applied');
+  expect(printed).toContain('Not a validated heat-pump sizing calculation');
+  expect(printed).toContain('recorded-method building load ' + review.buildingDemandKw.toFixed(2) + ' kW');
+  expect(printed).toContain('room emitter demand ' + review.roomEmitterDemandKw.toFixed(2) + ' kW');
   expect(printed).toMatch(/\d+\.\d\d kW/);
 });
 
@@ -74,4 +89,65 @@ test('an incomplete survey leaves the design review uncalculated', async ({ page
   expect(review.buildingDemandKw).toBe(0);
   expect(review.notes.join(' ')).toMatch(/Lounge/);
   await expect(page.locator('#hl_design_review_summary')).toContainText('Complete');
+});
+
+test('the review reconciles recorded-method building components without losing bridging or duplicating transfers', async ({ page }) => {
+  const comparisons = [];
+  for (const adjacent of [null, '18', '22', '10']) {
+    if (adjacent == null) {
+      await setFields(page, { hl_lounge_internal_wall_count: '0' });
+    } else {
+      await setFields(page, {
+        hl_lounge_internal_wall_count: '1',
+        hl_lounge_internal_wall_type: 'Heated room, single brick',
+        hl_lounge_internal_segment_1_length: '11',
+        hl_lounge_internal_segment_1_adjacent_temp: adjacent
+      });
+    }
+    const state = await page.evaluate(() => {
+      const result = window.heatLossResultsV60;
+      const room = result.rooms.find(r => r.key === 'lounge');
+      if (!room.complete || result.includedRooms.length !== 1) throw Error('Expected one complete room');
+      const review = window.DesignReview.computeDesignReview();
+      return {
+        room,
+        review,
+        canonicalBuildingKw: room.propertyWatts / 1000,
+        canonicalVentilationKw: room.ventilationWatts * room.factorMultiplier / 1000
+      };
+    });
+    expect(state.room.bridgeWatts).toBeGreaterThan(0);
+    comparisons.push({ boundary: adjacent || 'no internal wall',
+      buildingDifferenceW: (state.review.buildingDemandKw - state.canonicalBuildingKw) * 1000,
+      fabricDifferenceW: (state.review.fabricDemandKw -
+        (state.canonicalBuildingKw - state.canonicalVentilationKw)) * 1000,
+      ventilationDifferenceW: (state.review.ventilationDemandKw - state.canonicalVentilationKw) * 1000
+    });
+  }
+  for (const c of comparisons) {
+    expect(Math.abs(c.buildingDifferenceW), JSON.stringify(comparisons)).toBeLessThan(1e-9);
+    expect(Math.abs(c.fabricDifferenceW), JSON.stringify(comparisons)).toBeLessThan(1e-9);
+    expect(Math.abs(c.ventilationDifferenceW), JSON.stringify(comparisons)).toBeLessThan(1e-9);
+  }
+});
+
+test('review emitter requirement survives customer refusal and is not selected radiator capacity', async ({ page }) => {
+  await setFields(page, { hl_lounge_internal_wall_count: '0' });
+  const before = await page.evaluate(() => ({
+    requirement: window.heatLossResultsV60.rooms.find(r => r.key === 'lounge').radiatorRequirementWatts,
+    building: window.DesignReview.computeDesignReview().buildingDemandKw
+  }));
+  expect(before.requirement).toBeGreaterThan(0);
+  await setFields(page, { rad_lounge_outcome: 'Customer refused' });
+  const state = await page.evaluate(() => ({
+    room: window.heatLossResultsV60.rooms.find(r => r.key === 'lounge'),
+    selectedOutput: window.heatLossResultsV60.radiatorOutputWatts,
+    review: window.DesignReview.computeDesignReview(),
+    printed: buildPrintHtml('Emitter requirement', ['Heat Loss'], 'portrait')
+  }));
+  expect(state.room.complete).toBe(true);
+  expect(state.selectedOutput).toBe(0);
+  expect(state.review.roomEmitterDemandKw).toBeCloseTo(before.requirement / 1000, 10);
+  expect(state.review.buildingDemandKw).toBeCloseTo(before.building, 10);
+  expect(state.printed).toContain('room emitter demand ' + (before.requirement / 1000).toFixed(2) + ' kW');
 });

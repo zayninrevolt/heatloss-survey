@@ -3963,22 +3963,22 @@
       shielding = null;
       exposureNotes.push('Record the site shielding class.');
     }
-    var fabricWatts = 0;
-    var ventilationWatts = 0;
-    var transferWatts = 0;
+    var buildingWatts = 0;
+    var ventilationDemand = 0;
+    var emitterRequirementWatts = 0;
     results.includedRooms.forEach(function (room) {
-      fabricWatts += room.fabricWatts - room.bridgeWatts;
-      transferWatts += room.internalWallWatts;
-      ventilationWatts += room.ventilationWatts;
+      // The canonical property contribution already removes allowance-adjusted
+      // transfers to heated rooms, retains unheated boundaries and includes bridging.
+      // Do not reconstruct it from fabricWatts: that field already includes internal
+      // walls, and each room's recorded allowances must be applied separately.
+      buildingWatts += room.propertyWatts;
+      ventilationDemand += room.ventilationWatts * room.factorMultiplier;
+      // Required heat is not the capacity of the selected/retained radiators.
+      emitterRequirementWatts += room.radiatorRequirementWatts;
     });
-    var factor = results.includedRooms.reduce(function (sum, room) {
-      return sum + room.factorMultiplier;
-    }, 0) / results.includedRooms.length;
-    var fabricDemand = (fabricWatts + transferWatts) * factor;
-    var ventilationDemand = ventilationWatts * factor;
-    // The room peak must still size emitters even though the plant sees a lower figure.
-    var roomEmitterDemandKw = results.radiatorOutputWatts / 1000;
-    var buildingDemandKw = (fabricDemand + ventilationDemand) / 1000;
+    var fabricDemand = buildingWatts - ventilationDemand;
+    var roomEmitterDemandKw = emitterRequirementWatts / 1000;
+    var buildingDemandKw = buildingWatts / 1000;
     var notes = exposureNotes.slice();
     if (results.provisional) {
       notes.push(results.incompleteRooms.length + ' started room(s) are excluded from this review.');
@@ -4005,8 +4005,8 @@
       includedRooms: results.includedRooms.length,
       notes: notes,
       implemented: [
-        'Room fabric and ventilation loads are recombined without the ventilation-diversity reduction.',
-        'Table B.8 exposure allowance is resolved from the zone height, exposed facades and shielding.'
+        'The existing survey method is reported, including bridging and recorded room allowances. Heated-room transfers are excluded only from the building load.',
+        'No ventilation-diversity reduction is applied. Table B.8 is recorded for review, not applied to the load.'
       ],
       outstanding: [
         'The infiltration exposure flow (q50 to ambient) is not modelled, so this is not a complete BS EN 12831 ventilation result.',
@@ -4021,30 +4021,31 @@
       return 'Complete the room details to produce a heat-pump design review.';
     }
     return '<div class="hl-design-review-grid">' +
-      '<div><span>Fabric demand</span><strong>' + review.fabricDemandKw.toFixed(2) + ' kW</strong></div>' +
+      '<div><span>Fabric and bridging</span><strong>' + review.fabricDemandKw.toFixed(2) + ' kW</strong></div>' +
       '<div><span>Ventilation demand</span><strong>' + review.ventilationDemandKw.toFixed(2) + ' kW</strong></div>' +
-      '<div><span>Whole-building design load</span><strong>' + review.buildingDemandKw.toFixed(2) + ' kW</strong></div>' +
+      '<div><span>Recorded-method building load</span><strong>' + review.buildingDemandKw.toFixed(2) + ' kW</strong></div>' +
       '<div><span>Room emitter demand</span><strong>' + review.roomEmitterDemandKw.toFixed(2) + ' kW</strong></div>' +
       '</div>' +
       '<p class="hl-help">' + review.includedRooms + ' complete room(s). Exposed facades: ' +
       (review.exposedFacades == null ? 'not recorded' : review.exposedFacades) +
       '. Shielding: ' + escapeHtml(review.shieldingLabel || 'not recorded') +
       (review.exposureCoefficient == null ? '' : ', Table B.8 coefficient ' + review.exposureCoefficient.toFixed(2)) +
-      '.</p>';
+      '.</p>' +
+      '<p class="hl-help">These figures use the existing survey method, including bridging and recorded room allowances. No ventilation-diversity reduction is applied; the exposure coefficient is recorded, not applied. This is not a validated heat-pump sizing calculation.</p>';
   }
 
   function designReviewPrintLine() {
     var review = computeDesignReview();
     if (!review.complete) return 'not yet calculated: complete the room details.';
-    return 'fabric ' + review.fabricDemandKw.toFixed(2) + ' kW, ventilation ' +
-      review.ventilationDemandKw.toFixed(2) + ' kW, whole-building design load ' +
+    return 'fabric and bridging ' + review.fabricDemandKw.toFixed(2) + ' kW, ventilation ' +
+      review.ventilationDemandKw.toFixed(2) + ' kW, recorded-method building load ' +
       review.buildingDemandKw.toFixed(2) + ' kW, room emitter demand ' +
       review.roomEmitterDemandKw.toFixed(2) + ' kW. Exposed facades: ' +
       (review.exposedFacades == null ? 'not recorded' : review.exposedFacades) +
       ', shielding ' + (review.shieldingLabel || 'not recorded') +
       (review.exposureCoefficient == null ? '' : ', Table B.8 coefficient ' +
         review.exposureCoefficient.toFixed(2)) +
-      '. Not a complete BS EN 12831 ventilation result: the infiltration exposure flow ' +
+      '. These figures use the existing survey method, including bridging and recorded room allowances. No ventilation-diversity reduction is applied; the exposure coefficient is recorded, not applied. Not a validated heat-pump sizing calculation. Not a complete BS EN 12831 ventilation result: the infiltration exposure flow ' +
       'and separation of mechanical flows are not implemented, and ground floors are not ' +
       'calculated to BS EN ISO 13370.';
   }
