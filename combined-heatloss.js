@@ -770,6 +770,11 @@
         { label: 'Survey radiators room by room', value: 'Room by room' },
         { label: 'Customer refused all radiator work', value: 'Customer refused all' }
       ], 'Refusal marks every room as Refused while leaving the boiler and materials choices available.') +
+      fieldHtml('hl_shielding_class', 'Site shielding (ventilation exposure)', 'select', [
+        { label: 'Intensive shielding, inner city or forest', value: 'Intensive shielding' },
+        { label: 'Normal shielding, a few buildings or trees', value: 'Normal shielding' },
+        { label: 'No shielding, open site', value: 'No shielding, open site' }
+      ], 'Recorded for the heat-pump design review exposure allowance. It does not change the boiler heat loss.') +
       fieldHtml('hl_ventilation_system', 'Property ventilation system', 'select', VENTILATION_SYSTEMS, 'The current live calculation uses the legacy automatic room ACH table. MVHR applies its heat-recovery efficiency to that legacy ventilation loss; additional vents and flues remain additive. The separate MCS / BS EN 12831 method is under validation and is not used here yet.') +
       fieldHtml('hl_mvhr_efficiency', 'MVHR heat recovery (%)', 'number', null, 'Only used for MVHR. Enter the design efficiency, normally taken from the unit data.') +
       '</div>' +
@@ -3841,6 +3846,7 @@
       outputField.title = 'Chosen boiler or range-rate recommendation: 12 kW minimum, or 110% of the combined selected radiator output when higher. This is not the building design heat loss and it is not a heat pump size.';
     }
     refreshReferenceReadiness();
+    refreshDesignReview();
     return window.heatLossResultsV60;
   }
   window.hasCompletedHeatLossV63 = function () {
@@ -3921,6 +3927,176 @@
         persistCombinedData();
       });
     }
+  }
+
+  // The heat-pump design review is a REPORT over the existing room results plus the
+  // published BS EN 12831 exposure allowance. It reads figures the survey already
+  // computes and changes none of them: the boiler recommendation, room losses and
+  // radiator picks stay exactly as they were.
+  function computeDesignReview() {
+    var results = window.heatLossResultsV60;
+    var review = window.DesignReview;
+    if (!results || !review || !results.includedRooms.length) {
+      var started = results ? results.incompleteRooms.map(function (room) {
+        return room.roomName;
+      }) : [];
+      return { complete: false, buildingDemandKw: 0, fabricDemandKw: 0,
+        ventilationDemandKw: 0, roomEmitterDemandKw: 0,
+        exposure: { exposedFacades: null, shielding: null },
+        implemented: [], outstanding: [],
+        notes: started.length
+          ? ['Complete ' + started.join(', ') + ' before reading a design review.']
+          : ['Complete at least one room before reading a design review.'] };
+    }
+    var attachment = stringValue('hl_dwelling_attachment');
+    var exposedFacades = null;
+    var exposureNotes = [];
+    try {
+      exposedFacades = review.exposedFacadesForAttachment(attachment);
+    } catch (error) {
+      exposureNotes.push('Record the dwelling attachment to count exposed facades.');
+    }
+    var shielding = null;
+    try {
+      shielding = review.shieldingKey(stringValue('hl_shielding_class'));
+    } catch (error) {
+      shielding = null;
+      exposureNotes.push('Record the site shielding class.');
+    }
+    var fabricWatts = 0;
+    var ventilationWatts = 0;
+    var transferWatts = 0;
+    results.includedRooms.forEach(function (room) {
+      fabricWatts += room.fabricWatts - room.bridgeWatts;
+      transferWatts += room.internalWallWatts;
+      ventilationWatts += room.ventilationWatts;
+    });
+    var factor = results.includedRooms.reduce(function (sum, room) {
+      return sum + room.factorMultiplier;
+    }, 0) / results.includedRooms.length;
+    var fabricDemand = (fabricWatts + transferWatts) * factor;
+    var ventilationDemand = ventilationWatts * factor;
+    // The room peak must still size emitters even though the plant sees a lower figure.
+    var roomEmitterDemandKw = results.radiatorOutputWatts / 1000;
+    var buildingDemandKw = (fabricDemand + ventilationDemand) / 1000;
+    var notes = exposureNotes.slice();
+    if (results.provisional) {
+      notes.push(results.incompleteRooms.length + ' started room(s) are excluded from this review.');
+    }
+    return {
+      methodId: review.methodId,
+      complete: true,
+      exposure: { exposedFacades: exposedFacades, shielding: shielding },
+      exposedFacades: exposedFacades,
+      shielding: shielding,
+      shieldingLabel: stringValue('hl_shielding_class'),
+      exposureCoefficient: exposedFacades != null && shielding != null
+        ? review.exposureCoefficient({
+          zoneHeight: numberValue('r_ceiling', 2.4),
+          exposedFacades: exposedFacades,
+          shielding: shielding,
+          baseHeight: numberValue('hl_ventilation_base_height', 0)
+        })
+        : null,
+      fabricDemandKw: fabricDemand / 1000,
+      ventilationDemandKw: ventilationDemand / 1000,
+      buildingDemandKw: buildingDemandKw,
+      roomEmitterDemandKw: roomEmitterDemandKw,
+      includedRooms: results.includedRooms.length,
+      notes: notes,
+      implemented: [
+        'Room fabric and ventilation loads are recombined without the ventilation-diversity reduction.',
+        'Table B.8 exposure allowance is resolved from the zone height, exposed facades and shielding.'
+      ],
+      outstanding: [
+        'The infiltration exposure flow (q50 to ambient) is not modelled, so this is not a complete BS EN 12831 ventilation result.',
+        'Mechanical supply, extract and heat-recovery flows are not separated from uninterrupted infiltration.',
+        'Ground-contact floors use the selected standard U-value, not a BS EN ISO 13370 calculation.'
+      ]
+    };
+  }
+
+  function designReviewSummaryHtml(review) {
+    if (!review.complete) {
+      return 'Complete the room details to produce a heat-pump design review.';
+    }
+    return '<div class="hl-design-review-grid">' +
+      '<div><span>Fabric demand</span><strong>' + review.fabricDemandKw.toFixed(2) + ' kW</strong></div>' +
+      '<div><span>Ventilation demand</span><strong>' + review.ventilationDemandKw.toFixed(2) + ' kW</strong></div>' +
+      '<div><span>Whole-building design load</span><strong>' + review.buildingDemandKw.toFixed(2) + ' kW</strong></div>' +
+      '<div><span>Room emitter demand</span><strong>' + review.roomEmitterDemandKw.toFixed(2) + ' kW</strong></div>' +
+      '</div>' +
+      '<p class="hl-help">' + review.includedRooms + ' complete room(s). Exposed facades: ' +
+      (review.exposedFacades == null ? 'not recorded' : review.exposedFacades) +
+      '. Shielding: ' + escapeHtml(review.shieldingLabel || 'not recorded') +
+      (review.exposureCoefficient == null ? '' : ', Table B.8 coefficient ' + review.exposureCoefficient.toFixed(2)) +
+      '.</p>';
+  }
+
+  function designReviewPrintLine() {
+    var review = computeDesignReview();
+    if (!review.complete) return 'not yet calculated: complete the room details.';
+    return 'fabric ' + review.fabricDemandKw.toFixed(2) + ' kW, ventilation ' +
+      review.ventilationDemandKw.toFixed(2) + ' kW, whole-building design load ' +
+      review.buildingDemandKw.toFixed(2) + ' kW, room emitter demand ' +
+      review.roomEmitterDemandKw.toFixed(2) + ' kW. Exposed facades: ' +
+      (review.exposedFacades == null ? 'not recorded' : review.exposedFacades) +
+      ', shielding ' + (review.shieldingLabel || 'not recorded') +
+      (review.exposureCoefficient == null ? '' : ', Table B.8 coefficient ' +
+        review.exposureCoefficient.toFixed(2)) +
+      '. Not a complete BS EN 12831 ventilation result: the infiltration exposure flow ' +
+      'and separation of mechanical flows are not implemented, and ground floors are not ' +
+      'calculated to BS EN ISO 13370.';
+  }
+
+  function refreshDesignReview() {
+    var target = document.getElementById('hl_design_review_summary');
+    if (!target || !window.DesignReview) return;
+    var review = computeDesignReview();
+    window.designReviewV1 = review;
+    // innerHTML only ever receives this module's own literals plus values passed
+    // through escapeHtml: no raw survey text reaches the DOM here.
+    target.innerHTML = designReviewSummaryHtml(review);
+    var limits = document.getElementById('hl_design_review_limits');
+    if (limits) {
+      limits.innerHTML = '<b>Not yet implemented in this review:</b><ul>' +
+        review.outstanding.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') +
+        '</ul><small>This is a design review for a competent designer, not an MCS design, and it does not size or select equipment. It does not change the boiler figures above or the saved survey results.</small>';
+    }
+    var notes = document.getElementById('hl_design_review_notes');
+    if (notes) {
+      notes.innerHTML = review.notes.length
+        ? '<b>Review:</b> ' + escapeHtml(review.notes.join(' '))
+        : '';
+    }
+  }
+  window.DesignReview.computeDesignReview = computeDesignReview;
+
+  function installDesignReviewSection() {
+    var summary = document.getElementById('heatLossSummaryCard');
+    if (!summary || document.getElementById('hl_design_review')) return;
+    var section = document.createElement('details');
+    section.id = 'hl_design_review';
+    section.className = 'hl-property-defaults';
+    // Static markup only: no survey value is interpolated into this template.
+    section.innerHTML = '<summary>Heat-pump design review</summary>' +
+      '<p class="hl-help">Separate figures from the same rooms: what the fabric loses, what ventilation adds, what the whole building has to be supplied with, and what the emitters must be able to deliver. This reads the survey and never changes it.</p>' +
+      '<div id="hl_design_review_summary" role="status">Complete the room details to produce a heat-pump design review.</div>' +
+      '<div id="hl_design_review_notes" class="hl-help"></div>' +
+      '<div id="hl_design_review_limits" class="hl-help"></div>';
+    summary.appendChild(section);
+  }
+
+  // Static styling for the report-only section, injected once. Kept separate from
+  // combined-heatloss.css so the shell palette and the printed document colours are
+  // untouched; the markup string contains no survey value.
+  function installDesignReviewStyle() {
+    if (document.getElementById('hl-design-review-style')) return;
+    document.head.insertAdjacentHTML('beforeend',
+      '<style id="hl-design-review-style">' +
+      '.hl-design-review-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:6px 14px;margin:0 0 6px}' +
+      '.hl-design-review-grid div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid rgba(127,127,127,.35);padding:3px 0}' +
+      '.hl-design-review-grid span{opacity:.85}.hl-design-review-grid strong{white-space:nowrap}</style>');
   }
 
   function installSummaryCard() {
@@ -4078,6 +4254,8 @@
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; P+ 300/450/600/700mm = 0.776/1.106/1.409/1.597; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
       '<tr><td colspan="8" class="small">Myson fan-convector options use normal-fan 75/65°C outputs: Kickspace 500/600/800 = 0.755/1.023/1.707 kW; Hi-Line RC 7-4/10-6/15-10/20-14 = 0.930/1.610/2.459/3.468 kW; Hi-Line LV 7-4 = 0.930 kW. The LV is the only Myson option offered in bathroom and en-suite rooms.</td></tr>' +
       '<tr><td colspan="8" class="small">Normal radiator choices meet the room heat loss within a 50% oversize limit. A flagged minimum-size exception can exceed this limit and requires review. BBOE multiplies each radiator’s temperature-corrected output by 0.96 for the 4% connection reduction. It does not change the room or building heat loss. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
+      '<tr><td colspan="8" class="small">Heat-pump design review (report only, does not affect the boiler result): ' +
+      escapeHtml(designReviewPrintLine()) + '</td></tr>' +
       '<tr><td colspan="8" class="small">The live boiler calculation uses the legacy room-by-room age-table ventilation method. It is not a completed BS EN 12831 ventilation result. The property-wide reference inputs above are recorded for review and do not change the boiler or radiator result until the reference route has been benchmarked and released.</td></tr>' +
       '<tr><td colspan="8" class="small">The detailed exposed floor perimeter is recorded for audit. The selected standard floor U-value is still used by this practical calculator. Use a certified BS EN 12831 or MCS tool where a full ISO 13370 ground-floor calculation is required.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +
@@ -4727,6 +4905,8 @@
       : (typeof getData === 'function' ? getData() : storedSurveyData());
     var result = previousRebuildRadsForm.apply(this, arguments);
     installSummaryCard();
+    installDesignReviewStyle();
+    installDesignReviewSection();
     organisePropertyWorkflow();
     restoreValues(saved);
     migrateLegacyAuditSurveyRecord();
