@@ -499,8 +499,8 @@
       '<small>' + escapeHtml(sourceDescription) + '</small></div>';
   }
 
-  function internalWallFieldHtml(key) {
-    var options = Object.keys(VALUES.internalWall).filter(function (option) {
+  function internalWallConstructionOptions() {
+    return Object.keys(VALUES.internalWall).filter(function (option) {
       return option.indexOf('Heated room, ') === 0;
     }).map(function (option) {
       return {
@@ -508,9 +508,22 @@
         value: option
       };
     });
+  }
+
+  function internalWallFieldHtml(key) {
     return fieldHtml('hl_' + key + '_internal_wall_type',
-      'Internal wall construction', 'select', options,
+      'Internal wall construction', 'select', internalWallConstructionOptions(),
       'This construction is used for every numbered internal wall below.');
+  }
+
+  function normaliseDefaultInternalWall(value) {
+    // Older property defaults combined material and neighbour type. Preserve the
+    // material only; applying a default must never rewrite recorded temperatures
+    // or infer wall counts from the retired "No internal wall included" choice.
+    var candidate = String(value || '').replace(/^Unheated space, /, 'Heated room, ');
+    return internalWallConstructionOptions().some(function (option) {
+      return option.value === candidate;
+    }) ? candidate : '';
   }
 
   function internalWallSegmentsHtml(key) {
@@ -780,10 +793,11 @@
       '</div>' +
       '<p class="hl-help hl-age-guidance">If the age is unknown, leave it as Unknown and search separately using reliable property records. Do not infer the age from neighbouring homes.</p>' +
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
-      '<p class="hl-help">Applies external wall, internal wall and window defaults only. The internal-door choice is property-wide; each room separately records its number of standard doors. Floor, loft and room ventilation devices must be selected inside each room.</p>' +
+      '<p class="hl-help">Choose common external-wall, internal-wall and window materials, then press Apply to all rooms. Blank choices leave room selections unchanged. You will be asked before replacing existing room choices. The internal-door type is property-wide; wall counts, lengths and temperatures on the other side stay room-specific. Floor, loft and ventilation devices must be selected inside each room.</p>' +
       '<div class="hl-summary-grid">' +
       fieldHtml('hl_default_wall', 'External wall', 'select', optionsFromMap(VALUES.externalWall)) +
-      fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', optionsFromMap(VALUES.internalWall)) +
+      fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', internalWallConstructionOptions(),
+        'Choose a common material to apply to rooms. A blank choice leaves their construction unchanged. Record wall counts and temperatures on the other side inside each room.') +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
       fieldHtml('hl_internal_door_type', 'Internal door type', 'select', optionsFromMap(VALUES.internalDoor),
         'Plywood-faced hollow-core flush doors use the 2.0 W/m²K survey default. Solid-wood and glazed options are CIBSE DHDG Table 2-42 values. Use a known U-value only with manufacturer or design evidence.') +
@@ -1297,7 +1311,8 @@
           entry[1] !== NO_NEW_RADIATOR_SELECTION) {
         field.dataset.userSelected = 'yes';
       }
-      field.value = entry[1];
+      field.value = entry[0] === 'hl_default_internal_wall'
+        ? normaliseDefaultInternalWall(entry[1]) : entry[1];
     });
     migrateOldHeatLossValues(data || {});
   }
@@ -1492,7 +1507,6 @@
     setValue('front_boiler_temp', stringValue('hl_radiator_temperature'));
     var propertyDefaults = {
       hl_default_wall: 'Cavity wall, insulated',
-      hl_default_internal_wall: 'No internal wall included',
       hl_default_window: 'Older standard double glazing',
       hl_internal_door_type: 'Plywood-faced hollow-core internal door, survey default'
     };
@@ -1527,7 +1541,6 @@
       var defaults = {
         indoor_temp: newIndoorDefault,
         wall_type: 'Cavity wall, insulated',
-        internal_wall_type: 'No internal wall included',
         internal_door_count: '0',
         window_count: '0',
         window_type: 'Older standard double glazing',
@@ -1587,12 +1600,39 @@
       internal_wall_type: stringValue('hl_default_internal_wall'),
       window_type: stringValue('hl_default_window')
     };
+    var changes = [];
+    var invalidChoice = false;
     allRoomNames().forEach(function (roomName) {
       var key = roomKeyFromName(roomName);
       Object.entries(defaults).forEach(function (entry) {
-        if (entry[1]) setValue('hl_' + key + '_' + entry[0], entry[1]);
+        if (!entry[1]) return;
+        var id = 'hl_' + key + '_' + entry[0];
+        var field = document.getElementById(id);
+        if (!field) return;
+        // Validate every target before changing any room. A select silently
+        // clears itself when assigned a value it does not offer.
+        var available = Array.prototype.some.call(field.options, function (option) {
+          return option.value === entry[1];
+        });
+        if (!available) {
+          invalidChoice = true;
+          return;
+        }
+        if (field.value !== entry[1]) {
+          changes.push({ id: id, value: entry[1], previous: field.value });
+        }
       });
     });
+    if (invalidChoice) {
+      window.alert('A property construction choice is not available in a room. No room selections have been changed.');
+      return;
+    }
+    var replacingExisting = changes.some(function (change) { return change.previous !== ''; });
+    if (replacingExisting && !window.confirm(
+      'This will replace existing room construction choices for external walls, internal walls or windows wherever a property default is selected. Wall counts, dimensions and temperatures will not be changed. Continue?')) {
+      return;
+    }
+    changes.forEach(function (change) { setValue(change.id, change.value); });
     calculateHeatLoss();
     if (typeof update === 'function') update();
     persistCombinedData();
