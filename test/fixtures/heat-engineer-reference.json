@@ -1,0 +1,360 @@
+{
+  "source": {
+    "vendor": "Heat Engineer",
+    "version": 2026,
+    "captureKind": "actual approved synthetic project calculations",
+    "formulaSources": [
+      "https://reposit.haw-hamburg.de/bitstream/20.500.12738/14214/1/Bachelorarbeit_Karolina%20Brack_Final_geschw%C3%A4rzt.pdf (printed pages 11-12, equations 13-16)",
+      "https://www.h2xengineering.com/blogs/bs-en-12831-1-2017-heat-loss-calculation-standard/ (Table B.8 and zone heat equation)"
+    ],
+    "limitations": "Natural ventilation without ATDs or combustion openings; controlled rectangular rooms, explicit boundaries. Not whole-method compliance or mechanical ventilation validation."
+  },
+  "conditions": {
+    "outdoor": -2.7,
+    "ground": 9.8,
+    "year": 1977,
+    "ageBand": "F",
+    "dwelling": "detached",
+    "storeys": 1,
+    "q50": 12,
+    "wallU": 0.8,
+    "windowU": 2.8,
+    "doorU": 2.2,
+    "floorU": 1.15,
+    "roofU": 0.32,
+    "internalWallU": 0.8,
+    "externalBridge": 0.15,
+    "internalBridge": 0.1,
+    "height": 2.4,
+    "sharedWallLength": 3,
+    "windowAreaEach": 2,
+    "loungeDoorArea": 1.6
+  },
+  "columns": [
+    "wall",
+    "window",
+    "door",
+    "floor",
+    "roof",
+    "internal",
+    "fabric",
+    "roomVentilation",
+    "zoneVentilation",
+    "roomTotal",
+    "zoneTotal",
+    "roomEnvelopeFlow",
+    "roomLeakageFlow"
+  ],
+  "cases": [
+    {
+      "label": "normal",
+      "shielding": "normal",
+      "areas": [
+        12,
+        12
+      ],
+      "externalLengths": [
+        11,
+        11
+      ],
+      "temperatures": [
+        21,
+        21
+      ],
+      "adjacentTemperatures": [
+        21,
+        21
+      ],
+      "envelopes": [
+        50.4,
+        50.4
+      ],
+      "volumes": [
+        28.8,
+        28.8
+      ],
+      "zoneTotal": 2535.6038399999998,
+      "emitterTotal": 3022.9516799999997,
+      "rooms": [
+        [
+          513.342,
+          139.82999999999998,
+          89.11200000000001,
+          174.71999999999994,
+          133.66799999999998,
+          0,
+          1050.6719999999998,
+          487.34783999999996,
+          243.67391999999998,
+          1538.0198399999997,
+          1294.3459199999998,
+          60.48,
+          30.24
+        ],
+        [
+          549.366,
+          139.82999999999998,
+          0,
+          174.71999999999994,
+          133.66799999999998,
+          0,
+          997.584,
+          487.34783999999996,
+          243.67391999999998,
+          1484.93184,
+          1241.25792,
+          60.48,
+          30.24
+        ]
+      ]
+    },
+    {
+      "label": "intensive",
+      "shielding": "intensive",
+      "areas": [
+        12,
+        12
+      ],
+      "externalLengths": [
+        11,
+        11
+      ],
+      "temperatures": [
+        21,
+        21
+      ],
+      "adjacentTemperatures": [
+        21,
+        21
+      ],
+      "envelopes": [
+        50.4,
+        50.4
+      ],
+      "volumes": [
+        28.8,
+        28.8
+      ],
+      "zoneTotal": 2340.664704,
+      "emitterTotal": 2633.0734079999993,
+      "rooms": [
+        [
+          513.342,
+          139.82999999999998,
+          89.11200000000001,
+          174.71999999999994,
+          133.66799999999998,
+          0,
+          1050.6719999999998,
+          292.40870399999994,
+          146.20435199999997,
+          1343.0807039999997,
+          1196.8763519999998,
+          36.288,
+          18.144
+        ],
+        [
+          549.366,
+          139.82999999999998,
+          0,
+          174.71999999999994,
+          133.66799999999998,
+          0,
+          997.584,
+          292.40870399999994,
+          146.20435199999997,
+          1289.9927039999998,
+          1143.788352,
+          36.288,
+          18.144
+        ]
+      ]
+    },
+    {
+      "label": "none",
+      "shielding": "none",
+      "areas": [
+        12,
+        12
+      ],
+      "externalLengths": [
+        11,
+        11
+      ],
+      "temperatures": [
+        21,
+        21
+      ],
+      "adjacentTemperatures": [
+        21,
+        21
+      ],
+      "envelopes": [
+        50.4,
+        50.4
+      ],
+      "volumes": [
+        28.8,
+        28.8
+      ],
+      "zoneTotal": 2730.5429759999997,
+      "emitterTotal": 3412.829952,
+      "rooms": [
+        [
+          513.342,
+          139.82999999999998,
+          89.11200000000001,
+          174.71999999999994,
+          133.66799999999998,
+          0,
+          1050.6719999999998,
+          682.286976,
+          341.143488,
+          1732.958976,
+          1391.8154879999997,
+          84.672,
+          42.336
+        ],
+        [
+          549.366,
+          139.82999999999998,
+          0,
+          174.71999999999994,
+          133.66799999999998,
+          0,
+          997.584,
+          682.286976,
+          341.143488,
+          1679.870976,
+          1338.727488,
+          84.672,
+          42.336
+        ]
+      ]
+    },
+    {
+      "label": "unequal-volumes",
+      "shielding": "normal",
+      "areas": [
+        12,
+        6
+      ],
+      "externalLengths": [
+        11,
+        7
+      ],
+      "temperatures": [
+        21,
+        21
+      ],
+      "adjacentTemperatures": [
+        21,
+        21
+      ],
+      "envelopes": [
+        50.4,
+        28.8
+      ],
+      "volumes": [
+        28.8,
+        14.4
+      ],
+      "zoneTotal": 2060.83416,
+      "emitterTotal": 2339.31864,
+      "rooms": [
+        [
+          513.342,
+          139.82999999999998,
+          89.11200000000001,
+          174.71999999999994,
+          133.66799999999998,
+          0,
+          1050.6719999999998,
+          382.91616000000005,
+          243.67392000000004,
+          1433.5881599999998,
+          1294.3459199999998,
+          47.52000000000001,
+          30.240000000000006
+        ],
+        [
+          333.22200000000004,
+          139.82999999999998,
+          0,
+          87.35999999999997,
+          66.83399999999999,
+          0,
+          627.246,
+          278.4844800000001,
+          139.24224000000004,
+          905.7304800000001,
+          766.48824,
+          34.56000000000001,
+          17.280000000000005
+        ]
+      ]
+    },
+    {
+      "label": "different-temperatures",
+      "shielding": "normal",
+      "areas": [
+        12,
+        12
+      ],
+      "externalLengths": [
+        11,
+        11
+      ],
+      "temperatures": [
+        21,
+        18
+      ],
+      "adjacentTemperatures": [
+        18,
+        21
+      ],
+      "envelopes": [
+        50.4,
+        50.4
+      ],
+      "volumes": [
+        28.8,
+        28.8
+      ],
+      "zoneTotal": 2353.79904,
+      "emitterTotal": 2810.3020799999995,
+      "rooms": [
+        [
+          513.342,
+          139.82999999999998,
+          89.11200000000001,
+          174.71999999999994,
+          133.66799999999998,
+          19.439999999999998,
+          1070.1119999999999,
+          487.34783999999996,
+          243.67391999999998,
+          1557.4598399999998,
+          1313.7859199999998,
+          60.48,
+          30.24
+        ],
+        [
+          479.82599999999996,
+          122.12999999999998,
+          0,
+          127.91999999999997,
+          116.74799999999999,
+          -19.439999999999998,
+          827.184,
+          425.65824,
+          212.82912,
+          1252.84224,
+          1040.01312,
+          60.48,
+          30.24
+        ]
+      ]
+    }
+  ]
+}

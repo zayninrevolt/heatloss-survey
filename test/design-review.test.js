@@ -15,8 +15,10 @@ test('natural design review resolves the published exposure height and shielding
   assert.equal(coefficient(20), 0.08);
   assert.equal(coefficient(20.01), 0.11);
   assert.equal(coefficient(5, 'normal', 4, 50.01), 0.09);
-  // The Table B.8 footnote overrides every other cell once the zone base is above 50 m.
-  assert.equal(coefficient(5, 'normal', 1, 50.01), 0.09);
+  // The 0.09 merged cell applies to multiple facades up to 20 m zone height,
+  // not the single-facade row or the >20 m column in the actual Table B.8 image.
+  assert.equal(coefficient(5, 'normal', 1, 50.01), 0.03);
+  assert.equal(coefficient(20.01, 'normal', 4, 50.01), 0.11);
   assert.equal(coefficient(5, 'normal', 2), 0.05, 'a mid-terrace zone uses the more-than-one-facade column');
   assert.equal(coefficient(5, 'none', 3), 0.07);
   for (const input of [

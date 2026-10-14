@@ -4090,6 +4090,92 @@
       'calculated to BS EN ISO 13370.';
   }
 
+  function computeReferenceNaturalCheck() {
+    try {
+      if (!window.ReferenceNaturalDesign) throw Error('Reference modules are not loaded');
+      var results = window.heatLossResultsV60;
+      if (!results || !results.includedRooms.length || results.provisional) {
+        throw Error('Complete the started rooms before comparing reference loads');
+      }
+      // The exposed envelope for upper floors and inter-storey voids needs its
+      // own geometry validation. Do not silently approximate it in this check.
+      if (stringValue('hl_ventilation_storeys') !== '1') {
+        throw Error('This benchmarked check currently supports a recorded single-storey zone only');
+      }
+      var facades = window.DesignReview.exposedFacadesForAttachment(stringValue('hl_dwelling_attachment'));
+      if (facades === 1) throw Error('The single-facade direction factor is not benchmarked');
+      if ((stringValue('hl_airtightness_method') || 'Standard default') !== 'Standard default') {
+        throw Error('Measured and design-ACH evidence routes are not benchmarked in this check');
+      }
+      var system = stringValue('hl_ventilation_system') || 'Natural ventilation';
+      if (system !== 'Natural ventilation') throw Error('Mechanical ventilation is outside this reference check');
+      var age = stringValue('hl_property_age_band');
+      var outside = numberValue('hl_outdoor_temp', -3);
+      var rooms = results.includedRooms.map(function (room) {
+        if (room.ventilationDevice !== 'No additional vent or flue' || room.ventilationMode !== 'Automatic') {
+          throw Error('Vents, combustion openings and manual ACH are outside this reference check');
+        }
+        var elements = [];
+        var envelope = 0;
+        function element(name, area, u, boundary, category, openings, heated) {
+          if (!area || !u) return;
+          elements.push({ name: name, grossArea: area, openingAreas: openings || [],
+            uValue: u, indoorTemperature: room.indoor, boundaryTemperature: boundary,
+            propertyAgeBand: age, bridgeCategory: category, heatedTransfer: heated === true });
+        }
+        var grossWall = room.wallLength * room.height;
+        envelope += grossWall;
+        element('wall', grossWall, room.wallU, outside, 'external-default', [room.windowArea, room.doorArea]);
+        element('window', room.windowArea, room.windowU, outside, 'external-default');
+        element('door', room.doorArea, room.doorU, outside, 'external-default');
+        if (room.floorU > 0) {
+          envelope += room.floorArea;
+          element('floor', room.floorArea, room.floorU, room.indoor - room.floorDeltaT, 'external-default');
+        }
+        if (room.roofU > 0) {
+          envelope += room.floorArea;
+          element('roof', room.floorArea, room.roofU, room.indoor - room.roofDeltaT,
+            'external-default', [room.rooflightArea]);
+          element('rooflight', room.rooflightArea, room.rooflightU,
+            room.indoor - room.roofDeltaT, 'external-default');
+        }
+        (room.internalWallSegments || []).forEach(function (segment, index) {
+          var heated = isHeatedInternalWall(segment.type) && Number(segment.adjacentTemperature) !== 10;
+          var area = segment.area;
+          if (!heated) envelope += area;
+          var boundary = room.indoor - segment.deltaT;
+          element('internal-' + index, area, segment.u, boundary,
+            'internal-default', [segment.doorArea], heated);
+          element('internal-door-' + index, segment.doorArea, segment.doorU,
+            boundary, 'internal-default', [], heated);
+        });
+        if (room.internalWallLength > 0 && !room.internalWallSegments.length) {
+          throw Error('Numbered internal-wall segments are required for this comparison');
+        }
+        return { id: room.key, volume: room.floorArea * room.height, envelopeArea: envelope,
+          indoorTemperature: room.indoor, elements: elements };
+      });
+      var result = window.ReferenceNaturalDesign.calculate({ rooms: rooms,
+        outdoorTemperature: outside, zoneHeight: Math.max.apply(null, results.includedRooms.map(function (room) { return room.height; })),
+        exposedFacades: facades, baseHeight: numberValue('hl_ventilation_base_height', 0),
+        shielding: window.DesignReview.shieldingKey(stringValue('hl_shielding_class')),
+        directionFactor: 2, ventilationSystem: system });
+      return { available: true, result: result,
+        basis: 'Standard q50 12; per-element additive bridging; single-storey natural ventilation; ' + rooms.length + ' complete recorded room(s)' };
+    } catch (error) {
+      return { available: false, reason: String(error.message || error) };
+    }
+  }
+
+  function referenceNaturalPrintLine() {
+    var check = computeReferenceNaturalCheck();
+    if (!check.available) return 'Reference check unavailable: ' + check.reason + '. Legacy boiler results are unchanged.';
+    return 'Building demand ' + (check.result.buildingWatts / 1000).toFixed(2) +
+      ' kW; summed room emitter demand ' + (check.result.emitterDemandWatts / 1000).toFixed(2) +
+      ' kW. ' + check.basis + '. Experimental comparison, not used for equipment sizing. ' +
+      'Mechanical systems, ventilation devices and multi-storey envelope geometry are not benchmarked here.';
+  }
+
   function refreshDesignReview() {
     var target = document.getElementById('hl_design_review_summary');
     if (!target || !window.DesignReview) return;
@@ -4104,6 +4190,9 @@
         review.outstanding.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') +
         '</ul><small>This is a design review for a competent designer, not an MCS design, and it does not size or select equipment. It does not change the boiler figures above or the saved survey results.</small>';
     }
+    var naturalTarget = document.getElementById('hl_reference_natural_summary');
+    window.referenceNaturalCheckV1 = computeReferenceNaturalCheck();
+    if (naturalTarget) naturalTarget.textContent = referenceNaturalPrintLine();
     var notes = document.getElementById('hl_design_review_notes');
     if (notes) {
       notes.innerHTML = review.notes.length
@@ -4124,7 +4213,9 @@
       '<p class="hl-help">Separate figures from the same rooms: what the fabric loses, what ventilation adds, what the whole building has to be supplied with, and what the emitters must be able to deliver. This reads the survey and never changes it.</p>' +
       '<div id="hl_design_review_summary" role="status">Complete the room details to produce a heat-pump design review.</div>' +
       '<div id="hl_design_review_notes" class="hl-help"></div>' +
-      '<div id="hl_design_review_limits" class="hl-help"></div>';
+      '<div id="hl_design_review_limits" class="hl-help"></div>' +
+      '<h4>Natural ventilation reference check (experimental)</h4>' +
+      '<p id="hl_reference_natural_summary" class="hl-help" role="status">Reference check unavailable until the supported room and property inputs are recorded.</p>';
     summary.appendChild(section);
   }
 
@@ -4297,6 +4388,8 @@
       '<tr><td colspan="8" class="small">Normal radiator choices meet the room heat loss within a 50% oversize limit. A flagged minimum-size exception can exceed this limit and requires review. BBOE multiplies each radiator’s temperature-corrected output by 0.96 for the 4% connection reduction. It does not change the room or building heat loss. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
       '<tr><td colspan="8" class="small">Heat-pump design review (report only, does not affect the boiler result): ' +
       escapeHtml(designReviewPrintLine()) + '</td></tr>' +
+      '<tr><td colspan="8" class="small">Natural ventilation reference check: ' +
+      escapeHtml(referenceNaturalPrintLine()) + '</td></tr>' +
       '<tr><td colspan="8" class="small">The live boiler calculation uses the legacy room-by-room age-table ventilation method. It is not a completed BS EN 12831 ventilation result. The property-wide reference inputs above are recorded for review and do not change the boiler or radiator result until the reference route has been benchmarked and released.</td></tr>' +
       '<tr><td colspan="8" class="small">The detailed exposed floor perimeter is recorded for audit. The selected standard floor U-value is still used by this practical calculator. Use a certified BS EN 12831 or MCS tool where a full ISO 13370 ground-floor calculation is required.</td></tr>' +
       '<tr><td colspan="8" class="small">Different heat-loss calculators can produce different results because they may use age-based fabric values, different ground-floor methods, different air-change rates, different thermal-bridge allowances, or a different outdoor design temperature. Check that these assumptions match before comparing totals.</td></tr>' +

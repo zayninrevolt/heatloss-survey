@@ -78,7 +78,9 @@
     if (!['intensive', 'normal', 'none'].includes(shielding)) {
       throw new RangeError('A recognised shielding class is required');
     }
-    if (baseHeight > HIGH_ZONE_BASE_HEIGHT) return HIGH_ZONE_FACTOR;
+    if (!singleFacade && baseHeight > HIGH_ZONE_BASE_HEIGHT && zoneHeight <= 20) {
+      return HIGH_ZONE_FACTOR;
+    }
     var band = EXPOSURE_TABLE.find(function (entry) { return zoneHeight <= entry.maxHeight; });
     return singleFacade ? band.oneFacade : band[shielding];
   }

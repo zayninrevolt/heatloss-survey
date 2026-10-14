@@ -1,8 +1,10 @@
 (function (root, factory) {
-  var api = factory();
+  var exposure = typeof module === 'object' && module.exports
+    ? require('./design-review.js') : root.DesignReview;
+  var api = factory(exposure);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.McsVentilation = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (exposure) {
   'use strict';
 
   // Ventilation model structure from MCS's published reference data:
@@ -15,11 +17,13 @@
   // - highest-of combination rule: room design rate, intentional mechanical
   //   ventilation, or the room's share of building infiltration.
   //
-  // The published MCS pages do not disclose the full BS EN 12831 exposure
-  // coefficient table. Therefore callers must provide the calculated normal
-  // exposure factor: accepting a q50 input alone would silently produce a
-  // non-compliant, optimistic result. This module is not wired into live
-  // surveys until that coefficient calculation is fully sourced and benchmarked.
+  // Two explicitly separate APIs live here:
+  // - buildingInfiltration/roomVentilation are the original experimental v1
+  //   helpers, retained for compatibility and NOT used by the live reference check;
+  // - calculateNaturalZone is the corrected natural-only v2 path, using
+  //   Table B.8 directly, envelope leakage allocation and the directional cap.
+  // See docs/reference-natural-validation.md for equations, sources and scope.
+  // Neither route replaces the saved legacy boiler method or selects equipment.
 
   var METHOD_ID = 'mcs-reference-ventilation-v1';
   var DEFAULT_PERMEABILITY_50 = 12;
@@ -224,7 +228,93 @@
     };
   }
 
+  // Natural-ventilation reference route, independently checked against the
+  // commercial fixtures. Brack (2023), printed pp. 11-12, equations 13-16:
+  // q_env,z = q50 * A_env,z * f_qv,z for balanced natural ventilation;
+  // q_leak,i = q_env,z * A_env,i / A_env,z;
+  // q_env,i = min(q_env,z, q_leak,i * f_dir).
+  // Table B.8 supplies f_qv,z. The direction factor is REQUIRED, not fitted.
+  // Zone watts use the published max(leakage, fi-z * room minimum) expression;
+  // never halve the room heat load or the governing room flow indiscriminately.
+  // Mechanical ventilation, combustion and ATDs are deliberately unsupported.
+  function calculateNaturalZone(input) {
+    input = input || {};
+    if (!exposure || typeof exposure.exposureCoefficient !== 'function') {
+      throw new RangeError('The sourced exposure coefficient module is required');
+    }
+    function hasUnsupportedDevices(value) {
+      if (value.devices != null && (!Array.isArray(value.devices) || value.devices.length)) return true;
+      return ['atdFlowM3h', 'openFlowM3h'].some(function (key) {
+        return value[key] != null && (!Number.isFinite(Number(value[key])) || Number(value[key]) !== 0);
+      });
+    }
+    if ((input.ventilationSystem && input.ventilationSystem !== 'Natural ventilation') ||
+        hasUnsupportedDevices(input)) {
+      throw new RangeError('This reference route supports natural ventilation without devices only');
+    }
+    if (!Array.isArray(input.rooms) || !input.rooms.length) {
+      throw new RangeError('A complete ventilation-zone room list is required');
+    }
+    var outside = Number(input.outdoorTemperature);
+    if (input.outdoorTemperature == null || input.outdoorTemperature === '' ||
+        !Number.isFinite(outside)) throw new RangeError('Outdoor temperature is required');
+    var facades = positiveNumber(input.exposedFacades, 'Number of exposed facades');
+    if (!Number.isInteger(facades)) throw new RangeError('Exposed facades must be an integer');
+    var direction = positiveNumber(input.directionFactor, 'Sourced room direction factor');
+    var coefficient = exposure.exposureCoefficient(input);
+    var measured = input.permeability50 != null && input.permeability50 !== '';
+    var q50 = measured ? nonNegativeNumber(input.permeability50, 'Air permeability at 50 Pa')
+      : DEFAULT_PERMEABILITY_50;
+    var seen = {};
+    var rooms = input.rooms.map(function (room) {
+      var id = String(room.id || '');
+      if (!id || seen[id]) throw new RangeError('Room identifiers must be present and unique');
+      seen[id] = true;
+      if (hasUnsupportedDevices(room)) throw new RangeError('Room ventilation devices are unsupported');
+      var volume = positiveNumber(room.volume, 'Room volume');
+      if (room.envelopeArea == null || room.envelopeArea === '') {
+        throw new RangeError('Room external envelope area is required');
+      }
+      var envelopeArea = nonNegativeNumber(room.envelopeArea, 'Room envelope area');
+      var temperature = Number(room.indoorTemperature);
+      if (room.indoorTemperature == null || room.indoorTemperature === '' ||
+          !Number.isFinite(temperature) || temperature <= outside) {
+        throw new RangeError('Room design temperature must exceed outdoor temperature');
+      }
+      var minimumAch = room.minimumAch == null ? MINIMUM_ROOM_ACH
+        : nonNegativeNumber(room.minimumAch, 'Room minimum ACH');
+      if (!envelopeArea) minimumAch = 0;
+      return { id: id, volume: volume, envelopeArea: envelopeArea,
+        indoorTemperature: temperature, minimumAch: minimumAch,
+        minimumFlowM3h: minimumAch * volume };
+    });
+    var envelope = rooms.reduce(function (sum, room) { return sum + room.envelopeArea; }, 0);
+    if (!envelope) throw new RangeError('The zone needs a positive external envelope area');
+    var zoneFlow = q50 * envelope * coefficient;
+    var roomToZone = rooms.length === 1 ? 1 : 0.5;
+    rooms.forEach(function (room) {
+      room.leakageFlowM3h = zoneFlow * room.envelopeArea / envelope;
+      room.peakInfiltrationFlowM3h = Math.min(zoneFlow, room.leakageFlowM3h * direction);
+      room.roomOutdoorFlowM3h = Math.max(room.peakInfiltrationFlowM3h, room.minimumFlowM3h);
+      room.zoneOutdoorFlowM3h = Math.max(room.leakageFlowM3h, roomToZone * room.minimumFlowM3h);
+      var deltaT = room.indoorTemperature - outside;
+      room.roomVentilationWatts = 0.34 * room.roomOutdoorFlowM3h * deltaT;
+      room.zoneVentilationWatts = 0.34 * room.zoneOutdoorFlowM3h * deltaT;
+    });
+    return {
+      methodId: 'reference-natural-ventilation-v2',
+      scope: 'Natural ventilation without mechanical systems, combustion openings or ATDs',
+      permeability50: q50, permeabilitySource: measured ? 'entered-q50' : 'standard-default',
+      exposureCoefficient: coefficient, directionFactor: direction,
+      roomToZoneCoefficient: roomToZone, envelopeArea: envelope,
+      zoneInfiltrationFlowM3h: zoneFlow, heatCapacityWhM3K: 0.34, rooms: rooms,
+      roomVentilationWatts: rooms.reduce(function (sum, room) { return sum + room.roomVentilationWatts; }, 0),
+      zoneVentilationWatts: rooms.reduce(function (sum, room) { return sum + room.zoneVentilationWatts; }, 0)
+    };
+  }
+
   return {
+    calculateNaturalZone: calculateNaturalZone,
     buildingInfiltration: buildingInfiltration,
     roomVentilation: roomVentilation,
     deviceFlowM3h: deviceFlowM3h,

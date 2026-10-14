@@ -58,7 +58,7 @@ Technical references:
 - [Elevation API EU](https://www.elevation-api.eu/)
 - [Met Office weather-station locations](https://www.metoffice.gov.uk/research/climate/maps-and-data/uk-synoptic-and-climate-stations)
 
-`src/mcs-fabric.js` and `src/mcs-ventilation.js` implement the current MCS-reference method separately from the live workbook calculation. They are unit-tested but not yet connected to the survey, because the method still needs comparison against an established commercial calculator before it can be trusted on a live design. Until that comparison is recorded, the app does not claim to be a certified MCS or BS EN 12831 design tool.
+The reference modules now provide a separately versioned **experimental natural-ventilation check**, benchmarked against five captured Heat Engineer cases, including Lounge 21°C / Kitchen 18°C and unequal room sizes. It combines per-element additive bridging with separate room and building ventilation flows. The check appears inside the collapsed Heat-pump design review and in the printed assumptions. It does not replace the legacy boiler calculation, change radiator selection or claim complete MCS / BS EN 12831 validation. The current UI scope is single-storey, standard airtightness, natural ventilation without additional devices; unsupported inputs show an explicit reason rather than a guessed result. See [the method, evidence and remaining limits](docs/reference-natural-validation.md).
 
 ## Running the app
 
@@ -79,7 +79,8 @@ Technical logic is being separated from the legacy single-page UI into dependenc
 - `src/persistence.js` — schema-versioned encoding and ordered migrations for saved surveys
 - `src/validation.js` — non-blocking physical-range checks
 - `src/mcs-fabric.js` — MCS-reference element fabric loss, effective U-values and default thermal-bridging factors
-- `src/mcs-ventilation.js` — MCS-reference ventilation structure: it keeps permeability, exposure, shelter, room minimums, mechanical and device flows distinct. It is deliberately **not wired into live surveys**. A permeability result requires an explicit normal-exposure factor and records it, because a bare `q50 ÷ 20` conversion omits the BS EN 12831 storey, façade, shelter and altitude calculation. Heatpunk Fixture A verifies its observed relative shelter factors (intensive 0.6×, normal 1.0×, none 1.4×); the full exposure coefficient table remains a validation gate.
+- `src/mcs-ventilation.js` — the corrected natural-only v2 room/zone route uses Table B.8, envelope-area leakage allocation, the directional room cap and a 0.34 heat-capacity coefficient. Its older experimental v1 volume-share helpers remain for compatibility but are not used by the live reference check.
+- `src/reference-natural-design.js` — composes reference fabric and natural ventilation into separately labelled building and emitter demands; equipment sizing stays disabled.
 
 Saved surveys record two versions. The schema version describes the shape of the saved data. The calculation-method version describes what the numbers mean, so a survey saved before a calculation change loads with an on-screen notice telling the surveyor to recheck its results rather than silently returning different figures.
 
