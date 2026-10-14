@@ -5,7 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  var CURRENT_SCHEMA_VERSION = 3;
+  var CURRENT_SCHEMA_VERSION = 4;
   var CURRENT_CALC_METHOD_VERSION = 3;
   var STANDARD_ADJACENT_TEMPERATURES = ['10', '18', '21', '22', '23'];
 
@@ -122,14 +122,31 @@
       if (review) review.push(CALC_METHOD_REVIEW);
     }
     data._calcMethodVersion = CURRENT_CALC_METHOD_VERSION;
-    data._schemaVersion = CURRENT_SCHEMA_VERSION;
+    data._schemaVersion = 3;
+    return data;
+  }
+
+  // Schema-only upgrade. Preserve the legacy calculation version and every old
+  // room input. No smaller-footprint area, room pairing or insulation is invented.
+  function migrateSharedInterfaces(source, review) {
+    var data = Object.assign({}, source);
+    var heated = Object.keys(data).some(function(key) {
+      return (/^hl_.+_floor_type$/.test(key) && data[key] === 'Heated room below') ||
+        (/^hl_.+_loft_type$/.test(key) && data[key] === 'Heated room above');
+    });
+    if (heated && !data.hl_interstorey_interfaces) {
+      data.hl_interstorey_interfaces = '[]';
+      if (review) review.push('Shared interfaces now need the measured area, insulation and adjoining room. Previous implicit assumptions are unresolved; legacy boiler figures are unchanged.');
+    }
+    data._schemaVersion = 4;
     return data;
   }
 
   var migrations = {
     0: migrateLegacyFields,
     1: migrateNumberedInternalWalls,
-    2: migrateCalculationMethod
+    2: migrateCalculationMethod,
+    3: migrateSharedInterfaces
   };
 
   function migrateSurvey(source, review) {

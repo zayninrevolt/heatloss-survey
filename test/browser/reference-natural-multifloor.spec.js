@@ -20,13 +20,13 @@ test('a two-storey survey resolves the inter-storey boundary without changing bo
   const before=await page.evaluate(()=>JSON.stringify(window.heatLossResultsV60));
   const state=await page.evaluate(()=>({reference:window.referenceNaturalCheckV1,boiler:JSON.stringify(window.heatLossResultsV60)}));
   expect(state.reference.available,JSON.stringify(state.reference.reason)).toBe(true);
-  expect(state.reference.basis).toMatch(/2 stored zone/);
-  expect(state.reference.basis).toMatch(/4\.8 m zone height/);
-  expect(state.reference.basis).toMatch(/uninsulated CIBSE DHDG 2026 Table 2-45 value/);
+  expect(state.reference.basis).toMatch(/2 recorded storeys/);
+  expect(state.reference.basis).toMatch(/estimated zone height 4\.8/);
+  expect(state.reference.basis).toMatch(/CIBSE DHDG 2026 Table 2-45/);
   expect(state.boiler).toBe(before);
   const rooms=state.reference.result.rooms;
   expect(rooms).toHaveLength(2);
-  const boundary=room=>room.elements.find(e=>e.name==='intermediate-ceiling'||e.name==='intermediate-floor');
+  const boundary=room=>room.elements.find(e=>e.name.startsWith('intermediate-ceiling')||e.name.startsWith('intermediate-floor'));
   const lower=boundary(rooms[0]),upper=boundary(rooms[1]);
   // Both sides are the same physical interface, so they must use one construction,
   // one shared area and equal-and-opposite signed watts. The exposed result object
@@ -40,16 +40,16 @@ test('a two-storey survey resolves the inter-storey boundary without changing bo
   expect(upper.totalWatts).toBeCloseTo(-65.88,6);
   // The interface splits the room demands and must not enter the building demand.
   const withoutInterface=rooms.reduce((sum,room)=>sum+room.elements
-    .filter(e=>e.name!=='intermediate-ceiling'&&e.name!=='intermediate-floor')
+    .filter(e=>!e.name.startsWith('intermediate-ceiling')&&!e.name.startsWith('intermediate-floor'))
     .reduce((sub,e)=>sub+e.totalWatts,0)+room.ventilation.zoneVentilationWatts,0);
   expect(state.reference.result.buildingWatts).toBeCloseTo(withoutInterface,6);
   expect(state.reference.result.emitterDemandWatts).toBeGreaterThan(state.reference.result.buildingWatts);
   expect(state.reference.result.equipmentSizingEnabled).toBe(false);
   await page.locator('#hl_design_review > summary').click();
   await expect(page.locator('#hl_reference_natural_summary')).toContainText('Building demand');
-  await expect(page.locator('#hl_reference_natural_summary')).toContainText('inter-storey');
+  await expect(page.locator('#hl_reference_natural_summary')).toContainText('Shared interfaces');
   const printed=await page.evaluate(()=>buildPrintHtml('Reference check',['Heat Loss'],'portrait'));
-  expect(printed).toContain('uninsulated CIBSE DHDG 2026 Table 2-45 value');
+  expect(printed).toContain('CIBSE DHDG 2026 Table 2-45');
   expect(printed).toContain('not used for equipment sizing');
 });
 
@@ -58,7 +58,7 @@ test('an inter-storey boundary without a recorded complementary room reports a n
   await setFields(page,{hl_kitchen_floor_type:'Insulated solid ground floor'});
   const reference=await page.evaluate(()=>window.referenceNaturalCheckV1);
   expect(reference.available).toBe(false);
-  expect(reference.reason).toMatch(/complementary boundary/);
+  expect(reference.reason).toMatch(/complementary heated floor/);
   expect(reference.reason).not.toMatch(/single-storey/);
   await page.locator('#hl_design_review > summary').click();
   await expect(page.locator('#hl_reference_natural_summary')).toContainText('unavailable');

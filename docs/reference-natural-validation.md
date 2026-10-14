@@ -19,7 +19,7 @@ building fabric sum. External openings replace opaque fabric; they are not count
 
 The local UI adds a collapsed experimental check inside the existing Heat-pump
 design review and mirrors its scope and results into the Heat Loss print sheet.
-It derives inputs from the recorded rooms instead of adding new survey fields.
+It derives existing room inputs and adds conditional shared-interface fields within the existing room section, with one canonical record instead of duplicate room-side measurements.
 It does not change radiator selection, boiler recommendation, stored calculation
 method or the existing room/property totals.
 
@@ -72,25 +72,35 @@ demands by ±65.88 W in that case and leaves the building demand and the zone
 ventilation unchanged. This is why the reference check keeps inter-storey terms as
 signed room transfers that are excluded from the building fabric sum.
 
-The survey records a ceiling as `Heated room above` and a floor as `Heated room
-below`, which states that an interface exists but records no plan geometry. The
-check therefore:
+### Explicit shared records (geometry method `explicit-interstorey-v1`)
 
-- prefers a recorded adjacent temperature when a saved survey carries one;
-- otherwise pairs the two rooms from the complementary recorded construction and
-  uses the paired room's own design temperature;
-- uses the smaller of the two recorded footprints as the shared interface area;
-- selects the Table 2-45 value by heat-flow direction, derived from the two
-  temperatures rather than asked for;
-- fails closed and names the reason when no room records the complementary
-  boundary, or when more than one does.
+The heated-boundary selectors no longer imply the neighbouring room, insulation
+or overlap area. In the existing Floor, ceiling and evidence section the upper
+room records each interface once: actual room below, measured shared area (m²),
+and `Uninsulated` or evidenced `100mm insulation` using Table 2-45. The lower
+room reads the same record. Both current room temperatures select one physical
+heat-flow direction and one U-value for both signed sides.
 
-Limits kept deliberately: an insulated intermediate floor is not recorded by this
-survey, so the check uses and names the uninsulated value rather than assuming
-insulation; a shared interface between rooms of different footprints is
-approximated by the smaller recorded footprint because the plan overlap is not
-recorded; a storey count of `4+` is refused because it does not state the zone
-height the exposure coefficient needs.
+Multiple neighbours and three-storey chains are supported. Cycles, duplicate or
+dangling links, missing construction, overlaps beyond either room, accumulated
+areas beyond a surface and links exceeding the recorded storey depth fail closed.
+No shared area is inferred from a smaller footprint.
+
+Partial overlaps leave a derived unshared area. Its exposed construction must be
+recorded in the conditional unshared-floor/ceiling choice. It enters both external
+fabric and the infiltration envelope; it cannot disappear. These choices currently
+support exposed floors and flat/loft ceilings, not arbitrary unheated spaces or slopes.
+
+Schema 4 preserves the legacy calculation-method version (3), old adjacent values
+and all boiler inputs. Old implicit interfaces are empty and flagged for review;
+no room pairing, area or insulation is invented. Save/reload/import retain one
+canonical `hl_interstorey_interfaces` list. An incomplete record prevents only the
+reference check, not the ordinary boiler calculation.
+
+Zone height remains an **estimate from storeys and mean recorded room height**,
+labelled that way in screen/print, not a measured whole-building height. `4+` is
+unresolved because it does not state a height. Mechanical systems, ventilation
+devices, single-facade cases and equipment selection remain outside scope.
 
 For balanced natural ventilation without mechanical supply/extract, combustion
 openings or air terminal devices:
@@ -145,15 +155,15 @@ the vendor's resolved inputs, so a failure can only be a method difference.
 The pure natural module rejects mechanical systems, nonzero or malformed device
 flows, missing geometry, duplicate rooms, invalid temperatures and a missing
 room direction factor. The current UI comparison is narrower: complete recorded
-rooms, one to four recorded storeys, standard airtightness, automatic room rate,
+rooms, one to three recorded storeys (the menu's `4+` is unresolved), standard airtightness, automatic room rate,
 natural ventilation, no additional vents/flues, more than one exposed facade and
-an unambiguous heated-boundary pairing. It displays a reason instead of a number
+explicit measured shared records and recorded exposed remainders. It displays a reason instead of a number
 for unsupported cases. Nothing blocks the ordinary boiler workflow.
 
 Remaining work includes mechanical/ATD/combustion and air-transfer pressure terms,
-measured/design-ACH UI paths, recording an insulated intermediate floor and the
-plan overlap between rooms of different footprints, additional boundary cases and
-complete method validation before equipment sizing.
+measured/design-ACH UI paths, insulation other than the published 100 mm preset,
+arbitrary unheated remainders, measured zone-height geometry, additional boundary
+cases and complete method validation before equipment sizing.
 
 ## Verification
 
@@ -166,6 +176,6 @@ complete method validation before equipment sizing.
 - Before/after browser captures of the real form at Lounge 21 C / Kitchen 18 C
   must have zero changed numeric legacy fields. Do not use a passing test count as
   substitute for this comparison.
-- Calculation-method migration is intentionally unchanged: this update preserves
-  every legacy figure and adds a separately identified reference comparison. A
-  future switch of equipment-sizing numbers must version and review saved surveys.
+- Schema 4 migrates the data shape only; the legacy calculation-method version remains 3.
+- Three-storey, insulation and partial-overlap UI fixtures use independent longhand expectations. The retained independent commercial capture is two-storey; do not describe the three-storey UI test as a fresh vendor benchmark.
+- A future switch of equipment-sizing numbers must version and review saved surveys.

@@ -59,7 +59,7 @@
       "floorLevel": "GF",
       "indoor": 21,
       "envelopeArea": 49.1,
-      "envelopeNote": "walls gross 33.6 + ground floor 12; the vendor added 3.5 m2 for the intermediate interface from its own plan geometry, which this app cannot reproduce without recorded plan overlap",
+      "envelopeNote": "Vendor resolved 49.1 m2, while recorded gross walls plus ground floor sum to 45.6 m2. The 3.5 m2 difference is unexplained by the captured fields. Match this resolved input for arithmetic comparison, not as proof of plan-geometry parity.",
       "leakageFlowM3h": 29.46,
       "peakFlowM3h": 56.82,
       "minimumFlowM3h": 14.4,
