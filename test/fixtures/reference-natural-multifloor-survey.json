@@ -1,0 +1,22 @@
+{
+  "r_ceiling":"2.4", "hl_outdoor_temp":"-2.7", "hl_ground_temp":"9.8",
+  "hl_property_age_band":"F", "hl_bridge_method":"Age-based",
+  "hl_reheat_factor":"1", "hl_exposed_location":"1", "hl_high_ceiling_factor":"1",
+  "hl_radiator_temperature":"55", "hl_dwelling_attachment":"Detached",
+  "hl_shielding_class":"Normal shielding", "hl_ventilation_system":"Natural ventilation",
+  "hl_ventilation_storeys":"2", "hl_ventilation_base_height":"0", "hl_airtightness_method":"Standard default",
+  "rad_lounge_len":"4", "rad_lounge_wid":"3", "rad_lounge_outside":"3",
+  "hl_lounge_indoor_temp":"21", "hl_lounge_external_wall_length":"11",
+  "hl_lounge_wall_type":"Cavity wall, insulated", "hl_lounge_window_type":"No windows",
+  "hl_lounge_window_count":"0", "hl_lounge_door_type":"No external door", "hl_lounge_door_count":"0",
+  "hl_lounge_floor_type":"Insulated solid ground floor", "hl_lounge_loft_type":"Heated room above",
+  "hl_lounge_ventilation_mode":"Automatic", "hl_lounge_ventilation_device":"No additional vent or flue",
+  "rad_kitchen_len":"4", "rad_kitchen_wid":"3", "rad_kitchen_outside":"3",
+  "hl_kitchen_indoor_temp":"18", "hl_kitchen_external_wall_length":"11",
+  "hl_kitchen_wall_type":"Cavity wall, insulated", "hl_kitchen_window_type":"No windows",
+  "hl_kitchen_window_count":"0", "hl_kitchen_door_type":"No external door", "hl_kitchen_door_count":"0",
+  "hl_kitchen_floor_type":"Heated room below", "hl_kitchen_loft_type":"Plasterboard with 200mm insulation",
+  "hl_kitchen_ventilation_mode":"Automatic", "hl_kitchen_ventilation_device":"No additional vent or flue",
+  "hl_lounge_internal_wall_type":"Heated room, aerated block",
+  "hl_kitchen_internal_wall_type":"Heated room, aerated block"
+}

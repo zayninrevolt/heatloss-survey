@@ -1,0 +1,112 @@
+{
+  "source": {
+    "vendor": "Heat Engineer",
+    "version": 2026,
+    "captureKind": "actual approved synthetic two-storey project calculation",
+    "methodSources": [
+      "https://reposit.haw-hamburg.de/bitstream/20.500.12738/14214/1/Bachelorarbeit_Karolina%20Brack_Final_geschw%C3%A4rzt.pdf (printed pages 11-12, natural-ventilation equations)",
+      "https://www.h2xengineering.com/blogs/bs-en-12831-1-2017-heat-loss-calculation-standard/ (Table B.8 exposure coefficient and zone heat-loss expression)",
+      "https://heatloss.elmhurstenergy.co.uk/docs/reference-sources/u-values (CIBSE Domestic Heating Design Guide 2026 Table 2-45 internal floor and internal ceiling values, Table 2-36 internal walls, Table 2-9 bridging basis)"
+    ],
+    "limitations": "Two stacked synthetic rooms of equal footprint, natural ventilation without ATDs or combustion openings, one intermediate floor between two heated rooms at different design temperatures. Not whole-method compliance, not mechanical ventilation and not a plan-geometry validation of a room's shared interface area."
+  },
+  "conditions": {
+    "outdoor": -2.7,
+    "ground": 9.8,
+    "ageBand": "F",
+    "dwelling": "detached",
+    "storeys": 2,
+    "q50": 12,
+    "height": 2.4,
+    "area": 12,
+    "externalWallLength": 14,
+    "windowArea": 2,
+    "loungeDoorArea": 1.6,
+    "wallU": 0.8,
+    "windowU": 2.8,
+    "doorU": 2.2,
+    "groundFloorU": 1.15,
+    "roofU": 0.32,
+    "intermediateFloorU": 1.73,
+    "externalBridge": 0.15,
+    "internalBridge": 0.1,
+    "exposedFacades": 4,
+    "directionFactor": 2
+  },
+  "vendorMethodNotes": [
+    "Zone infiltration is q50 x zone external envelope area x the Table B.8 coefficient, allocated to each room by external envelope area. The zone envelope is limited to externally exposed surfaces: the intermediate floor and ceiling are excluded.",
+    "The room flow is min(zone flow, allocated leakage x direction factor) and then the room minimum of 0.5 ACH at 14.4 m3/h governs it; ventilation watts use 0.34 x flow x room delta T.",
+    "Fabric elements deduct openings from the gross wall area and apply bridging additively at each element's own boundary temperature, including 0.10 on the intermediate floor and ceiling between two heated rooms.",
+    "The intermediate floor appears once per room with opposite signs, so it splits the room emitter demands and leaves the building total unaltered.",
+    "The vendor resolved the intermediate construction at 1.73 W/m2K, which is the CIBSE DHDG 2026 Table 2-45 uninsulated intermediate floor value for upward heat flow."
+  ],
+  "zone": {
+    "envelopeArea": 94.7,
+    "vendorZoneHeight": 3.6,
+    "zoneHeightSource": "vendor applies 1.8 m per recorded storey",
+    "exposedFacades": 4,
+    "shielding": "normal",
+    "exposureCoefficient": 0.05,
+    "roomToZoneCoefficient": 0.5,
+    "infiltrationFlowM3h": 56.82,
+    "ventilationWatts": 429.94836,
+    "buildingWatts": 2369.35236,
+    "emitterDemandWatts": 2782.37892
+  },
+  "rooms": [
+    {
+      "name": "Lounge",
+      "floorLevel": "GF",
+      "indoor": 21,
+      "envelopeArea": 49.1,
+      "envelopeNote": "walls gross 33.6 + ground floor 12; the vendor added 3.5 m2 for the intermediate interface from its own plan geometry, which this app cannot reproduce without recorded plan overlap",
+      "leakageFlowM3h": 29.46,
+      "peakFlowM3h": 56.82,
+      "minimumFlowM3h": 14.4,
+      "roomVentilationWatts": 457.85556,
+      "zoneVentilationWatts": 237.38868,
+      "elements": {
+        "wall": 675.45,
+        "window": 139.83,
+        "door": 89.112,
+        "groundFloor": 174.72,
+        "intermediateCeiling": 65.88,
+        "roof": 0
+      },
+      "fabricWatts": 1144.992,
+      "emitterTotals": {
+        "roomWatts": 1602.84756,
+        "zoneWatts": 1382.38068
+      }
+    },
+    {
+      "name": "Kitchen",
+      "floorLevel": "1F",
+      "indoor": 18,
+      "envelopeArea": 45.6,
+      "envelopeNote": "walls gross 33.6 + roof 12; the intermediate floor is excluded from the zone envelope",
+      "leakageFlowM3h": 27.36,
+      "peakFlowM3h": 54.72,
+      "minimumFlowM3h": 14.4,
+      "roomVentilationWatts": 385.11936,
+      "zoneVentilationWatts": 192.55968,
+      "elements": {
+        "wall": 621.414,
+        "window": 122.13,
+        "door": 0,
+        "groundFloor": 0,
+        "intermediateFloor": -65.88,
+        "roof": 116.748
+      },
+      "fabricWatts": 794.412,
+      "emitterTotals": {
+        "roomWatts": 1179.53136,
+        "zoneWatts": 986.97168
+      }
+    }
+  ],
+  "bridgeEvidence": {
+    "experiment": "Replacing the intermediate ceiling material with the project's 0.32 W/m2K roof construction returned 15.12 W for a 12 m2 element at a 3 K boundary difference, which is (0.32 + 0.10) x 12 x 3. An external bridge allowance would have returned 16.92 W.",
+    "conclusion": "The intermediate floor and ceiling between two heated rooms take the internal bridge allowance, 0.10 for age bands A to K."
+  }
+}

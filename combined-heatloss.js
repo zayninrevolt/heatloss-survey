@@ -4090,6 +4090,50 @@
       'calculated to BS EN ISO 13370.';
   }
 
+  // Inter-storey boundaries for the experimental reference check.
+  //
+  // The survey records a ceiling as 'Heated room above' and a floor as 'Heated
+  // room below', but it records no plan geometry, so the shared interface area is
+  // taken as the smaller of the two recorded footprints. The neighbouring
+  // temperature comes from the recorded adjacent value when a saved survey has
+  // one, otherwise from the paired room's own recorded design temperature. A
+  // missing or ambiguous pairing fails closed with a named reason rather than
+  // guessing which room is above or below.
+  //
+  // CIBSE Domestic Heating Design Guide 2026 Table 2-45 supplies the internal
+  // floor and internal ceiling U-values by heat-flow direction (uninsulated
+  // intermediate floor upwards 1.73, downwards 1.41 W/m2K). An insulated
+  // intermediate floor is not recorded by this survey, so it is not assumed:
+  // the uninsulated construction is named in the basis and in the printed sheet.
+  var HEATED_CEILING_TYPE = 'Heated room above';
+  var HEATED_FLOOR_TYPE = 'Heated room below';
+  var INTERMEDIATE_FLOOR_U = { upwards: 1.73, downwards: 1.41 };
+
+  function recordedStoreyCount() {
+    var recorded = stringValue('hl_ventilation_storeys');
+    if (recorded === '1' || recorded === '2' || recorded === '3' || recorded === '4') {
+      return Number(recorded);
+    }
+    throw Error('Record 1 to 4 ventilation-zone storeys: "4+" does not state the zone height the exposure coefficient needs');
+  }
+
+  function interStoreyBoundary(room, rooms, isCeiling) {
+    var recorded = isCeiling ? room.roofAdjacentTemperature : room.floorAdjacentTemperature;
+    if (recorded !== null && recorded !== undefined && Number.isFinite(Number(recorded))) {
+      return { adjacentTemperature: Number(recorded), pairedArea: null };
+    }
+    var reciprocal = isCeiling ? HEATED_FLOOR_TYPE : HEATED_CEILING_TYPE;
+    var candidates = rooms.filter(function (other) {
+      return other.key !== room.key && (isCeiling ? other.floorType : other.loftType) === reciprocal;
+    });
+    if (candidates.length !== 1) {
+      throw Error('Record the heated room ' + (isCeiling ? 'above' : 'below') + ' ' +
+        room.roomName + ': ' + candidates.length +
+        ' other room(s) record the complementary boundary, so that interface is unresolved');
+    }
+    return { adjacentTemperature: candidates[0].indoor, pairedArea: candidates[0].floorArea };
+  }
+
   function computeReferenceNaturalCheck() {
     try {
       if (!window.ReferenceNaturalDesign) throw Error('Reference modules are not loaded');
@@ -4097,11 +4141,7 @@
       if (!results || !results.includedRooms.length || results.provisional) {
         throw Error('Complete the started rooms before comparing reference loads');
       }
-      // The exposed envelope for upper floors and inter-storey voids needs its
-      // own geometry validation. Do not silently approximate it in this check.
-      if (stringValue('hl_ventilation_storeys') !== '1') {
-        throw Error('This benchmarked check currently supports a recorded single-storey zone only');
-      }
+      var storeys = recordedStoreyCount();
       var facades = window.DesignReview.exposedFacadesForAttachment(stringValue('hl_dwelling_attachment'));
       if (facades === 1) throw Error('The single-facade direction factor is not benchmarked');
       if ((stringValue('hl_airtightness_method') || 'Standard default') !== 'Standard default') {
@@ -4139,6 +4179,25 @@
           element('rooflight', room.rooflightArea, room.rooflightU,
             room.indoor - room.roofDeltaT, 'external-default');
         }
+        // An inter-storey boundary replaces a heated-boundary ceiling or floor
+        // (both of which carry U 0 in the saved method). It is signed, carries
+        // the internal bridging allowance, and is excluded from the building
+        // fabric because the two sides cancel at building level.
+        function interStorey(name, isCeiling) {
+          var boundary = interStoreyBoundary(room, results.includedRooms, isCeiling);
+          var sharedArea = boundary.pairedArea === null || boundary.pairedArea === undefined
+            ? room.floorArea : Math.min(room.floorArea, boundary.pairedArea);
+          if (!sharedArea) return;
+          var heatFlowsUp = isCeiling
+            ? boundary.adjacentTemperature < room.indoor
+            : boundary.adjacentTemperature > room.indoor;
+          elements.push({ name: name, grossArea: sharedArea, openingAreas: [],
+            uValue: heatFlowsUp ? INTERMEDIATE_FLOOR_U.upwards : INTERMEDIATE_FLOOR_U.downwards,
+            indoorTemperature: room.indoor, boundaryTemperature: boundary.adjacentTemperature,
+            propertyAgeBand: age, bridgeCategory: 'internal-default', heatedTransfer: true });
+        }
+        if (room.loftType === HEATED_CEILING_TYPE) interStorey('intermediate-ceiling', true);
+        if (room.floorType === HEATED_FLOOR_TYPE) interStorey('intermediate-floor', false);
         (room.internalWallSegments || []).forEach(function (segment, index) {
           var heated = isHeatedInternalWall(segment.type) && Number(segment.adjacentTemperature) !== 10;
           var area = segment.area;
@@ -4155,13 +4214,21 @@
         return { id: room.key, volume: room.floorArea * room.height, envelopeArea: envelope,
           indoorTemperature: room.indoor, elements: elements };
       });
+      // The ventilation zone height follows the recorded storey count, so a
+      // multi-storey zone is banded on its own height rather than one room's.
+      var meanRoomHeight = results.includedRooms.reduce(function (sum, room) {
+        return sum + room.height; }, 0) / results.includedRooms.length;
+      var zoneHeight = storeys * meanRoomHeight;
       var result = window.ReferenceNaturalDesign.calculate({ rooms: rooms,
-        outdoorTemperature: outside, zoneHeight: Math.max.apply(null, results.includedRooms.map(function (room) { return room.height; })),
+        outdoorTemperature: outside, zoneHeight: zoneHeight,
         exposedFacades: facades, baseHeight: numberValue('hl_ventilation_base_height', 0),
         shielding: window.DesignReview.shieldingKey(stringValue('hl_shielding_class')),
         directionFactor: 2, ventilationSystem: system });
       return { available: true, result: result,
-        basis: 'Standard q50 12; per-element additive bridging; single-storey natural ventilation; ' + rooms.length + ' complete recorded room(s)' };
+        basis: 'Standard q50 12; per-element additive bridging; natural ventilation across ' +
+          storeys + ' stored zone(s) at a ' + zoneHeight.toFixed(1) +
+          ' m zone height; inter-storey boundaries at the uninsulated CIBSE DHDG 2026 Table 2-45 value; ' +
+          rooms.length + ' complete recorded room(s)' };
     } catch (error) {
       return { available: false, reason: String(error.message || error) };
     }
@@ -4173,7 +4240,8 @@
     return 'Building demand ' + (check.result.buildingWatts / 1000).toFixed(2) +
       ' kW; summed room emitter demand ' + (check.result.emitterDemandWatts / 1000).toFixed(2) +
       ' kW. ' + check.basis + '. Experimental comparison, not used for equipment sizing. ' +
-      'Mechanical systems, ventilation devices and multi-storey envelope geometry are not benchmarked here.';
+      'Mechanical systems and ventilation devices are not benchmarked here; an inter-storey ' +
+      'boundary assumes the uninsulated intermediate construction unless a saved survey records the adjacent temperature.';
   }
 
   function refreshDesignReview() {
