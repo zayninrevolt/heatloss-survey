@@ -80,6 +80,11 @@ test('portrait heat-loss PDF keeps its heading with assumptions and preserves sh
 });
 
 test('long room assumptions paginate without a detached heading or missing room rows', async ({ page }, testInfo) => {
+  // Eight recorded rooms plus a real PDF export cannot fit the repository's
+  // default 30 s budget on a slower CI runner (measured 22 s locally, exceeded
+  // on GitHub Actions). This is a scoped allowance for this heavy case only;
+  // the global test timeout is unchanged and the assertions are untouched.
+  test.setTimeout(120_000);
   await prepare(page);
   const fields = require('../fixtures/reference-natural-survey.json');
   const keys = await page.evaluate(() => allRoomNames().map(roomKeyFromName).slice(0, 8));
