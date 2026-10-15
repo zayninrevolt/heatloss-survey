@@ -97,6 +97,7 @@ test('round-trips every current field including a custom room', async ({ page })
     set('hl_utility_test_internal_segment_1_adjacent_temp', '18');
   });
   const before = await page.evaluate(() => getData());
+  expect(before._calcMethodVersion).toBe(String(await page.evaluate(() => SurveyPersistence.CURRENT_CALC_METHOD_VERSION)));
 
   const downloadPromise = page.waitForEvent('download');
   await page.evaluate(() => saveJson());
@@ -169,7 +170,7 @@ test('migrates old renamed fields before import filtering', async ({ page }) => 
   });
 
   await expect(page.locator('#site_address')).toHaveValue('1 Legacy Lane');
-  await expect(page.locator('#hl_radiator_temperature')).toHaveValue('55');
+  await expect(page.locator('#hl_radiator_temperature')).toHaveValue('60');
   await expect(page.locator('#rad_lounge_len')).toHaveValue('5');
   await expect(page.locator('#appStatusMessage')).toContainText(
     'Legacy fields migrated: address, radiator temperature'

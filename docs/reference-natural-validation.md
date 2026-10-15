@@ -91,9 +91,7 @@ recorded in the conditional unshared-floor/ceiling choice. It enters both extern
 fabric and the infiltration envelope; it cannot disappear. These choices currently
 support exposed floors and flat/loft ceilings, not arbitrary unheated spaces or slopes.
 
-Schema 4 preserves the legacy calculation-method version (3), old adjacent values
-and all boiler inputs. Old implicit interfaces are empty and flagged for review;
-no room pairing, area or insulation is invented. Save/reload/import retain one
+Schema 4 preserves the old boiler inputs and flags old implicit interfaces instead of inventing measurements. The interface migration itself did not change the calculation-data version; the later emitter-data review advances that version separately. Save/reload/import retain one
 canonical `hl_interstorey_interfaces` list. An incomplete record prevents only the
 reference check, not the ordinary boiler calculation.
 
@@ -155,15 +153,34 @@ the vendor's resolved inputs, so a failure can only be a method difference.
 The pure natural module rejects mechanical systems, nonzero or malformed device
 flows, missing geometry, duplicate rooms, invalid temperatures and a missing
 room direction factor. The current UI comparison is narrower: complete recorded
-rooms, one to three recorded storeys (the menu's `4+` is unresolved), standard airtightness, automatic room rate,
+rooms, one to three recorded storeys (the menu's `4+` is unresolved), standard or measured-q50 airtightness, automatic room rate,
 natural ventilation, no additional vents/flues, more than one exposed facade and
 explicit measured shared records and recorded exposed remainders. It displays a reason instead of a number
 for unsupported cases. Nothing blocks the ordinary boiler workflow.
 
 Remaining work includes mechanical/ATD/combustion and air-transfer pressure terms,
-measured/design-ACH UI paths, insulation other than the published 100 mm preset,
+the design-ACH UI path, insulation other than the published 100 mm preset,
 arbitrary unheated remainders, measured zone-height geometry, additional boundary
 cases and complete method validation before equipment sizing.
+
+## Measured q50 evidence extension
+
+The existing `Measured 50 Pa permeability` evidence selector and value now feed the
+experimental natural check. A finite, positive recorded q50 replaces the standard
+12 in the same published infiltration equation. Missing or invalid evidence refuses
+the check; it never silently becomes 12. Returning to `Standard default` ignores a
+stale measured value. The printed basis identifies measured q50 and asks the designer
+to verify that the air test covers the same ventilation zone. The recorded air-test
+area/volume do not replace the survey's explicit geometry or allocate hidden leakage.
+
+The MCS ventilation reference states that the 12 default applies when neither measured
+permeability nor a justified design ACH is known. This extension uses the already
+implemented q50 input, not a new pressure-conversion rule. Browser longhand checks at
+q50 6 and 18 independently verify envelope allocation, room/zone maxima and ventilation
+watts, and prove the entire legacy result object is unchanged. The existing commercial
+fixtures are q50 12; **these new measured cases are not new commercial captures**.
+The design-ACH route, mechanical ventilation and devices still fail closed. Equipment
+sizing remains disabled. See `test/browser/reference-measured-q50.spec.js`.
 
 ## Verification
 

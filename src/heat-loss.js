@@ -272,6 +272,53 @@
     return 'pre-2000';
   }
 
+  // WBTA-000061-001-042024d, slide 48 uses pre-2000 / 2000-2006 / 2006+.
+  // Its labels overlap in 2006; never silently interpret that year as modern.
+  // Keep the legacy band result until a valid year or explicit category resolves it.
+  function resolveVentilationAge(input) {
+    input = input || {};
+    var band = String(input.ageBand || 'Unknown').trim().toUpperCase();
+    var bounds = { I: [1996, 2002], J: [2003, 2006] }[band];
+    var scalarYear = typeof input.buildYear === 'string' || typeof input.buildYear === 'number';
+    var yearText = scalarYear ? String(input.buildYear).trim()
+      : input.buildYear == null ? '' : 'Invalid year';
+    var year = /^\d{4}$/.test(yearText) ? Number(yearText) : NaN;
+    var validYear = Boolean(bounds && Number.isInteger(year) &&
+      year >= bounds[0] && year <= bounds[1]);
+    var result = {
+      category: ventilationAgeCategory(band), source: 'age-band',
+      showYear: Boolean(bounds), reviewRequired: Boolean(bounds),
+      buildYear: validYear ? year : null,
+      minYear: bounds ? bounds[0] : null, maxYear: bounds ? bounds[1] : null,
+      message: ''
+    };
+    if (['pre-2000', '2000-2006', '2006+'].includes(input.override)) {
+      result.category = input.override;
+      result.source = 'override';
+      result.showYear = false;
+      result.reviewRequired = false;
+      result.message = 'Explicit ventilation age category: ' + input.override +
+        '. This takes precedence over the year built and property age band.';
+      return result;
+    }
+    if (!bounds) return result;
+    if (validYear && year !== 2006) {
+      result.category = year < 2000 ? 'pre-2000' : '2000-2006';
+      result.source = 'build-year';
+      result.reviewRequired = false;
+      result.message = 'Year built ' + year + ': ' + result.category +
+        ' legacy ventilation category. Construction selections and room temperatures are unchanged.';
+    } else {
+      result.source = 'legacy-band-assumption';
+      result.message = validYear
+        ? 'The training table overlaps at 2006. Confirm Ventilation age category in Calculation assumptions and adjustments; the existing band assumption is retained until then.'
+        : (yearText ? 'Enter a whole year from ' + bounds[0] + ' to ' + bounds[1] + '. '
+          : 'This band crosses a ventilation age cutoff. Enter the year built or choose Ventilation age category in Calculation assumptions and adjustments. ') +
+          'Until confirmed, the existing ' + result.category + ' band assumption is retained; review before using these figures.';
+    }
+    return result;
+  }
+
   function minimumRoomAirChangeRate(roomName, ageBand, hasExternalEnvelope) {
     if (hasExternalEnvelope === false) return 0;
     var roomType = roomTypeForAirChange(roomName);
@@ -394,6 +441,7 @@
     roomDesignTemperature: roomDesignTemperature,
     roomTypeForAirChange: roomTypeForAirChange,
     ventilationAgeCategory: ventilationAgeCategory,
+    resolveVentilationAge: resolveVentilationAge,
     ventilationFlow: ventilationFlow
   };
 });

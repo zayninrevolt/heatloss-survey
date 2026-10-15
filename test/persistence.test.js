@@ -17,7 +17,9 @@ test('migrates an unversioned survey without mutating the source', () => {
   assert.deepEqual(migrated, {
     ...legacy,
     site_address: '1 Test Street',
-    hl_radiator_temperature: '55',
+    // A legacy 60 degC flow is now a first-class 5 degC step, so it is kept as
+    // 60 rather than being rounded down to the old 55 option.
+    hl_radiator_temperature: '60',
     hl_lounge_window_type: 'Older standard double glazing',
     hl_lounge_floor_type: 'Insulated solid ground floor',
     hl_lounge_internal_wall_type: 'Unheated space, single brick',

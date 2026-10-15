@@ -85,26 +85,7 @@
     { type: 'K3', height: 600, wattsPerMetre: 2514, widths: [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000, 2400] },
     { type: 'K3', height: 700, wattsPerMetre: 2841, widths: [500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 1800, 2000] }
   ];
-  // Rated at 75/65°C with a 20°C room temperature, on the normal fan speed.
-  // The Hi-Line LV is the bathroom-safe low-voltage model.
-  var MYSON_FAN_CONVECTOR_MODELS = [
-    { type: 'Myson Kickspace', height: 101, width: 496, wattsAtDt50: 755,
-      size: 'Myson Kickspace 500' },
-    { type: 'Myson Kickspace', height: 101, width: 560, wattsAtDt50: 1023,
-      size: 'Myson Kickspace 600' },
-    { type: 'Myson Kickspace', height: 101, width: 760, wattsAtDt50: 1707,
-      size: 'Myson Kickspace 800' },
-    { type: 'Myson Hi-Line RC', height: 277, width: 554, wattsAtDt50: 930,
-      size: 'Myson Hi-Line RC 7-4' },
-    { type: 'Myson Hi-Line RC', height: 277, width: 682, wattsAtDt50: 1610,
-      size: 'Myson Hi-Line RC 10-6' },
-    { type: 'Myson Hi-Line RC', height: 277, width: 887, wattsAtDt50: 2459,
-      size: 'Myson Hi-Line RC 15-10' },
-    { type: 'Myson Hi-Line RC', height: 277, width: 1171, wattsAtDt50: 3468,
-      size: 'Myson Hi-Line RC 20-14' },
-    { type: 'Myson Hi-Line LV', height: 277, width: 554, wattsAtDt50: 930,
-      bathroomOnly: true, size: 'Myson Hi-Line LV 7-4' }
-  ];
+  var MYSON_FAN_CONVECTOR_MODELS = window.MysonFanConvectors.models;
   var STELRAD_CORRECTION_FACTORS = {
     20: 0.302, 21: 0.322, 22: 0.342, 23: 0.363, 24: 0.383,
     25: 0.404, 26: 0.426, 27: 0.447, 28: 0.469, 29: 0.491,
@@ -745,11 +726,13 @@
   }
 
   function propertySummaryHtml() {
-    var radiatorTemperatures = [
-      { label: '75°C, nominal ΔT50', value: '75' },
-      { label: '65°C, nominal ΔT40', value: '65' },
-      { label: '55°C, nominal ΔT30', value: '55' }
-    ];
+    // 45 to 75 in 5 degC steps. The nominal ΔT label is the mean water
+    // temperature minus a 20 degC room, and the recorded system spread stays a
+    // 10 degC flow-to-return drop, so 45°C gives a 19 K ΔT in a 21 degC room.
+    var radiatorTemperatures = window.RadiatorSizing.SUPPORTED_FLOW_TEMPERATURES
+      .map(function (value) {
+        return { label: value + '°C, nominal ΔT' + (value - 25), value: String(value) };
+      });
     var bridgeMethods = [
       { label: 'Age-based RdSAP factor', value: 'Age-based' },
       { label: 'Standard allowance, 10%', value: 'Percentage' },
@@ -760,6 +743,8 @@
       '<input type="hidden" id="hl_interstorey_interfaces" data-id="hl_interstorey_interfaces" value="[]">' +
       '<input type="hidden" id="survey_schema_version" data-id="_schemaVersion" value="' +
       window.SurveyPersistence.CURRENT_SCHEMA_VERSION + '">' +
+      '<input type="hidden" id="survey_calc_method_version" data-id="_calcMethodVersion" value="' +
+      window.SurveyPersistence.CURRENT_CALC_METHOD_VERSION + '">' +
       '<div class="hl-postcode-lookup">' +
       '<button type="button" id="hl_lookup_postcode">Use property postcode</button>' +
       '<div id="hl_postcode_lookup_status" role="status">Enter a property postcode above to set the design temperature, altitude and ground temperature.</div>' +
@@ -769,6 +754,9 @@
       '<div class="hl-workflow-output" aria-live="polite"><span>Calculated recommended system output</span><strong id="hl_recommended_system_output">12.00 kW</strong></div>' +
       '<div class="hl-summary-grid" id="hl_property_setup_grid">' +
       fieldHtml('hl_property_age_band', 'Main property age band', 'select', PROPERTY_AGE_BANDS, 'Select Unknown when there is no reliable record. The surveyor can verify the age separately before finalising the survey.') +
+      '<div class="field" id="hl_build_year_wrap" hidden><label for="hl_build_year">Year built</label>' +
+      '<input id="hl_build_year" data-id="hl_build_year" type="number" step="1" inputmode="numeric" aria-describedby="hl_build_year_status">' +
+      '<small id="hl_build_year_status" role="status"></small></div>' +
       fieldHtml('hl_property_age_source', 'Property age evidence', 'select', ['Title deeds or building-control record', 'Homeowner or landlord', 'Visual estimate', 'Unknown']) +
       fieldHtml('hl_outdoor_temp', 'Outdoor design temperature (°C)', 'number', null, 'Automatically uses the nearest 99.6% reference value for the property postcode.') +
       fieldHtml('hl_bridge_method', 'Thermal bridge method', 'select', bridgeMethods, 'The percentage method applies the allowance to the complete room load before the room factors.') +
@@ -781,7 +769,7 @@
       fieldHtml('hl_high_ceiling_factor', 'High-ceiling allowance', 'select', CEILING_FACTORS, 'The standard room height is 2.4m. Choose the nearest higher band for rooms with high ceilings.') +
       fieldHtml('hl_property_altitude', 'Property altitude (m)', 'number', null, 'Estimated from postcode coordinates using Elevation API EU and Copernicus terrain data. If higher than the reference station, the outdoor temperature is reduced by 0.6°C per complete 100m.') +
       fieldHtml('hl_ground_temp', 'Ground temperature (°C)', 'number', null, 'Uses the annual mean temperature from the nearest MCS reference station for solid ground floors.') +
-      fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'Limited to the three system temperatures used: 75°C, 65°C or 55°C.') +
+      fieldHtml('hl_radiator_temperature', 'Radiator design temperature', 'select', radiatorTemperatures, 'System flow temperature, recorded in 5°C steps from 45°C to 75°C. The return is 10°C below the flow. Below 65°C the emitters need to be larger; the lowest temperatures fall below Stelrad’s published ΔT20 table and are calculated from the manufacturer’s output exponent instead.') +
       fieldHtml('hl_radiator_connection', 'Radiator pipe connection', 'select', RADIATOR_CONNECTIONS, 'BBOE reduces each radiator’s effective output by 4%, multiplying it by 0.96. It does not change the calculated room heat loss. TBOE uses the temperature-corrected radiator output without this connection reduction.') +
       fieldHtml('hl_radiator_plan', 'Whole-property radiator outcome', 'select', [
         { label: 'Survey radiators room by room', value: 'Room by room' },
@@ -1372,8 +1360,8 @@
     if (!stringValue('hl_radiator_temperature')) {
       var oldTemperature = Number(data.hl_flow_temp || data.front_boiler_temp);
       if (Number.isFinite(oldTemperature) && oldTemperature > 0) {
-        setValue('hl_radiator_temperature', oldTemperature <= 60 ? 55 :
-          (oldTemperature <= 70 ? 65 : 75));
+        setValue('hl_radiator_temperature', String(Math.min(75, Math.max(45,
+          Math.round(oldTemperature / 5) * 5))));
       }
     }
     allRoomNames().forEach(function (roomName) {
@@ -1501,7 +1489,8 @@
       setValue('hl_ventilation_system', 'Natural ventilation');
     }
     if (!stringValue('hl_mvhr_efficiency')) setValue('hl_mvhr_efficiency', 75);
-    if (!['75', '65', '55'].includes(stringValue('hl_radiator_temperature'))) {
+    if (!window.RadiatorSizing.SUPPORTED_FLOW_TEMPERATURES.map(String)
+        .includes(stringValue('hl_radiator_temperature'))) {
       setValue('hl_radiator_temperature', 75);
     }
     if (!stringValue('hl_radiator_connection')) setValue('hl_radiator_connection', 'BBOE');
@@ -1773,7 +1762,7 @@
   }
 
   function mysonFanConvectorOptions(deltaT, filters, roomName) {
-    if (!Number.isFinite(Number(deltaT))) return [];
+    if (window.MysonFanConvectors.output('Myson Kickspace 500', deltaT) === null) return [];
     var bathroom = roomIsBathroom(roomName);
     return MYSON_FAN_CONVECTOR_MODELS.filter(function (model) {
       if (bathroom !== Boolean(model.bathroomOnly)) return false;
@@ -1781,8 +1770,7 @@
       if (filters.maxWidth && model.width > filters.maxWidth) return false;
       return !filters.panelType || filters.panelType === 'Any';
     }).map(function (model) {
-      // Myson's published 75/65 and 90/70 data follows a 1.06 exponent.
-      var watts = model.wattsAtDt50 * Math.pow(Math.max(0, deltaT) / 50, 1.06) *
+      var watts = window.MysonFanConvectors.output(model.size, deltaT) *
         (Number(filters.outputFactor) || 1);
       return {
         type: model.type,
@@ -1885,12 +1873,15 @@
 
   function recommendStelradElite(requiredWatts, indoor, currentSelection, key, roomName,
     existingReplacement) {
-    var flow = Number(stringValue('hl_radiator_temperature')) || 75;
-    var returnTemperature = flow - 10;
-    var meanWater = (flow + returnTemperature) / 2;
-    var deltaT = meanWater - indoor;
+    var temperature = window.RadiatorSizing.meanWaterDeltaT({
+      flow: Number(stringValue('hl_radiator_temperature')) || 75, room: indoor
+    });
+    var flow = temperature.meanWater + temperature.drop / 2;
+    var returnTemperature = flow - temperature.drop;
+    var meanWater = temperature.meanWater;
+    var deltaT = temperature.deltaT;
     var correctionFactor = stelradCorrectionFactor(deltaT);
-    var validTemperature = flow > returnTemperature && deltaT >= 20 && deltaT <= 65;
+    var validTemperature = temperature.usable;
     var filters = {
       maxHeight: Number(stringValue('hl_' + key + '_rad_max_height')) || 0,
       maxWidth: numberValue('hl_' + key + '_rad_max_width', 0),
@@ -2011,6 +2002,7 @@
       selectedSecond: selectedSecond,
       pairCount: pairCount,
       selected: selected,
+      tabulated: temperature.tabulated,
       temperatureWarning: !validTemperature
     };
   }
@@ -2037,10 +2029,14 @@
       : outcome || 'New radiator required';
   }
 
+  function currentRadiatorDesign(indoor) {
+    return window.RadiatorSizing.meanWaterDeltaT({
+      flow: Number(stringValue('hl_radiator_temperature')) || 75, room: indoor
+    });
+  }
+
   function currentRadiatorDeltaT(indoor) {
-    var flow = Number(stringValue('hl_radiator_temperature')) || 75;
-    var returnTemperature = flow - 10;
-    return (flow + returnTemperature) / 2 - indoor;
+    return currentRadiatorDesign(indoor).deltaT;
   }
 
   function recordCustomOutputBasis(key, indoor, index) {
@@ -2102,7 +2098,7 @@
       };
     }
     var deltaT = currentRadiatorDeltaT(indoor);
-    if (deltaT < 20 || deltaT > 65) return null;
+    if (!currentRadiatorDesign(indoor).usable) return null;
     var correctionFactor = stelradCorrectionFactor(deltaT);
     var option = stelradIndividualOptions(correctionFactor,
       { outputFactor: radiatorFactor }, roomName, deltaT, false).find(function (option) {
@@ -2414,9 +2410,7 @@
     if (!roomAgeBand || roomAgeBand === 'Unknown') {
       roomAgeBand = stringValue('hl_property_age_band') || 'Unknown';
     }
-    var ventilationAgeCategory = window.HeatLossCalculations.ventilationAgeCategory(
-      stringValue('hl_ventilation_age_category') || roomAgeBand
-    );
+    var ventilationAgeCategory = propertyVentilationAge(roomAgeBand).category;
     var roomType = window.HeatLossCalculations.roomTypeForAirChange(roomName);
     var standardAch = window.HeatLossCalculations.minimumRoomAirChangeRate(
       roomName, ventilationAgeCategory, hasExternalEnvelope
@@ -2701,10 +2695,25 @@
       warnings.push('Existing radiator output is below the calculated room requirement');
     }
 
+    var mysonDeltaT = currentRadiatorDeltaT(indoor);
+    var existingQuantity = Math.max(1, Math.min(2,
+      Math.round(numberValue('rad_' + key + '_ex_quantity', 1)) || 1));
+    var recordedMyson = [stringValue('rad_' + key + '_ex_size'),
+      stringValue('rad_' + key + '_ex_size_2')].slice(0, existingQuantity)
+      .some(function (size) { return /^Myson /.test(size); });
+    if (recordedMyson && window.MysonFanConvectors.output('Myson Kickspace 500', mysonDeltaT) === null) {
+      warnings.push('Recorded Myson fan-convector size is retained, but manufacturer output is required at this design temperature. No adequacy is assumed outside the published ΔT30 to ΔT50 range; verify the fan-start sensor and use the custom-output route with evidenced data.');
+    }
     if (radiator && radiator.temperatureWarning) {
       warnings.push(radiator.flow <= radiator.returnTemperature
         ? 'Radiator flow temperature must be higher than return temperature'
-        : 'Radiator ΔT is outside the supported 20°C to 65°C temperature range');
+        : 'Radiator ΔT is outside the supported 15°C to 65°C temperature range');
+    } else if (radiator && radiator.tabulated === false) {
+      warnings.push('Radiator ΔT of ' + radiator.deltaT.toFixed(0) +
+        ' K at a ' + radiator.flow.toFixed(0) + '°C flow is below the published ' +
+        'ΔT20 correction table. Emitter output is extrapolated from the ' +
+        'manufacturer exponent and should be confirmed against the manufacturer ' +
+        'data for the selected emitter.');
     }
     if (radiator && !radiator.temperatureWarning && !radiator.selected) {
       warnings.push(radiator.usesTwo
@@ -2991,7 +3000,7 @@
     var returnTemperature = flow - 10;
     var deltaT = (flow + returnTemperature) / 2 - result.indoor;
     var correctionFactor = stelradCorrectionFactor(deltaT);
-    var options = deltaT >= 20 && deltaT <= 65
+    var options = currentRadiatorDesign(result.indoor).usable
       ? stelradIndividualOptions(correctionFactor, {}, result.roomName, deltaT, false)
       : [];
     field.innerHTML = '<option value="">Select existing radiator size</option>';
@@ -3021,7 +3030,9 @@
     } else if (existingValue) {
       var legacy = document.createElement('option');
       legacy.value = existingValue;
-      legacy.textContent = existingValue + ' | unrecognised size';
+      legacy.textContent = existingValue + (/^Myson /.test(existingValue)
+        ? ' | manufacturer output required at this design temperature'
+        : ' | unrecognised size');
       field.insertBefore(legacy, field.children[1] || null);
       field.value = existingValue;
     }
@@ -3786,12 +3797,16 @@
     }
     summary += ', ' + Math.round(calculation.totalWatts) + ' W total, ' +
       calculation.wattsPerSquareMetre.toFixed(1) + ' W/m² across entered rooms.';
-    if (calculation.provisional) {
+    if (incomplete.length) {
       summary += ' Provisional: ' + incomplete.length + ' incomplete room' +
         (incomplete.length === 1 ? '' : 's') + ' ' +
         (incomplete.length === 1 ? 'is' : 'are') +
         ' excluded from the total while still sharing the ventilation flow. ' +
         'Complete them before relying on these figures.';
+    }
+    if (calculation.ventilationAge && calculation.ventilationAge.reviewRequired) {
+      summary += ' Provisional: confirm year built or ventilation age category. ' +
+        'The existing band assumption is retained until reviewed.';
     }
     return summary;
   }
@@ -3815,7 +3830,34 @@
     target.dataset.state = readiness.inputsComplete ? 'inputs-complete' : 'inputs-incomplete';
   }
 
+  function propertyVentilationAge(roomAgeBand) {
+    var propertyBand = stringValue('hl_property_age_band') || 'Unknown';
+    var band = roomAgeBand || propertyBand;
+    return window.HeatLossCalculations.resolveVentilationAge({
+      ageBand: band,
+      buildYear: band === propertyBand ? stringValue('hl_build_year') : '',
+      override: stringValue('hl_ventilation_age_category')
+    });
+  }
+
+  function refreshBuildYearControl(age) {
+    var wrap = document.getElementById('hl_build_year_wrap');
+    var field = document.getElementById('hl_build_year');
+    var status = document.getElementById('hl_build_year_status');
+    if (!wrap || !field || !status) return;
+    wrap.hidden = !age.showYear;
+    wrap.style.display = age.showYear ? '' : 'none';
+    field.disabled = !age.showYear;
+    field.min = age.minYear == null ? '' : String(age.minYear);
+    field.max = age.maxYear == null ? '' : String(age.maxYear);
+    field.setAttribute('aria-invalid', String(age.showYear &&
+      stringValue('hl_build_year') !== '' && age.buildYear === null));
+    status.textContent = age.message;
+  }
+
   function calculateHeatLoss() {
+    var ventilationAge = propertyVentilationAge();
+    refreshBuildYearControl(ventilationAge);
     var roomNames = allRoomNames();
     var ceilingHeight = numberValue('r_ceiling', 2.4);
     var propertyVolume = roomNames.reduce(function (sum, roomName) {
@@ -3858,7 +3900,8 @@
     // A started but unfinished room is left out of the total, yet its volume still
     // shares out the whole-property ventilation flow. That makes the total a
     // provisional figure, and the surveyor has to be told before it is issued.
-    var provisional = incomplete.length > 0;
+    var provisional = incomplete.length > 0 ||
+      (included.length > 0 && ventilationAge.reviewRequired);
     var radiatorOutputWatts = results.reduce(function (sum, room) {
       return sum + (room.effectiveRadiator
         ? room.effectiveRadiator.watts
@@ -3871,6 +3914,7 @@
       incompleteRooms: incomplete,
       unstartedRooms: unstarted,
       provisional: provisional,
+      ventilationAge: ventilationAge,
       totalWatts: totalWatts,
       totalArea: totalArea,
       radiatorOutputWatts: radiatorOutputWatts,
@@ -4024,8 +4068,11 @@
     var roomEmitterDemandKw = emitterRequirementWatts / 1000;
     var buildingDemandKw = buildingWatts / 1000;
     var notes = exposureNotes.slice();
-    if (results.provisional) {
+    if (results.incompleteRooms.length) {
       notes.push(results.incompleteRooms.length + ' started room(s) are excluded from this review.');
+    }
+    if (results.ventilationAge && results.ventilationAge.reviewRequired) {
+      notes.push('Confirm year built or ventilation age category before relying on the legacy ventilation figures.');
     }
     return {
       methodId: review.methodId,
@@ -4110,14 +4157,22 @@
     try {
       if (!window.ReferenceNaturalDesign) throw Error('Reference modules are not loaded');
       var results = window.heatLossResultsV60;
-      if (!results || !results.includedRooms.length || results.provisional) {
+      if (!results || !results.includedRooms.length || results.incompleteRooms.length) {
         throw Error('Complete the started rooms before comparing reference loads');
       }
       var storeys = recordedStoreyCount();
       var facades = window.DesignReview.exposedFacadesForAttachment(stringValue('hl_dwelling_attachment'));
       if (facades === 1) throw Error('The single-facade direction factor is not benchmarked');
-      if ((stringValue('hl_airtightness_method') || 'Standard default') !== 'Standard default') {
-        throw Error('Measured and design-ACH evidence routes are not benchmarked in this check');
+      var airtightnessMethod = stringValue('hl_airtightness_method') || 'Standard default';
+      var measuredQ50 = null;
+      if (airtightnessMethod === 'Measured 50 Pa permeability') {
+        var measuredText = stringValue('hl_measured_air_permeability_50').trim();
+        measuredQ50 = Number(measuredText);
+        if (!measuredText || !Number.isFinite(measuredQ50) || measuredQ50 <= 0) {
+          throw Error('Record a positive measured q50 from an air test for this ventilation zone');
+        }
+      } else if (airtightnessMethod !== 'Standard default') {
+        throw Error('Design infiltration ACH is outside this reference check');
       }
       var system = stringValue('hl_ventilation_system') || 'Natural ventilation';
       if (system !== 'Natural ventilation') throw Error('Mechanical ventilation is outside this reference check');
@@ -4195,13 +4250,16 @@
         return sum + room.height; }, 0) / results.includedRooms.length;
       var zoneHeight = storeys * meanRoomHeight;
       var result = window.ReferenceNaturalDesign.calculate({ rooms: rooms,
+        permeability50: measuredQ50,
         outdoorTemperature: outside, zoneHeight: zoneHeight,
         exposedFacades: facades, baseHeight: numberValue('hl_ventilation_base_height', 0),
         shielding: window.DesignReview.shieldingKey(stringValue('hl_shielding_class')),
         directionFactor: 2, ventilationSystem: system });
       return { available: true, result: result,
         geometryMethodId: shared.methodId, interfaces: shared.interfaces,
-        basis: 'Standard q50 12; per-element additive bridging; ' + storeys +
+        basis: (measuredQ50 === null ? 'Standard q50 12' : 'Measured q50 ' + measuredQ50 +
+          ' from recorded air-test evidence; verify the test covers this ventilation zone') +
+          '; per-element additive bridging; ' + storeys +
           ' recorded storeys; estimated zone height ' + zoneHeight.toFixed(1) +
           ' m from storeys and mean room height; explicit measured shared interfaces using CIBSE DHDG 2026 Table 2-45; ' +
           rooms.length + ' complete recorded room(s)' };
@@ -4300,8 +4358,28 @@
       Number(value || 0).toFixed(2) + ' W/m²K</b>';
   }
 
+  // The lowest room design ΔT in the current result, or null when no room is
+  // complete. A value below 20 means at least one room falls outside the
+  // published correction table.
+  function lowestRoomDeltaT() {
+    var calculation = window.heatLossResultsV60;
+    if (!calculation || !calculation.includedRooms.length) return null;
+    return calculation.includedRooms.reduce(function (lowest, room) {
+      var value = currentRadiatorDeltaT(room.indoor);
+      return lowest === null || value < lowest ? value : lowest;
+    }, null);
+  }
+
   function renderHeatLossAssumptionsSheet(calculation) {
     var rows = calculation.includedRooms || [];
+    var ventilationAge = calculation.ventilationAge || propertyVentilationAge();
+    var yearSummary = ventilationAge.showYear || ventilationAge.buildYear !== null
+      ? '<br><small>Year built: ' + (ventilationAge.buildYear === null
+        ? 'Not recorded or invalid' : ventilationAge.buildYear) + '; ' +
+        escapeHtml(ventilationAge.message) + '</small>' : '';
+    var printedAgeCategory = ventilationAge.source === 'build-year'
+      ? ventilationAge.category + ' (from year built ' + ventilationAge.buildYear + ')'
+      : stringValue('hl_ventilation_age_category') || 'From property age band';
     var station = stringValue('hl_design_station') || 'Manual value';
     var bridgeMethod = stringValue('hl_bridge_method') || 'Percentage';
     var bridgeSummary = bridgeMethod === 'Age-based'
@@ -4323,8 +4401,16 @@
       '<td class="label">Thermal bridges</td><td class="input">' +
       bridgeSummary + '<br><small>' + allowanceSummary + '</small></td>' +
       '<td class="label">Radiator design</td><td colspan="3" class="input">Radiator options at ' +
-      escapeHtml(stringValue('hl_radiator_temperature')) + '°C, nominal ΔT' +
-      (Number(stringValue('hl_radiator_temperature')) - 25) + ', ' +
+      escapeHtml(stringValue('hl_radiator_temperature')) + '°C flow / ' +
+      escapeHtml(String(Number(stringValue('hl_radiator_temperature')) - 10)) +
+      '°C return, nominal ΔT' +
+      (Number(stringValue('hl_radiator_temperature')) - 25) +
+      (function () {
+        var lowest = lowestRoomDeltaT();
+        return lowest !== null && lowest < 20
+          ? '<br><small>Below the published ΔT20 correction table: emitter output extrapolated from the manufacturer exponent. Confirm against the manufacturer data.</small>'
+          : '';
+      })() + ', ' +
       escapeHtml(stringValue('hl_radiator_connection') || 'BBOE') +
       (stringValue('hl_radiator_connection') === 'TBOE'
         ? ' connection'
@@ -4336,7 +4422,7 @@
       '<td class="label">Ground reference</td><td colspan="3" class="input">' +
       escapeHtml(stringValue('hl_ground_station') || 'Manual value') + '</td></tr>' +
       '<tr><td class="label">Property age</td><td class="input">Band ' +
-      escapeHtml(stringValue('hl_property_age_band') || 'Unknown') + '</td>' +
+      escapeHtml(stringValue('hl_property_age_band') || 'Unknown') + yearSummary + '</td>' +
       '<td class="label">Age evidence</td><td colspan="5" class="input">' +
       escapeHtml(stringValue('hl_property_age_source') || 'Unknown') + '</td></tr>' +
       '<tr><td class="label">Survey record</td><td colspan="3" class="input">' +
@@ -4367,7 +4453,7 @@
         'Mechanical ventilation with heat recovery (MVHR)'
         ? ', ' + escapeHtml(stringValue('hl_mvhr_efficiency')) + '% heat recovery'
         : '') +
-      '<br>Age category: ' + escapeHtml(stringValue('hl_ventilation_age_category') || 'From property age band') +
+      '<br>Age category: ' + escapeHtml(printedAgeCategory) +
       '</td><td class="label">Room minimum</td><td class="input">Selected room type and age band</td></tr>' +
       '<tr><th>Room</th><th>External wall</th><th>Internal wall</th><th>Windows</th><th>External door</th><th>Floor</th><th>Ceiling / loft</th><th>Ventilation</th></tr>' +
       (rows.length ? rows.map(function (room) {
@@ -4432,8 +4518,8 @@
       '<tr><td colspan="8" class="small"><b>Survey disclaimer:</b> Some property construction materials, insulation levels and dimensions may be presumed from visible evidence or typical construction where they cannot be verified. Confirm them before equipment selection.</td></tr>' +
       '<tr><td colspan="8" class="small">Each numbered internal wall uses its measured length, selected construction and entered temperature on the other side. Signed room-to-adjoining temperature differences are retained for room radiator sizing.</td></tr>' +
       '<tr><td colspan="8" class="small">Stelrad Elite ΔT50 outputs used (kW/m): K1 300/450/600/700mm = 0.517/0.768/1.000/1.142; P+ 300/450/600/700mm = 0.776/1.106/1.409/1.597; K2 300/450/600/700mm = 1.012/1.409/1.778/2.011; K3 300/500/600/700mm = 1.418/2.169/2.514/2.841. Outputs are multiplied by Stelrad’s published correction factor for mean water temperature minus room temperature.</td></tr>' +
-      '<tr><td colspan="8" class="small">Myson fan-convector options use normal-fan 75/65°C outputs: Kickspace 500/600/800 = 0.755/1.023/1.707 kW; Hi-Line RC 7-4/10-6/15-10/20-14 = 0.930/1.610/2.459/3.468 kW; Hi-Line LV 7-4 = 0.930 kW. The LV is the only Myson option offered in bathroom and en-suite rooms.</td></tr>' +
-      '<tr><td colspan="8" class="small">Normal radiator choices meet the room heat loss within a 50% oversize limit. A flagged minimum-size exception can exceed this limit and requires review. BBOE multiplies each radiator’s temperature-corrected output by 0.96 for the 4% connection reduction. It does not change the room or building heat loss. The front-page range-rate output is the higher of 12 kW or the combined corrected output of the selected radiators.</td></tr>' +
+      '<tr><td colspan="8" class="small">Myson fan-convector outputs: February 2025 manufacturer tables, normal fan speed at 340 litre/hour water flow. Kickspace 500/600/800 at ΔT50 = 0.896/1.278/1.707 kW; Hi-Line RC 7-4/10-6/15-10/20-14 = 0.930/1.610/2.459/3.468 kW; Hi-Line LV 7-4 = 0.930 kW. The app interpolates linearly between published ΔT30 and ΔT50 outputs; Myson options are not offered outside ΔT30 to ΔT50. Confirm the actual model, fan-start sensor, water flow and installation limits. Existing recorded sizes are retained for review; manufacturer output can be entered through the custom-output route. The LV is the only Myson option offered in bathroom and en-suite rooms.</td></tr>' +
+      '<tr><td colspan="8" class="small">Normal radiator choices meet the room heat loss within a 50% oversize limit. A flagged minimum-size exception can exceed this limit and requires review. BBOE multiplies each radiator’s temperature-corrected output by 0.96 for the 4% connection reduction. It does not change the room or building heat loss. The front-page range-rate output is the higher of 12 kW or 110% of the combined corrected output of the selected radiators. This is a boiler/range-rate recommendation, not the building design heat loss or a heat-pump size.</td></tr>' +
       '<tr><td colspan="8" class="small">Heat-pump design review (report only, does not affect the boiler result): ' +
       escapeHtml(designReviewPrintLine()) + '</td></tr>' +
       '<tr><td colspan="8" class="small">Natural ventilation reference check: ' +

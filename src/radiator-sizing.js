@@ -5,12 +5,58 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  var SUPPORTED_FLOW_TEMPERATURES = [45, 50, 55, 60, 65, 70, 75];
+  // The currently recorded system-temperature spread, in K, between flow and
+  // return. Every supported flow temperature uses it, so the mean water
+  // temperature is flow - 5 and a 45 degC flow gives a 19 K delta-T in a 21 degC
+  // room. That is 1 K below the lowest published Stelrad table entry, so the
+  // result is reported as extrapolated rather than tabulated.
+  var DESIGN_FLOW_RETURN_DROP = 10;
+
+  // The percentage radiator table is published from delta-T 20 to 65. A low
+  // flow temperature can legitimately produce a smaller delta-T, so the factor
+  // is extended with the same manufacturer exponent law (delta-T/50)^1.3 that
+  // reproduces the published table, and the caller is told when it is no longer
+  // reading a tabulated value.
+  var PUBLISHED_MINIMUM_DELTA_T = 20;
+  var PUBLISHED_MAXIMUM_DELTA_T = 65;
+  var OUTPUT_EXPONENT = 1.3;
+
   function correctionFactor(deltaT, factors) {
-    var value = Math.max(20, Math.min(65, Number(deltaT) || 0));
-    var lower = Math.floor(value);
-    var upper = Math.ceil(value);
-    if (lower === upper) return factors[lower];
-    return factors[lower] + (factors[upper] - factors[lower]) * (value - lower);
+    var value = Number(deltaT);
+    if (!Number.isFinite(value)) return 0;
+    var clampable = factors && factors[Math.max(PUBLISHED_MINIMUM_DELTA_T,
+      Math.min(PUBLISHED_MAXIMUM_DELTA_T, value))];
+    if (value >= PUBLISHED_MINIMUM_DELTA_T) {
+      var bounded = Math.max(PUBLISHED_MINIMUM_DELTA_T,
+        Math.min(PUBLISHED_MAXIMUM_DELTA_T, value));
+      var lower = Math.floor(bounded);
+      var upper = Math.ceil(bounded);
+      if (lower === upper) return factors[lower];
+      return factors[lower] + (factors[upper] - factors[lower]) * (bounded - lower);
+    }
+    // Below the published table, scale from the lowest published entry.
+    return (clampable || 0) * Math.pow(value / PUBLISHED_MINIMUM_DELTA_T,
+      OUTPUT_EXPONENT);
+  }
+
+  function meanWaterDeltaT(config) {
+    config = config || {};
+    var flow = Number(config.flow);
+    var room = Number(config.room);
+    var drop = config.drop == null ? DESIGN_FLOW_RETURN_DROP : Number(config.drop);
+    var result = { drop: drop, meanWater: null, deltaT: null,
+      tabulated: false, usable: false };
+    if (!Number.isFinite(flow) || !Number.isFinite(room) || !Number.isFinite(drop)) {
+      return result;
+    }
+    result.meanWater = flow - drop / 2;
+    result.deltaT = result.meanWater - room;
+    result.tabulated = result.deltaT >= PUBLISHED_MINIMUM_DELTA_T &&
+      result.deltaT <= PUBLISHED_MAXIMUM_DELTA_T;
+    result.usable = SUPPORTED_FLOW_TEMPERATURES.indexOf(flow) >= 0 && drop > 0 &&
+      result.deltaT >= 15 && result.deltaT <= 65 && flow > drop;
+    return result;
   }
 
   function output(model, width, factor) {
@@ -143,6 +189,8 @@
 
   return {
     correctionFactor: correctionFactor,
+    meanWaterDeltaT: meanWaterDeltaT,
+    SUPPORTED_FLOW_TEMPERATURES: SUPPORTED_FLOW_TEMPERATURES,
     individualOptions: individualOptions,
     output: output,
     recommendedSystemOutputKw: recommendedSystemOutputKw,

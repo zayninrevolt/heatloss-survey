@@ -11,10 +11,18 @@ const models = [
   { type: 'K3', height: 500, wattsPerMetre: 2169, widths: [600] }
 ];
 
-test('correction-factor lookup clamps boundaries and interpolates', () => {
-  assert.equal(sizing.correctionFactor(10, factors), 0.302);
-  assert.equal(sizing.correctionFactor(20.5, factors), 0.312);
+test('correction-factor lookup clamps the top of the table and interpolates', () => {
+  // The published table runs to 65 K; anything hotter is capped there.
   assert.equal(sizing.correctionFactor(80, factors), 1.408);
+  // Inside the table the value is interpolated between published entries.
+  assert.equal(sizing.correctionFactor(20.5, factors), 0.312);
+  assert.equal(sizing.correctionFactor(20, factors), 0.302);
+  // Below the published table the factor must keep falling rather than being
+  // clamped to the lowest tabulated entry, otherwise a 45 degC design would
+  // reuse the ΔT20 capacity and under-size every emitter.
+  assert.equal(sizing.correctionFactor(15, factors), 0.302 * Math.pow(0.75, 1.3));
+  assert.ok(sizing.correctionFactor(15, factors) < 0.302);
+  assert.ok(sizing.correctionFactor(19, factors) < sizing.correctionFactor(20, factors));
 });
 
 test('published delta-T50 output scales by width and correction factor', () => {

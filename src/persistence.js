@@ -6,7 +6,7 @@
   'use strict';
 
   var CURRENT_SCHEMA_VERSION = 4;
-  var CURRENT_CALC_METHOD_VERSION = 3;
+  var CURRENT_CALC_METHOD_VERSION = 4;
   var STANDARD_ADJACENT_TEMPERATURES = ['10', '18', '21', '22', '23'];
 
   var CALC_METHOD_REVIEW =
@@ -27,8 +27,8 @@
     if (!data.hl_radiator_temperature) {
       var oldTemperature = Number(data.hl_flow_temp || data.front_boiler_temp);
       if (Number.isFinite(oldTemperature) && oldTemperature > 0) {
-        data.hl_radiator_temperature = String(oldTemperature <= 60 ? 55 :
-          oldTemperature <= 70 ? 65 : 75);
+        data.hl_radiator_temperature = String(Math.min(75, Math.max(45,
+          Math.round(oldTemperature / 5) * 5)));
       }
     }
     Object.keys(data).forEach(function (key) {
@@ -115,13 +115,23 @@
     return data;
   }
 
-  function migrateCalculationMethod(source, review) {
-    var data = Object.assign({}, source);
+  function updateCalculationMethod(data, review) {
     var stamped = Number(data._calcMethodVersion);
-    if (!Number.isFinite(stamped) || stamped < CURRENT_CALC_METHOD_VERSION) {
+    if (stamped > CURRENT_CALC_METHOD_VERSION) {
+      throw new Error('Saved survey uses a newer calculation method than this app supports.');
+    }
+    if (!Number.isFinite(stamped) || stamped < 3) {
       if (review) review.push(CALC_METHOD_REVIEW);
     }
+    if (!Number.isFinite(stamped) || stamped < 4) {
+      if (review) review.push('Emitter manufacturer data updated: Myson Kickspace model ratings and dimensions are corrected; fan-convector outputs use published ΔT30/50 tables instead of a fitted exponent. Low-temperature radiator corrections are also extended. Recorded sizes and temperatures are retained. Recheck emitter adequacy and the boiler range-rate recommendation before issuing this survey.');
+    }
     data._calcMethodVersion = CURRENT_CALC_METHOD_VERSION;
+  }
+
+  function migrateCalculationMethod(source, review) {
+    var data = Object.assign({}, source);
+    updateCalculationMethod(data, review);
     data._schemaVersion = 3;
     return data;
   }
@@ -163,6 +173,9 @@
       data = migrations[version](data, review);
       version = Number(data._schemaVersion);
     }
+    // A calculation-data revision is independent of the saved-data schema.
+    // Current-schema surveys also need the review, not just schema migrations.
+    updateCalculationMethod(data, review);
     return data;
   }
 

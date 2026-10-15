@@ -446,6 +446,20 @@
         .sheet {
           break-inside: avoid;
         }
+        /* The assumptions table can exceed one page. Let it flow instead of
+           moving the whole table away from its heading onto a new page. */
+        #heatLossAssumptionsSheetV61 .heatloss-assumptions-sheet {
+          break-inside: auto;
+          page-break-inside: auto;
+        }
+        #heatLossAssumptionsSheetV61 .sheet-title {
+          break-after: avoid;
+          page-break-after: avoid;
+        }
+        #heatLossAssumptionsSheetV61 tr {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
         .main {
           overflow: visible;
         }
@@ -1903,9 +1917,9 @@
         ["front_sys", "Range rate output (12 kW minimum)", "text"],
         [
           "front_boiler_temp",
-          "Radiator temperature °C (75=ΔT50, 65=ΔT40, 55=ΔT30)",
+          "Radiator flow temperature °C (45 to 75 in 5°C steps; nominal ΔT = flow − 25)",
           "select",
-          ["", "75", "65", "55"],
+          ["", "75", "70", "65", "60", "55", "50", "45"],
         ],
         ["front_warning_codes", "Warning codes", "text"],
         ["front_mcp", "MCP", "select", yesNo],
@@ -8892,9 +8906,10 @@
       })();
     </script>
     <link rel="stylesheet" href="combined-heatloss.css?v=95">
-    <script src="src/heat-loss.js?v=7"></script>
-    <script src="src/radiator-sizing.js?v=1"></script>
-    <script src="src/persistence.js?v=6"></script>
+    <script src="src/heat-loss.js?v=8"></script>
+    <script src="src/radiator-sizing.js?v=3"></script>
+    <script src="src/myson-fan-convectors.js?v=1"></script>
+    <script src="src/persistence.js?v=7"></script>
     <script src="src/validation.js?v=2"></script>
     <script src="src/reference-readiness.js?v=1"></script>
     <script src="src/design-review.js?v=2"></script>
@@ -8903,6 +8918,6 @@
     <script src="src/reference-natural-design.js?v=1"></script>
     <script src="src/interstorey-interfaces.js?v=1"></script>
     <script src="src/interstorey-ui.js?v=1"></script>
-    <script src="combined-heatloss.js?v=136"></script>
+    <script src="combined-heatloss.js?v=140"></script>
   </body>
 </html>
