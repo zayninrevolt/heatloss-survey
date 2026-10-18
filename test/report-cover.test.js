@@ -12,10 +12,14 @@ test('cover photo allowlist rejects remote URLs, active formats, attributes and 
   }
 });
 
-test('cover is optional for existing surveys and missing or unsafe photos', () => {
-  assert.equal(cover.render({}), '');
-  assert.equal(cover.render({ property_photo: '' }), '');
-  assert.equal(cover.render({ property_photo: 'https://example.invalid/image.jpg' }), '');
+test('cover always renders a safe photo placeholder when no usable photo is present', () => {
+  for (const data of [{}, { property_photo: '' }, { property_photo: 'https://example.invalid/image.jpg' }]) {
+    const html = cover.render(data);
+    assert.ok(html.includes('aria-label="Report cover"'));
+    assert.ok(html.includes('report-cover-photo-placeholder'));
+    assert.ok(!html.includes('<img '));
+    assert.ok(!html.includes('https://example.invalid'));
+  }
 });
 
 test('cover escapes user data and uses the existing property details', () => {

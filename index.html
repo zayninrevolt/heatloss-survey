@@ -3633,9 +3633,11 @@
         <h3 id="pdfDialogTitle">Save PDFs</h3>
         <p>
           This will save them one at a time so the browser does not block the
-          second page. The property-photo cover is portrait; Front/Rads and
-          Heat Loss stay landscape. H&amp;S is portrait.
+          second page. The report includes a portrait cover; Front/Rads and
+          Heat Loss stay landscape. You can also save the cover separately.
+          H&amp;S is portrait.
         </p>
+        <button onclick="printPdfPart('cover')">Save cover PDF</button>
         <button onclick="printPdfPart('survey')">Save Front + Rads PDF</button>
         <button onclick="printPdfPart('hns')">Save H&amp;S PDF</button>
         <button class="secondary" onclick="hidePdfOptions()">Close</button>
@@ -3976,10 +3978,10 @@
       }
       function printPdfPart(type) {
         const address = currentAddressName();
-        const title = type === "hns" ? "HnS - " + address : address;
+        const title = type === "hns" ? "HnS - " + address : type === "cover" ? "Cover - " + address : address;
         const sheets =
-          type === "hns" ? ["A12a", "Customer Profile"] : ["Front", "Rads"];
-        const orientation = type === "hns" ? "portrait" : "landscape";
+          type === "hns" ? ["A12a", "Customer Profile"] : type === "cover" ? ["Cover"] : ["Front", "Rads"];
+        const orientation = type === "hns" || type === "cover" ? "portrait" : "landscape";
         const w = window.open("", "_blank");
         if (!w) {
           alert(
@@ -8928,6 +8930,6 @@
     <script src="src/interstorey-interfaces.js?v=1"></script>
     <script src="src/interstorey-ui.js?v=1"></script>
     <script src="combined-heatloss.js?v=140"></script>
-    <script src="src/report-cover.js?v=1"></script>
+    <script src="src/report-cover.js?v=2"></script>
   </body>
 </html>

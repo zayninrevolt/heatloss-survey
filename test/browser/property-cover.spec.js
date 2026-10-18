@@ -94,7 +94,8 @@ test('saved jobs restore their own photo and old backups do not inherit a previo
   const legacy = await page.evaluate(() => { const data = getData(); delete data.property_photo; return data; });
   await page.locator('#loadFile').setInputFiles({ name: 'without-photo.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(legacy)) });
   await expect(page.locator('#property_photo')).toHaveValue('');
-  await expect(page.locator('#preview .report-cover')).toHaveCount(0);
+  await expect(page.locator('#preview .report-cover')).toHaveCount(1);
+  await expect(page.locator('#preview .report-cover-photo-placeholder')).toBeVisible();
   await page.reload();
   await expect(page.locator('#propertyPhotoPreview')).toBeHidden();
 });
@@ -125,7 +126,8 @@ test('removing and clearing a photo persist without affecting a saved job', asyn
   const job = await page.evaluate(() => window._activeSurveyIdV57);
   await page.getByRole('button', { name: 'Remove photo', exact: true }).click();
   await expect(page.locator('#propertyPhotoPreview')).toBeHidden();
-  await expect(page.locator('#preview .report-cover')).toHaveCount(0);
+  await expect(page.locator('#preview .report-cover')).toHaveCount(1);
+  await expect(page.locator('#preview .report-cover-photo-placeholder')).toBeVisible();
   await page.reload();
   await expect(page.locator('#property_photo')).toHaveValue('');
   await page.evaluate(id => loadSurveyFromListV57(id), job);
@@ -164,7 +166,8 @@ test('PDF has one portrait cover followed by unchanged landscape report pages', 
   const before = await page.evaluate(() => JSON.stringify(window.heatLossResultsV60));
   const baseline = await page.context().newPage();
   await baseline.setContent(await page.evaluate(() => buildPrintHtml('Synthetic baseline', ['Front', 'Rads'], 'landscape')));
-  const baselinePages = chromiumPdfPages(await baseline.pdf({ preferCSSPageSize: true, printBackground: true }));
+  // The cover now exists even without a photo. Compare only the landscape body.
+  const baselinePages = chromiumPdfPages(await baseline.pdf({ preferCSSPageSize: true, printBackground: true })).slice(1);
   await baseline.close();
   await page.locator('#frontTab').click();
   await page.getByLabel('Company name (optional)', { exact: true }).fill('Synthetic Heating & Survey Ltd');

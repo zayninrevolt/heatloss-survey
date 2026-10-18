@@ -25,12 +25,15 @@ test('keeps keyboard focus inside each modal and restores it after Escape', asyn
   const pdf = page.locator('#pdfPanel');
   const pdfButtons = pdf.locator('button');
   await expect(pdfButtons.nth(0)).toBeFocused();
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
+  // Every PDF choice, including the separate cover, stays in the focus trap.
+  for (let index = 1; index < await pdfButtons.count(); index += 1) {
+    await page.keyboard.press('Tab');
+    await expect(pdfButtons.nth(index)).toBeFocused();
+  }
   await page.keyboard.press('Tab');
   await expect(pdfButtons.nth(0)).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(pdfButtons.nth(2)).toBeFocused();
+  await expect(pdfButtons.last()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('#savePdfsBtn')).toBeFocused();
 

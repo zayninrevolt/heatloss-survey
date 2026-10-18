@@ -47,7 +47,11 @@ test('landscape survey PDF never orphans the heat-loss assumptions heading', asy
     preferCSSPageSize: true });
   const pages = chromiumPdfPages(pdf);
   await testInfo.attach('pdf-page-metrics', { body: JSON.stringify(pages, null, 2), contentType: 'application/json' });
-  expect(pages.every(page => page.width > page.height)).toBe(true);
+  // The approved report now always starts with a portrait cover; its body
+  // remains landscape and still must not orphan any assumptions heading.
+  expect(pages[0].height).toBeGreaterThan(pages[0].width);
+  await expect(print.locator('.report-cover')).toHaveCount(1);
+  expect(pages.slice(1).every(page => page.width > page.height)).toBe(true);
   noHeadingOnlyPages(pages);
   await assertUnchanged(page, before);
   expect(errors).toEqual([]);

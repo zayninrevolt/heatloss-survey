@@ -19,7 +19,7 @@
   }
 
   function render(data) {
-    if (!isSafePhoto(data.property_photo)) return '';
+    var hasPhoto = isSafePhoto(data.property_photo);
     var rawDate = String(data.site_date || data.front_date || '');
     var date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
       ? rawDate.split('-').reverse().join('/') : rawDate;
@@ -28,7 +28,8 @@
       '<p class="report-cover-kicker">Property survey</p><h2>Heating survey report</h2>' +
       '<p class="report-cover-address">' + escape(data.site_address || data.front_address || 'Property address not entered') + '</p>' +
       '<p class="report-cover-postcode">' + escape(data.site_postcode || data.front_postcode) + '</p>' +
-      '<img src="' + data.property_photo + '" alt="Front of the surveyed property">' +
+      (hasPhoto ? '<img src="' + data.property_photo + '" alt="Front of the surveyed property">' :
+        '<div class="report-cover-photo-placeholder">Property photo (optional)<br>No photo added</div>') +
       '<dl><div><dt>Survey date</dt><dd>' + escape(date || 'Not entered') + '</dd></div>' +
       '<div><dt>Surveyor</dt><dd>' + escape(data.site_surveyor || data.front_surveyor || 'Not entered') + '</dd></div></dl>' +
       '<p class="report-cover-footer">Heating survey and room-by-room heat-loss report</p></section>';
@@ -46,23 +47,80 @@
     '.report-cover h2{font-size:32px;line-height:1.15;margin:0 0 24px;color:#172b3a}' +
     '.report-cover-address{font-size:23px;line-height:1.35;white-space:pre-line;overflow-wrap:anywhere;margin:0 0 6px}' +
     '.report-cover-postcode{font-size:16px;margin:0 0 28px}.report-cover img{display:block;width:100%;height:360px;object-fit:contain;background:#f0f4f6}' +
+    '.report-cover-photo-placeholder{box-sizing:border-box;display:flex;align-items:center;justify-content:center;text-align:center;width:100%;height:360px;background:#f0f4f6;border:1px dashed #aabac5;color:#456478;font-size:15px;line-height:1.6}' +
     '.report-cover dl{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:30px 0}.report-cover dt{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#456478;margin-bottom:8px}' +
     '.report-cover dd{margin:0;font-size:16px;overflow-wrap:anywhere}.report-cover-footer{font-size:11px;color:#456478;border-top:1px solid #cbd5e1;padding-top:18px;margin-top:36px}' +
     '@media(max-width:600px){.report-cover{padding:24px;min-height:0}.report-cover h2{font-size:25px}.report-cover img{height:240px}.report-cover-address{font-size:20px}}';
+
+  // One print contract for the main browser document and every PDF popup.
+  // Keep these rules last so legacy print-fit wrappers cannot override them.
+  var printStyles = `
+@page property-cover { size: A4 portrait; margin: 12mm; }
+@page property-report { size: A4 landscape; margin: 6mm; }
+@page property-hns { size: A4 portrait; margin: 6mm; }
+@media print {
+  html, body { margin: 0 !important; padding: 0 !important; width: auto !important; background: #fff !important; }
+  .app { display: block !important; }
+  .main { width: auto !important; max-width: none !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+  .sheet-wrap {
+    page: property-report; width: 285mm !important; max-width: 285mm !important;
+    min-width: 0 !important; margin: 0 !important; padding: 0 !important;
+    border: 0 !important; box-shadow: none !important; overflow: visible !important;
+    break-after: page; page-break-after: always;
+  }
+  .sheet-wrap:last-child { break-after: auto; page-break-after: auto; }
+  .sheet-wrap:has(.sheet.a12a), .sheet-wrap:has(.sheet.profile) {
+    page: property-hns; width: 198mm !important; max-width: 198mm !important;
+  }
+  .sheet-wrap table.sheet.a12a, .sheet-wrap table.sheet.profile {
+    width: 198mm !important; max-width: 198mm !important; min-width: 0 !important;
+  }
+  .sheet.heatloss-sheet { width: 285mm !important; max-width: 285mm !important; }
+  .sheet.a12a td, .sheet.a12a th, .sheet.profile td, .sheet.profile th {
+    height: auto !important; min-height: 0 !important; padding: 1.2px 2px !important;
+    font-size: 7pt !important; line-height: 1.06 !important;
+    white-space: normal !important; overflow-wrap: anywhere !important;
+  }
+  .sheet.profile td, .sheet.profile th { font-size: 6.6pt !important; }
+  .sheet.profile .small { font-size: 5.8pt !important; }
+  .sheet.profile { break-inside: auto !important; page-break-inside: auto !important; }
+  .sheet.profile tr { break-inside: avoid; page-break-inside: avoid; }
+  .sheet-wrap:has(.sheet.profile) > .sheet-title { break-after: avoid; page-break-after: avoid; }
+  table.sheet.profile span.signature-cell, table.sheet.profile .signature-cell,
+  table.sheet.profile img.signature-img, table.sheet.profile .signature-img,
+  table.sheet.profile span.signature-placeholder, table.sheet.profile .signature-placeholder,
+  table.sheet.profile td.input:has(span.signature-cell),
+  table.sheet.profile td.input:has(span.signature-placeholder) {
+    height: 36px !important; min-height: 36px !important; max-height: 36px !important;
+  }
+  table.sheet.profile img.signature-img { object-fit: contain !important; }
+  .report-cover {
+    page: property-cover; break-after: page; page-break-after: always; break-inside: avoid;
+    display: flex; flex-direction: column; width: 186mm !important; height: 270mm !important;
+    min-height: 0 !important; padding: 10mm !important; margin: 0 auto !important;
+    box-shadow: none; border-top: 2mm solid #244c63;
+  }
+  .report-cover h2 { font-size: 24pt; }
+  .report-cover-address { font-size: 18pt; }
+  .report-cover img, .report-cover-photo-placeholder { height: 105mm; flex-shrink: 0; }
+  .report-cover dl { margin: 8mm 0; }
+  .report-cover-footer { margin-top: auto; }
+}
+`;
 
   function install(win) {
     var doc = win.document;
     var field = doc.getElementById('property_photo');
     if (!field || doc.getElementById('propertyPhotoCard')) return;
     var style = doc.createElement('style');
-    style.id = 'reportCoverStyles'; style.textContent = styles;
+    style.id = 'reportCoverStyles'; style.textContent = styles + printStyles;
     doc.head.appendChild(style);
     var card = doc.createElement('div');
     card.id = 'propertyPhotoCard'; card.className = 'card property-photo-card';
     // Static UI markup only. User data is assigned via textContent or a validated JPEG src.
     card.innerHTML = '<h2>Report cover</h2>' +
       '<div class="field" id="reportCompanyField"><label for="site_company">Company name (optional)</label></div>' +
-      '<p>Add a front-of-property photo for a portrait report cover. The existing report pages stay landscape. The photo is included in your editable JSON backup.</p>' +
+      '<p>The portrait cover is previewed with the other documents and included in the report PDF. A property photo is optional. Report pages stay landscape; the photo and company name are included in your editable JSON backup.</p>' +
       '<label for="propertyPhotoFile">Add or replace property photo</label>' +
       '<input type="file" id="propertyPhotoFile" accept="image/jpeg,image/png,image/webp">' +
       '<img id="propertyPhotoPreview" alt="Selected front-of-property photo" hidden>' +
@@ -143,7 +201,7 @@
     });
     remove.addEventListener('click', function () {
       generation += 1; field.value = ''; sync(); win.update();
-      card.removeAttribute('aria-busy'); report('Photo removed. The report will not include a cover page.');
+      card.removeAttribute('aria-busy'); report('Photo removed. The cover remains available with a photo placeholder.');
     });
 
     var previousSetData = win.setData;
@@ -172,32 +230,27 @@
     win.buildPrintHtml = function (title, sheetTitles, orientation) {
       var html = previousBuildPrintHtml.apply(this, arguments);
       var titles = Array.from(sheetTitles || []);
-      if (!titles.includes('Front') || !titles.includes('Rads')) return html;
-      var cover = render(win.getData());
-      if (!cover) return html;
+      var includeCover = titles.includes('Cover') || (titles.includes('Front') && titles.includes('Rads'));
       // The source report HTML is generated by this app. The photo has a strict
       // JPEG/base64 allowlist and every user-entered text value is escaped.
       var parsed = new win.DOMParser().parseFromString(html, 'text/html');
-      parsed.querySelector('main').insertAdjacentHTML('afterbegin', cover);
+      if (includeCover) parsed.querySelector('main').insertAdjacentHTML('afterbegin', render(win.getData()));
       var printStyle = parsed.createElement('style');
-      printStyle.textContent =
-        '@page property-cover{size:A4 portrait;margin:12mm}' +
-        '@page property-report{size:A4 landscape;margin:6mm}' +
-        '.main{width:auto!important;max-width:none!important}' +
-        '.sheet-wrap{page:property-report}' +
-        '.report-cover{page:property-cover;break-after:page;break-inside:avoid;page-break-after:always;' +
-          'display:flex;flex-direction:column;width:186mm!important;height:270mm!important;min-height:0!important;' +
-          'padding:10mm!important;margin:0 auto!important;box-shadow:none;border-top:2mm solid #244c63}' +
-        '.report-cover h2{font-size:24pt}.report-cover-address{font-size:18pt}' +
-        '.report-cover img{height:105mm;flex-shrink:0}.report-cover dl{margin:8mm 0}' +
-        '.report-cover-footer{margin-top:auto}';
+      printStyle.textContent = printStyles;
+      // Preserve the existing portrait-only heat-loss export. Native printing
+      // and the combined survey still use the landscape report page contract.
+      if (orientation === 'portrait' && !includeCover &&
+          !titles.includes('A12a') && !titles.includes('Customer Profile')) {
+        printStyle.textContent += '@page property-report{size:A4 portrait;margin:6mm}' +
+          '@media print{.sheet-wrap,.sheet.heatloss-sheet{width:198mm!important;max-width:198mm!important}}';
+      }
       parsed.head.appendChild(printStyle);
       return '<!doctype html>\n' + parsed.documentElement.outerHTML;
     };
     var previousRenderFront = win.renderFront;
     win.renderFront = function () {
       sync();
-      return (isSafePhoto(field.value) ? render(win.getData()) : '') + previousRenderFront.apply(this, arguments);
+      return render(win.getData()) + previousRenderFront.apply(this, arguments);
     };
     sync(); win.update();
   }
