@@ -1835,6 +1835,8 @@
           stores survey data in this browser. The optional design-temperature
           lookup sends only the property postcode to postcodes.io.
         </div>
+        <input type="hidden" id="property_photo" data-id="property_photo" value="">
+        <input type="hidden" id="site_company" data-id="site_company" value="">
         <div id="commonForm"></div>
         <section class="section active" id="frontForm" role="tabpanel" aria-labelledby="frontTab" aria-hidden="false"></section>
         <section class="section" id="radsForm" role="tabpanel" aria-labelledby="radsTab" aria-hidden="true"></section>
@@ -3094,6 +3096,13 @@
           }
 
           const value = String(rawValue);
+          if (key === "property_photo") {
+            if (value && (!window.ReportCover || !window.ReportCover.isSafePhoto(value))) {
+              throw new Error("Invalid property photo in this survey backup.");
+            }
+            clean[key] = value;
+            return;
+          }
           if (key === "p_tenant_sig" || key === "p_surveyor_sig") {
             if (isSafeSignatureDataUrl(value)) clean[key] = value;
             return;
@@ -3624,8 +3633,8 @@
         <h3 id="pdfDialogTitle">Save PDFs</h3>
         <p>
           This will save them one at a time so the browser does not block the
-          second page. Front/Rads is set to landscape; H&amp;S is set to
-          portrait.
+          second page. The property-photo cover is portrait; Front/Rads and
+          Heat Loss stay landscape. H&amp;S is portrait.
         </p>
         <button onclick="printPdfPart('survey')">Save Front + Rads PDF</button>
         <button onclick="printPdfPart('hns')">Save H&amp;S PDF</button>
@@ -8919,5 +8928,6 @@
     <script src="src/interstorey-interfaces.js?v=1"></script>
     <script src="src/interstorey-ui.js?v=1"></script>
     <script src="combined-heatloss.js?v=140"></script>
+    <script src="src/report-cover.js?v=1"></script>
   </body>
 </html>
