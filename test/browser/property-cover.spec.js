@@ -159,7 +159,7 @@ test('clearing the form cancels a photo still being processed', async ({ page })
   await expect(page.locator('#property_photo')).toHaveValue('');
 });
 
-test('PDF has one portrait cover followed by unchanged landscape report pages', async ({ page }, testInfo) => {
+test('complete PDF keeps one portrait cover, unchanged landscape survey and portrait appendices', async ({ page }, testInfo) => {
   test.setTimeout(180000);
   const { realisticSurvey } = require('../helpers/realistic-two-storey-driver');
   await realisticSurvey(page);
@@ -174,9 +174,9 @@ test('PDF has one portrait cover followed by unchanged landscape report pages', 
   const photo = await uploadPhoto(page);
   expect(await page.evaluate(() => JSON.stringify(window.heatLossResultsV60))).toBe(before);
   page.on('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: 'Save PDFs', exact: true }).click();
+  await page.getByRole('button', { name: 'Save PDF', exact: true }).click();
   const popup = page.waitForEvent('popup');
-  await page.getByRole('button', { name: 'Save Front + Rads + Heat Loss PDF', exact: true }).click();
+  await page.getByRole('button', { name: 'Save report PDF', exact: true }).click();
   const print = await popup;
   await print.waitForLoadState('load');
   await expect(print.locator('main > :first-child')).toHaveClass('report-cover');
@@ -186,12 +186,13 @@ test('PDF has one portrait cover followed by unchanged landscape report pages', 
   await print.evaluate(() => Promise.all(Array.from(document.images, image => image.decode())));
   const buffer = await print.pdf({ path: testInfo.outputPath('portrait-cover-landscape-report.pdf'), preferCSSPageSize: true, printBackground: true });
   const pages = chromiumPdfPages(buffer);
-  expect(pages).toHaveLength(baselinePages.length + 1);
+  expect(pages).toHaveLength(baselinePages.length + 3);
   expect(pages[0].height).toBeGreaterThan(pages[0].width);
   expect(pages[0].width).toBeCloseTo(595.28, 0);
   expect(pages[0].height).toBeCloseTo(841.89, 0);
-  expect(pages.slice(1).map(p => [p.width, p.height])).toEqual(baselinePages.map(p => [p.width, p.height]));
-  expect(pages.slice(1).every(p => p.width > p.height && p.textCodes > 40)).toBe(true);
+  expect(pages.slice(1, -2).map(p => [p.width, p.height])).toEqual(baselinePages.map(p => [p.width, p.height]));
+  expect(pages.slice(1, -2).every(p => p.width > p.height && p.textCodes > 40)).toBe(true);
+  expect(pages.slice(-2).every(p => p.height > p.width && p.textCodes > 100)).toBe(true);
   await testInfo.attach('verified-page-sizes', { body: JSON.stringify(pages, null, 2), contentType: 'application/json' });
   await print.locator('.report-cover').screenshot({ path: testInfo.outputPath('cover-preview.png') });
   const hns = await page.evaluate(() => buildPrintHtml('HnS', ['A12a', 'Customer Profile'], 'portrait'));

@@ -7,22 +7,24 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test('cover is previewed without a photo and has its own portrait PDF option', async ({ page }, testInfo) => {
+test('cover is previewed without a photo and leads the complete mixed-orientation PDF', async ({ page }, testInfo) => {
   await expect(page.locator('#preview .report-cover')).toBeVisible();
   await expect(page.locator('#preview .report-cover-photo-placeholder')).toBeVisible();
   await page.getByLabel('Company name (optional)', { exact: true }).fill('Synthetic Cover Company');
   await expect(page.locator('#preview .report-cover-company')).toHaveText('Synthetic Cover Company');
   page.on('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: 'Save PDFs', exact: true }).click();
+  await page.getByRole('button', { name: 'Save PDF', exact: true }).click();
   const popup = page.waitForEvent('popup');
-  await page.getByRole('button', { name: 'Save cover PDF', exact: true }).click();
+  await page.getByRole('button', { name: 'Save report PDF', exact: true }).click();
   const print = await popup;
   await print.waitForLoadState('load');
   await expect(print.locator('.report-cover')).toHaveCount(1);
   await expect(print.locator('.report-cover-company')).toHaveText('Synthetic Cover Company');
-  await expect(print.locator('.sheet-wrap')).toHaveCount(0);
+  await expect(print.locator('.sheet-wrap')).toHaveCount(6);
   const pages = chromiumPdfPages(await print.pdf({ path: testInfo.outputPath('cover-only.pdf'), preferCSSPageSize: true, printBackground: true }));
-  expect(pages).toHaveLength(1);
+  expect(pages.length).toBeGreaterThan(4);
+  expect(pages.slice(1, -2).every(p => p.width > p.height)).toBe(true);
+  expect(pages.slice(-2).every(p => p.height > p.width)).toBe(true);
   expect(pages[0].width).toBeCloseTo(595.28, 0);
   expect(pages[0].height).toBeCloseTo(841.89, 0);
 });
@@ -42,19 +44,21 @@ test('native browser print uses portrait cover, landscape report and portrait H&
   }
   // Cover plus A12a and Customer Profile, not an orphan profile-heading page.
   expect(pages.filter(p => p.height > p.width)).toHaveLength(3);
+  expect(pages.slice(1, -2).every(p => p.width > p.height)).toBe(true);
+  expect(pages.slice(-2).every(p => p.height > p.width)).toBe(true);
   expect(await page.evaluate(() => JSON.stringify(window.heatLossResultsV60))).toBe(before);
   await testInfo.attach('native-print-page-sizes', { body: JSON.stringify(pages, null, 2), contentType: 'application/json' });
 });
 
-test('H&S PDF keeps the customer profile heading with its table without oversized signature gaps', async ({ page }, testInfo) => {
+test('complete PDF ends with H&S and customer profile without oversized signature gaps', async ({ page }, testInfo) => {
   await page.locator('#site_address').fill('12 Synthetic Profile Road');
   await page.locator('#site_address').dispatchEvent('change');
   await page.locator('#site_customer').fill('Synthetic Customer');
   await page.locator('#site_customer').dispatchEvent('change');
   page.on('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: 'Save PDFs', exact: true }).click();
+  await page.getByRole('button', { name: 'Save PDF', exact: true }).click();
   const popup = page.waitForEvent('popup');
-  await page.getByRole('button', { name: 'Save H&S PDF', exact: true }).click();
+  await page.getByRole('button', { name: 'Save report PDF', exact: true }).click();
   const print = await popup;
   await print.waitForLoadState('load');
   await expect(print.locator('.sheet.profile')).toContainText('12 Synthetic Profile Road');
@@ -63,9 +67,11 @@ test('H&S PDF keeps the customer profile heading with its table without oversize
   const signatures = await print.locator('.sheet.profile .signature-placeholder').evaluateAll(elements => elements.map(e => e.getBoundingClientRect().height));
   const pdf = await print.pdf({ path: testInfo.outputPath('customer-profile-corrected.pdf'), preferCSSPageSize: true, printBackground: true });
   const pages = chromiumPdfPages(pdf);
-  expect(pages).toHaveLength(2);
-  expect(pages.every(p => p.height > p.width && p.textCodes > 100)).toBe(true);
+  expect(pages.length).toBeGreaterThan(4);
+  expect(pages.slice(-2).every(p => p.height > p.width && p.textCodes > 100)).toBe(true);
+  expect(pages.filter(p => p.height > p.width)).toHaveLength(3);
   expect(signatures).toHaveLength(2);
   expect(signatures.every(height => height <= 36)).toBe(true);
-  await expect(print.locator('.report-cover')).toHaveCount(0);
+  await expect(print.locator('.report-cover')).toHaveCount(1);
+  await expect(print.locator('main > :last-child .sheet.profile')).toHaveCount(1);
 });

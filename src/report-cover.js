@@ -108,6 +108,22 @@
 }
 `;
 
+  function orderSections(container) {
+    var order = ['Front', 'Rads', 'Heat Loss', 'A12a', 'Customer Profile'];
+    var sections = Array.from(container.children).filter(function (section) {
+      return section.classList.contains('sheet-wrap');
+    });
+    function rank(section) {
+      var heading = section.querySelector('h2');
+      var index = order.indexOf(heading ? heading.textContent.trim() : '');
+      return index < 0 ? order.length : index;
+    }
+    // Move the existing nodes. Do not reconstruct tables or change survey data.
+    sections.sort(function (a, b) { return rank(a) - rank(b); }).forEach(function (section) {
+      container.appendChild(section);
+    });
+  }
+
   function install(win) {
     var doc = win.document;
     var field = doc.getElementById('property_photo');
@@ -235,6 +251,7 @@
       // JPEG/base64 allowlist and every user-entered text value is escaped.
       var parsed = new win.DOMParser().parseFromString(html, 'text/html');
       if (includeCover) parsed.querySelector('main').insertAdjacentHTML('afterbegin', render(win.getData()));
+      orderSections(parsed.querySelector('main'));
       var printStyle = parsed.createElement('style');
       printStyle.textContent = printStyles;
       // Preserve the existing portrait-only heat-loss export. Native printing
@@ -251,6 +268,12 @@
     win.renderFront = function () {
       sync();
       return render(win.getData()) + previousRenderFront.apply(this, arguments);
+    };
+    var previousRenderPreview = win.renderPreview;
+    win.renderPreview = function () {
+      var result = previousRenderPreview.apply(this, arguments);
+      orderSections(doc.getElementById('preview'));
+      return result;
     };
     sync(); win.update();
   }

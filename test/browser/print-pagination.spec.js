@@ -12,7 +12,7 @@ function noHeadingOnlyPages(pages) {
 
 async function exportThroughMenu(page, buttonName) {
   page.on('dialog', dialog => dialog.accept()); // synthetic, incomplete front sheet
-  await page.getByRole('button', { name: 'Save PDFs', exact: true }).click();
+  await page.getByRole('button', { name: 'Save PDF', exact: true }).click();
   const popup = page.waitForEvent('popup');
   await page.getByRole('button', { name: buttonName, exact: true }).click();
   const print = await popup;
@@ -36,12 +36,12 @@ async function assertUnchanged(page, before) {
   expect(await page.evaluate(() => JSON.stringify(window.heatLossResultsV60))).toBe(before);
 }
 
-test('landscape survey PDF never orphans the heat-loss assumptions heading', async ({ page }, testInfo) => {
+test('complete report PDF never orphans the heat-loss assumptions heading', async ({ page }, testInfo) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await prepare(page);
   const before = await verifySurvey(page);
-  const print = await exportThroughMenu(page, 'Save Front + Rads + Heat Loss PDF');
+  const print = await exportThroughMenu(page, 'Save report PDF');
   await expect(print.locator('#heatLossAssumptionsSheetV61')).toContainText('Survey disclaimer:');
   const pdf = await print.pdf({ path: testInfo.outputPath('survey.pdf'), printBackground: true,
     preferCSSPageSize: true });
@@ -51,7 +51,8 @@ test('landscape survey PDF never orphans the heat-loss assumptions heading', asy
   // remains landscape and still must not orphan any assumptions heading.
   expect(pages[0].height).toBeGreaterThan(pages[0].width);
   await expect(print.locator('.report-cover')).toHaveCount(1);
-  expect(pages.slice(1).every(page => page.width > page.height)).toBe(true);
+  expect(pages.slice(1, -2).every(page => page.width > page.height)).toBe(true);
+  expect(pages.slice(-2).every(page => page.height > page.width)).toBe(true);
   noHeadingOnlyPages(pages);
   await assertUnchanged(page, before);
   expect(errors).toEqual([]);
@@ -105,7 +106,7 @@ test('long room assumptions paginate without a detached heading or missing room 
   const before = await verifySurvey(page);
   const names = await page.evaluate(() => window.heatLossResultsV60.includedRooms.map(room => room.roomName));
   expect(names).toHaveLength(8);
-  const print = await exportThroughMenu(page, 'Save Front + Rads + Heat Loss PDF');
+  const print = await exportThroughMenu(page, 'Save report PDF');
   for (const name of names) {
     await expect(print.locator('#heatLossAssumptionsSheetV61 .heatloss-assumptions-sheet')).toContainText(name);
   }
@@ -116,14 +117,18 @@ test('long room assumptions paginate without a detached heading or missing room 
   await assertUnchanged(page, before);
 });
 
-test('the separate health-and-safety PDF retains its portrait print layout', async ({ page }, testInfo) => {
+test('the complete report ends with portrait health-and-safety and customer profile pages', async ({ page }, testInfo) => {
   await prepare(page);
   const before = await verifySurvey(page);
-  const print = await exportThroughMenu(page, 'Save H&S PDF');
+  const print = await exportThroughMenu(page, 'Save report PDF');
   const pdf = await print.pdf({ path: testInfo.outputPath('health-and-safety.pdf'), printBackground: true,
     preferCSSPageSize: true });
   const pages = chromiumPdfPages(pdf);
-  expect(pages.every(page => page.height > page.width)).toBe(true);
-  await expect(print.locator('#heatLossAssumptionsSheetV61')).toHaveCount(0);
+  expect(pages.slice(-2).every(page => page.height > page.width)).toBe(true);
+  expect(pages[0].height).toBeGreaterThan(pages[0].width);
+  expect(pages.slice(1, -2).every(page => page.width > page.height)).toBe(true);
+  noHeadingOnlyPages(pages);
+  await expect(print.locator('#heatLossAssumptionsSheetV61')).toHaveCount(1);
+  await expect(print.locator('main > :last-child .sheet.profile')).toHaveCount(1);
   await assertUnchanged(page, before);
 });

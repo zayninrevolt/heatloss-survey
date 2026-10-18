@@ -1792,8 +1792,8 @@
         <h1 class="title">Heating Survey Form</h1>
         <p class="subtitle">
           Fill in the form and the spreadsheet-style sheets update
-          automatically. Use Save PDFs to create one PDF for Front/Rads and one
-          PDF for the H&amp;S pages.
+          automatically. Use Save PDF to create one complete report: cover,
+          survey, Health &amp; Safety, then Customer Profile.
         </p>
         <div class="tabs" role="tablist" aria-label="Survey sections">
           <button id="frontTab" class="tab active" data-tab="frontForm" role="tab" aria-controls="frontForm" aria-selected="true">Front</button>
@@ -1804,7 +1804,7 @@
         <div id="v55CompletionCounter"></div>
         <div class="buttons">
           <button id="surveyListBtnV57" onclick="showSurveyPanelV57()">Surveys</button>
-          <button id="savePdfsBtn" class="secondary" onclick="showPdfOptions()">Save PDFs</button>
+          <button id="savePdfsBtn" class="secondary" onclick="showPdfOptions()">Save PDF</button>
           <div class="more-menu" id="moreMenuV58">
             <button
               type="button"
@@ -3630,16 +3630,13 @@
     </script>
     <div aria-hidden="true" aria-labelledby="pdfDialogTitle" aria-modal="true" class="pdf-panel" id="pdfPanel" role="dialog">
       <div class="pdf-card">
-        <h3 id="pdfDialogTitle">Save PDFs</h3>
+        <h3 id="pdfDialogTitle">Save report PDF</h3>
         <p>
-          This will save them one at a time so the browser does not block the
-          second page. The report includes a portrait cover; Front/Rads and
-          Heat Loss stay landscape. You can also save the cover separately.
-          H&amp;S is portrait.
+          Save one complete PDF in this order: property cover, survey
+          (Front, Rads and Heat Loss), Health &amp; Safety, then Customer Profile.
+          The cover, H&amp;S and profile are portrait; the survey stays landscape.
         </p>
-        <button onclick="printPdfPart('cover')">Save cover PDF</button>
-        <button onclick="printPdfPart('survey')">Save Front + Rads PDF</button>
-        <button onclick="printPdfPart('hns')">Save H&amp;S PDF</button>
+        <button onclick="printPdfPart('all')">Save report PDF</button>
         <button class="secondary" onclick="hidePdfOptions()">Close</button>
         <p style="font-size: 12px; margin-top: 10px">
           In the save/print window, enable
@@ -3980,6 +3977,7 @@
         const address = currentAddressName();
         const title = type === "hns" ? "HnS - " + address : type === "cover" ? "Cover - " + address : address;
         const sheets =
+          type === "all" ? ["Cover", "Front", "Rads", "Heat Loss", "A12a", "Customer Profile"] :
           type === "hns" ? ["A12a", "Customer Profile"] : type === "cover" ? ["Cover"] : ["Front", "Rads"];
         const orientation = type === "hns" || type === "cover" ? "portrait" : "landscape";
         const w = window.open("", "_blank");
@@ -5987,7 +5985,7 @@
             }
           });
 
-          if (type === "hns") {
+          if (type === "hns" || type === "all") {
             if (!val("p_tenant_sig")) missing.push("Tenant signature");
             if (!val("p_surveyor_sig")) missing.push("Surveyor signature");
           }
@@ -8930,6 +8928,6 @@
     <script src="src/interstorey-interfaces.js?v=1"></script>
     <script src="src/interstorey-ui.js?v=1"></script>
     <script src="combined-heatloss.js?v=140"></script>
-    <script src="src/report-cover.js?v=2"></script>
+    <script src="src/report-cover.js?v=3"></script>
   </body>
 </html>

@@ -57,9 +57,9 @@ test('realistic mixed two-storey survey reconciles longhand, emitters, persisten
  expect(await page.evaluate(()=>getData())).toEqual(state.data);
  await page.locator('#radsTab').click();
  page.on('dialog',dialog=>dialog.accept());
- await page.getByRole('button',{name:'Save PDFs',exact:true}).click();
+ await page.getByRole('button',{name:'Save PDF',exact:true}).click();
  const popup=page.waitForEvent('popup');
- await page.getByRole('button',{name:'Save Front + Rads + Heat Loss PDF',exact:true}).click();
+ await page.getByRole('button',{name:'Save report PDF',exact:true}).click();
  const print=await popup;await print.waitForLoadState('load');await print.evaluate(()=>document.fonts.ready);
  for(const role of fixture.roles) await expect(print.locator('#heatLossAssumptionsSheetV61')).toContainText(role.name);
  await expect(print.locator('#heatLossAssumptionsSheetV61')).toContainText('1997');
