@@ -1800,6 +1800,7 @@
           <button id="radsTab" class="tab" data-tab="radsForm" role="tab" aria-controls="radsForm" aria-selected="false">Rads</button>
           <button id="a12aTab" class="tab" data-tab="a12aForm" role="tab" aria-controls="a12aForm" aria-selected="false">A12a</button>
           <button id="profileTab" class="tab" data-tab="profileForm" role="tab" aria-controls="profileForm" aria-selected="false">Profile</button>
+          <button id="layoutTab" class="tab" data-tab="layoutForm" role="tab" aria-controls="layoutForm" aria-selected="false">Layout</button>
         </div>
         <div id="v55CompletionCounter"></div>
         <div class="buttons">
@@ -1837,11 +1838,13 @@
         </div>
         <input type="hidden" id="property_photo" data-id="property_photo" value="">
         <input type="hidden" id="site_company" data-id="site_company" value="">
+        <input type="hidden" id="house_layout" data-id="house_layout" value="">
         <div id="commonForm"></div>
         <section class="section active" id="frontForm" role="tabpanel" aria-labelledby="frontTab" aria-hidden="false"></section>
         <section class="section" id="radsForm" role="tabpanel" aria-labelledby="radsTab" aria-hidden="true"></section>
         <section class="section" id="a12aForm" role="tabpanel" aria-labelledby="a12aTab" aria-hidden="true"></section>
         <section class="section" id="profileForm" role="tabpanel" aria-labelledby="profileTab" aria-hidden="true"></section>
+        <section class="section" id="layoutForm" role="tabpanel" aria-labelledby="layoutTab" aria-hidden="true"></section>
       </aside>
       <main class="main" id="preview" tabindex="-1"></main>
     </div>
@@ -3089,6 +3092,15 @@
               });
             });
             clean[key] = rooms;
+            return;
+          }
+
+          if (key === "house_layout") {
+            if (typeof rawValue !== "string" || !window.FloorPlanModel) {
+              throw new Error("Invalid visual layout in this survey backup.");
+            }
+            const layout = window.FloorPlanModel.decode(rawValue);
+            clean[key] = rawValue ? JSON.stringify(layout) : "";
             return;
           }
 
@@ -8923,6 +8935,7 @@
       })();
     </script>
     <link rel="stylesheet" href="combined-heatloss.css?v=95">
+    <link rel="stylesheet" href="house-layout.css?v=2">
     <script src="src/heat-loss.js?v=8"></script>
     <script src="src/radiator-sizing.js?v=3"></script>
     <script src="src/myson-fan-convectors.js?v=1"></script>
@@ -8938,5 +8951,8 @@
     <script src="combined-heatloss.js?v=140"></script>
     <script src="src/report-cover.js?v=3"></script>
     <script src="src/workflow-qol.js?v=1"></script>
+    <script src="src/layout-model.js?v=1"></script>
+    <script src="src/floor-plan-model.js?v=1"></script>
+    <script src="src/house-layout.js?v=2"></script>
   </body>
 </html>
