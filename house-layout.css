@@ -1,36 +1,58 @@
-#houseLayoutCanvas{display:none;min-width:0;padding:24px;background:var(--app-bg,#f3f6fa);color:var(--app-text,#172b3a)}
-#houseLayoutCanvas h2{font-size:22px;margin:0 0 8px}
-#houseLayoutCanvas p{font-size:14px;line-height:1.5;margin:0 0 16px}
-#houseLayoutSvg{display:block;width:min(100%,calc((100dvh - 160px)*4/3));height:auto;aspect-ratio:4/3;border:1px solid #a5b4c7;border-radius:10px;background:white;touch-action:none;user-select:none}
+#houseLayoutCanvas{display:none;--plan-ink:var(--app-text,#172b3a);--plan-panel:var(--app-panel,#fff);--plan-border:var(--app-border,#bdcbd8);box-sizing:border-box;color:var(--plan-ink);background:var(--app-bg,#edf2f6);font:14px/1.4 Arial,sans-serif}
+#houseLayoutCanvas *{box-sizing:border-box}
+#houseLayoutCanvas [hidden]{display:none!important}
+#houseLayoutCanvas button,#houseLayoutCanvas select{min-width:44px;min-height:44px;border:1px solid var(--plan-border);border-radius:10px;background:var(--plan-panel);color:var(--plan-ink);font:600 14px/1.2 Arial,sans-serif;padding:10px 12px;cursor:pointer;touch-action:manipulation}
+#houseLayoutCanvas button:disabled{opacity:.45;cursor:not-allowed}
+#houseLayoutCanvas button:focus-visible,#houseLayoutCanvas select:focus-visible,#houseLayoutSvg:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+#houseLayoutCanvas button[aria-pressed=true],#houseLayoutCanvas #layoutSplitApply,#houseLayoutCanvas #layoutAssign{background:#205aca;color:#fff;border-color:#205aca}
+.plan-topbar{display:flex;align-items:center;gap:6px;padding:8px max(8px,env(safe-area-inset-right)) 8px max(8px,env(safe-area-inset-left));border-bottom:1px solid var(--plan-border);background:var(--plan-panel);flex-shrink:0}
+.plan-topbar select{flex:1;min-width:0;width:0;max-width:280px;margin-right:auto}
+#houseLayoutCanvas .plan-caption{display:flex;justify-content:space-between;gap:8px;padding:7px 12px;font-size:12px;flex-shrink:0}
+.plan-caption span{color:var(--app-muted,#526779)}
+#layoutStage{position:relative;flex:1;min-height:0;margin:0 8px;background:white;border:1px solid var(--plan-border);border-radius:12px;overflow:hidden}
+#houseLayoutSvg{display:block;width:100%;height:100%;background:white;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:contain}
 #houseLayoutSvg [data-space]{cursor:pointer;outline:none}
-#houseLayoutSvg [data-space]:focus-visible path{fill:#ffdbab}
-#houseLayoutSvg [data-wall]{cursor:crosshair}
-.house-layout-controls fieldset{min-width:0;margin:12px 0;padding:10px;border:1px solid var(--app-border,#a5b4c7);border-radius:8px}
-.house-layout-controls legend{font-weight:700;font-size:13px}
-.house-layout-controls [aria-pressed=true]{border-color:var(--app-accent,#2563eb);box-shadow:0 0 0 1px var(--app-accent,#2563eb)}
-#houseLayoutSvg [data-layout-corner]{cursor:crosshair;outline:none}
-#houseLayoutSvg [data-layout-corner]:focus-visible circle:last-child{stroke:#111827;stroke-width:4}
-#houseLayoutSvg:focus-visible{outline:3px solid var(--app-accent-strong,#2563eb);outline-offset:3px}
-.house-layout-controls button{min-height:44px;padding:10px 12px;border-radius:8px;border:1px solid var(--app-border,#a5b4c7);background:var(--app-panel-raised,#244c63);color:var(--app-text,white);font-weight:700;cursor:pointer}
-.house-layout-controls button:disabled{opacity:.5;cursor:not-allowed}
-.house-layout-controls select,.house-layout-controls input:not([type=checkbox]){min-height:44px}
-.layout-edit-actions{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
-#layoutAddRoom,#layoutSaveImage{background:var(--app-accent,#244c63);color:var(--app-bg,white)}
-.house-layout-controls .layout-report-option{display:flex;gap:10px;align-items:center;min-height:44px;font-size:14px;margin-top:12px}
-#layoutStatus{font-size:13px;min-height:20px;margin-top:12px}
-body.theme-dark #houseLayoutCanvas{background:var(--app-bg,#121c2b);color:var(--app-text,#e2e8f0)}
+#houseLayoutSvg [data-space]:focus-visible path{fill:#ffdbab;stroke:#2563eb;stroke-width:2}
+#houseLayoutSvg [data-split-handle],#houseLayoutSvg [data-move-wall],#houseLayoutSvg [data-layout-corner]{cursor:grab;outline:none}
+#houseLayoutSvg [role=button]:focus-visible circle{stroke:#172b3a;stroke-width:4}
+#layoutEmpty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:20px;background:#fff;color:#172b3a;text-align:center}
+#houseLayoutCanvas #layoutEmpty h2{font-size:24px;margin:0}
+#houseLayoutCanvas #layoutEmpty p{max-width:250px;margin:0 0 8px}
+#houseLayoutCanvas #layoutEmpty button{width:min(100%,260px);background:#f0f5fb;color:#172b3a}
+.plan-zoom{position:absolute;bottom:10px;right:10px;display:flex;gap:4px;padding:3px;border-radius:12px;background:var(--plan-panel);box-shadow:0 2px 12px #172b3a20}
+#houseLayoutCanvas .plan-zoom button{padding:8px;font-size:16px}
+#houseLayoutCanvas #layoutStatus{margin:0;padding:5px 12px;font-size:12px;flex-shrink:0;max-height:54px;overflow:auto}
+#houseLayoutCanvas #layoutStatus:empty{display:none}
+#houseLayoutCanvas #layoutDrawingHelp{margin:0;padding:6px 12px;font-size:12px;flex-shrink:0}
+#layoutActions{flex-shrink:0;padding:6px max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));background:var(--plan-panel);border-top:1px solid var(--plan-border)}
+#layoutActions>div{display:flex;justify-content:center;gap:6px}
+#layoutActions button{flex:1;max-width:220px;padding:12px 7px}
+#layoutSheet{width:min(100%,520px);max-width:100%;max-height:72dvh;margin:auto auto 0;padding:16px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));border:1px solid var(--plan-border);border-radius:18px 18px 0 0;background:var(--plan-panel);color:var(--plan-ink);box-shadow:0 -8px 40px #0003;overflow:auto;overscroll-behavior:contain}
+#layoutSheet::backdrop{background:#14263866}
+.plan-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+#houseLayoutCanvas .plan-sheet-head h2{margin:0;font-size:20px}
+#layoutSheetBody>label:not(.layout-report-option){display:block;margin-bottom:5px;font-size:13px;font-weight:700}
+#layoutSheetBody>select{display:block;width:100%;margin-bottom:12px}
+#houseLayoutCanvas #layoutSheetBody p{font-size:14px;margin:0 0 12px;line-height:1.5}
+.plan-sheet-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.plan-sheet-actions button{flex:1;min-width:135px}
+#layoutSheetBody .layout-report-option{display:flex;gap:10px;align-items:center;min-height:44px;margin:8px 0}
+#layoutSheetBody input[type=checkbox]{width:22px;height:22px;flex-shrink:0}
+#layoutSheetBody summary{min-height:44px;padding:12px 0;cursor:pointer}
 @media screen{
- body.house-layout-mode .app{display:grid;grid-template-columns:280px minmax(0,1fr)}
- body.house-layout-mode #preview{display:none!important}
- body.house-layout-mode #houseLayoutCanvas{display:block}
- body.house-layout-mode #commonForm{display:none}
+ body.house-layout-mode{overflow:hidden!important;overscroll-behavior:none}
+ body.house-layout-mode .sidebar,body.house-layout-mode #preview,body.house-layout-mode #mobileStickyActionsV50{display:none!important}
+ body.house-layout-mode #houseLayoutCanvas{display:flex;flex-direction:column;position:fixed;inset:0;height:100dvh;z-index:1500;min-width:0}
 }
-@media screen and (min-width:701px){
- body.house-layout-mode .sidebar{box-sizing:border-box;min-width:0;position:sticky;top:0;height:100dvh;overflow-y:auto}
- body.house-layout-mode #houseLayoutCanvas{position:sticky;top:0;align-self:start}
-}
-@media screen and (max-width:700px){
- body.house-layout-mode .app{grid-template-columns:minmax(0,1fr)}
- #houseLayoutCanvas{padding:12px}
+@media screen and (max-height:440px){
+ #layoutEmpty{flex-direction:row;flex-wrap:wrap;align-content:center;gap:10px}
+ #houseLayoutCanvas #layoutEmpty h2{flex-basis:100%;font-size:20px}
+ #houseLayoutCanvas #layoutEmpty p{display:none}
+ #houseLayoutCanvas #layoutEmpty button{width:min(30%,200px)}
+ #houseLayoutCanvas .plan-caption{padding:2px 12px}
+ #houseLayoutCanvas #layoutDrawingHelp{padding:3px 12px}
+ .plan-topbar{padding-top:4px;padding-bottom:4px}
+ #layoutActions{padding-top:4px;padding-bottom:max(4px,env(safe-area-inset-bottom))}
+ #layoutActions button{padding-top:9px;padding-bottom:9px}
 }
 @media print{#houseLayoutCanvas{display:none!important}}

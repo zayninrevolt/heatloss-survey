@@ -60,5 +60,58 @@
   });
   var clean={version:2,front:v.front,includeReport:v.includeReport,floors:floors};if(JSON.stringify(clean).length>50000)throw new Error('Layout is too large.');return clean;
  }
- return {empty:empty,blank:blank,outline:outline,spaces:spaces,decode:decode};
+ // Touch splits operate on a derived space, never on measured survey geometry.
+ function split(f,cell,opts){
+  opts=opts||{};var regions=spaces(f),region=regions.find(function(s){return s.cells.includes(cell);});
+  if(!region)throw new Error('Select a space inside this floor.');
+  var set=new Set(region.cells),vertical=opts.axis!=='horizontal';
+  var xs=region.cells.map(function(id){return id%80;}),ys=region.cells.map(function(id){return Math.floor(id/80);});
+  var left=Math.min.apply(null,xs),right=Math.max.apply(null,xs)+1,top=Math.min.apply(null,ys),bottom=Math.max.apply(null,ys)+1;
+  var low=vertical?left:top,high=vertical?right:bottom,from=vertical?top:left,to=vertical?bottom:right;
+  var position=Number.isInteger(opts.position)?opts.position:Math.round((low+high)/2);
+  var options={kind:opts.kind==='L'?'L':'straight',axis:vertical?'vertical':'horizontal',position:position};
+  var added=[],used=new Set(f.walls.map(function(w){return w.id;})),i=1;
+  function id(){while(used.has('s'+i))i++;var value='s'+i++;used.add(value);return value;}
+  // Clip each divider to the chosen space, including concave outlines and existing walls.
+  function cut(v,pos,lo,hi){
+   var aStart=null;
+   function run(end){added.push({id:id(),a:v?[pos,aStart]:[aStart,pos],b:v?[pos,end]:[end,pos]});aStart=null;}
+   for(var n=Math.min(lo,hi);n<=Math.max(lo,hi);n++){
+    var a=v?n*80+pos-1:(pos-1)*80+n,b=v?n*80+pos:pos*80+n;
+    var interior=n<Math.max(lo,hi)&&set.has(a)&&set.has(b);
+    if(interior&&aStart===null)aStart=n;
+    if(!interior&&aStart!==null)run(n);
+   }
+  }
+  function handle(id,axis,p,min,max){return {id:id,axis:axis,point:p,min:min,max:max};}
+  var handles=[],bad=position<=low||position>=high;
+  if(options.kind==='L'){
+   options.first=Number.isInteger(opts.first)?opts.first:Math.round(low+(high-low)/3);
+   options.second=Number.isInteger(opts.second)?opts.second:Math.round(low+2*(high-low)/3);
+   options.offset=Number.isInteger(opts.offset)?opts.offset:Math.round((from+to)/2);
+   var a=options.first,b=options.second,c=options.offset;
+   cut(vertical,a,from,c);cut(!vertical,c,a,b);cut(vertical,b,c,to);
+   handles=[handle('first',vertical?'x':'y',vertical?[a,(from+c)/2]:[(from+c)/2,a],low+1,high-1),handle('second',vertical?'x':'y',vertical?[b,(c+to)/2]:[(c+to)/2,b],low+1,high-1),handle('offset',vertical?'y':'x',vertical?[(a+b)/2,c]:[c,(a+b)/2],from+1,to-1)];
+   bad=a<=low||a>=high||b<=low||b>=high||a===b||c<=from||c>=to;
+  }else{
+   cut(vertical,position,from,to);
+   handles=[handle('position',vertical?'x':'y',vertical?[position,(from+to)/2]:[(from+to)/2,position],low+1,high-1)];
+  }
+  var candidate={id:f.id,name:f.name,outline:f.outline.map(function(p){return p.slice();}),walls:f.walls.concat(added).map(function(w){return {id:w.id,a:w.a.slice(),b:w.b.slice()};}),labels:f.labels.map(function(l){return {...l};})},error=null;
+  try{if(bad||!added.length||spaces(candidate).length!==regions.length+1)throw new Error('Move the divider until it makes two spaces.');decode({version:2,front:'bottom',includeReport:false,floors:[candidate]});}catch(e){error=e.message;candidate=null;}
+  return {floor:candidate,error:error,walls:added,handles:handles,options:options};
+ }
+ function moveWall(f,id,value){
+  var wall=f.walls.find(function(w){return w.id===id;});if(!wall||!Number.isInteger(value))throw new Error('Choose an internal wall.');
+  var index=wall.a[0]===wall.b[0]?0:1,other=1-index,old=wall.a[index];
+  var lo=Math.min(wall.a[other],wall.b[other]),hi=Math.max(wall.a[other],wall.b[other]);
+  var next={id:f.id,name:f.name,outline:f.outline.map(function(p){return p.slice();}),labels:f.labels.map(function(l){return {...l};}),walls:f.walls.map(function(w){
+   function moved(p){var q=p.slice();if(w.id===id||(p[index]===old&&p[other]>=lo&&p[other]<=hi))q[index]=value;return q;}
+   return {id:w.id,a:moved(w.a),b:moved(w.b)};
+  })};
+  decode({version:2,front:'bottom',includeReport:false,floors:[next]});
+  if(spaces(next).length!==spaces(f).length)throw new Error('Keep the divider joined to the surrounding walls.');
+  return next;
+ }
+ return {empty:empty,blank:blank,outline:outline,spaces:spaces,decode:decode,split:split,moveWall:moveWall};
 });
