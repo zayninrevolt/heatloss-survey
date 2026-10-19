@@ -23,17 +23,18 @@ test('provides keyboard skip navigation and a sequential heading outline', async
 test('keeps keyboard focus inside each modal and restores it after Escape', async ({ page }) => {
   await page.locator('#savePdfsBtn').click();
   const pdf = page.locator('#pdfPanel');
-  const pdfButtons = pdf.locator('button');
-  await expect(pdfButtons.nth(0)).toBeFocused();
-  // The complete-report action and Close both stay in the focus trap.
-  for (let index = 1; index < await pdfButtons.count(); index += 1) {
+  const pdfControls = pdf.locator('a[href], button');
+  await expect(pdf.getByRole('button', { name: 'Save report PDF', exact: true })).toBeFocused();
+  // Traverse every checklist link as well as export/Close, including wrapping.
+  const count = await pdfControls.count();
+  const start = await pdfControls.evaluateAll(elements => elements.indexOf(document.activeElement));
+  expect(start).toBeGreaterThanOrEqual(0);
+  for (let step = 1; step <= count; step += 1) {
     await page.keyboard.press('Tab');
-    await expect(pdfButtons.nth(index)).toBeFocused();
+    await expect(pdfControls.nth((start + step) % count)).toBeFocused();
   }
-  await page.keyboard.press('Tab');
-  await expect(pdfButtons.nth(0)).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(pdfButtons.last()).toBeFocused();
+  await expect(pdfControls.nth((start + count - 1) % count)).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('#savePdfsBtn')).toBeFocused();
 

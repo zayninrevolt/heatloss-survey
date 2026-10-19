@@ -1846,6 +1846,13 @@
       <main class="main" id="preview" tabindex="-1"></main>
     </div>
     <script>
+      // Capture this before startup writes its own autosaves. Restored jobs,
+      // including jobs with intentionally blank author fields, must stay intact.
+      window._personalDefaultsFreshStart = false;
+      try {
+        window._personalDefaultsFreshStart = !localStorage.getItem("surveyWebData") &&
+          !localStorage.getItem("heatLossDataV60") && !localStorage.getItem("surveyActiveV76");
+      } catch (error) {}
       /* ============================================================
    MAIN FORM DATA AND SPREADSHEET PREVIEW
    Edit the field arrays below to add/remove questions.
@@ -7103,45 +7110,45 @@
 
           return [
             {
-              label: "Address entered",
+              label: "Address entered", target: "site_address",
               done: hasValueV53("site_address") || hasValueV53("front_address"),
             },
             {
-              label: "Customer name entered",
+              label: "Customer name entered", target: "site_customer",
               done:
                 hasValueV53("site_customer") || hasValueV53("front_customer"),
             },
             {
-              label: "Surveyor entered",
+              label: "Surveyor entered", target: "site_surveyor",
               done:
                 hasValueV53("site_surveyor") || hasValueV53("front_surveyor"),
             },
             {
-              label: "Survey date entered",
+              label: "Survey date entered", target: "site_date",
               done: hasValueV53("site_date") || hasValueV53("front_date"),
             },
             {
-              label: "Warning code entered",
+              label: "Warning code entered", target: "front_warning_codes",
               done: hasValueV53("front_warning_codes"),
             },
-            { label: "Heat loss calculated", done:
+            { label: "Heat loss calculated", target: "heatLossSummaryCard", done:
               typeof window.hasCompletedHeatLossV63 === "function" &&
               window.hasCompletedHeatLossV63() },
             {
-              label: "Installation type selected",
+              label: "Installation type selected", target: "mat_install_type",
               done: hasValueV53("mat_install_type"),
             },
-            { label: `Radiators counted: ${totalRads}`, done: totalRads > 0 },
+            { label: `Radiators counted: ${totalRads}`, target: "hl_rooms_card", done: totalRads > 0 },
             {
-              label: "A12a hazard section completed",
+              label: "A12a hazard section completed", target: "a12aForm",
               done: a12aLooksCompleteV53(),
             },
             {
-              label: "Tenant signature completed",
+              label: "Tenant signature completed", target: "tenantSigPadV35",
               done: hasSignatureV53("p_tenant_sig"),
             },
             {
-              label: "Surveyor signature completed",
+              label: "Surveyor signature completed", target: "surveyorSigPadV35",
               done: hasSignatureV53("p_surveyor_sig"),
             },
           ];
@@ -7159,8 +7166,8 @@
         ${items
           .map(function (item) {
             return `<li>
-            <span class="${item.done ? "ok" : "missing"}">${item.done ? "✓" : "!"}</span>
-            <span>${escapeHtml(item.label)}</span>
+            <span class="${item.done ? "ok" : "missing"}" role="img" aria-label="${item.done ? "Complete" : "Needs attention"}">${item.done ? "✓" : "!"}</span>
+            <a href="#${item.target}" data-survey-check="${item.target}">${escapeHtml(item.label)}</a>
           </li>`;
           })
           .join("")}
@@ -7911,6 +7918,7 @@
           if (typeof update === "function") update();
           hideSurveyPanelV57();
           if (typeof showAppStatus === "function") showAppStatus("New survey started.");
+          return true;
         };
 
         function renderSurveyListV57() {
@@ -8929,5 +8937,6 @@
     <script src="src/interstorey-ui.js?v=1"></script>
     <script src="combined-heatloss.js?v=140"></script>
     <script src="src/report-cover.js?v=3"></script>
+    <script src="src/workflow-qol.js?v=1"></script>
   </body>
 </html>
