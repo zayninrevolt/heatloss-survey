@@ -62,30 +62,46 @@
  }
  // Touch splits operate on a derived space, never on measured survey geometry.
  function split(f,cell,opts){
-  opts=opts||{};var regions=spaces(f),region=regions.find(function(s){return s.cells.includes(cell);});
+  opts=opts||{};
+  if(opts.kind==='corner'&&!opts.corner){
+   var fallback;
+   for(var name of ['top-left','top-right','bottom-right','bottom-left']){var trial=split(f,cell,{...opts,corner:name});if(trial.floor)return trial;if(!fallback)fallback=trial;}
+   return fallback;
+  }
+  var regions=spaces(f),region=regions.find(function(s){return s.cells.includes(cell);});
   if(!region)throw new Error('Select a space inside this floor.');
   var set=new Set(region.cells),vertical=opts.axis!=='horizontal';
   var xs=region.cells.map(function(id){return id%80;}),ys=region.cells.map(function(id){return Math.floor(id/80);});
   var left=Math.min.apply(null,xs),right=Math.max.apply(null,xs)+1,top=Math.min.apply(null,ys),bottom=Math.max.apply(null,ys)+1;
   var low=vertical?left:top,high=vertical?right:bottom,from=vertical?top:left,to=vertical?bottom:right;
   var position=Number.isInteger(opts.position)?opts.position:Math.round((low+high)/2);
-  var options={kind:opts.kind==='L'?'L':'straight',axis:vertical?'vertical':'horizontal',position:position};
+  var options={kind:opts.kind==='L'?'L':opts.kind==='corner'?'corner':'straight',axis:vertical?'vertical':'horizontal',position:position};
   var added=[],used=new Set(f.walls.map(function(w){return w.id;})),i=1;
   function id(){while(used.has('s'+i))i++;var value='s'+i++;used.add(value);return value;}
   // Clip each divider to the chosen space, including concave outlines and existing walls.
   function cut(v,pos,lo,hi){
-   var aStart=null;
+   var aStart=null,min=Math.max(0,Math.min(lo,hi)),max=Math.min(v?60:80,Math.max(lo,hi));
+   if(pos<=0||pos>=(v?80:60))return;
    function run(end){added.push({id:id(),a:v?[pos,aStart]:[aStart,pos],b:v?[pos,end]:[end,pos]});aStart=null;}
-   for(var n=Math.min(lo,hi);n<=Math.max(lo,hi);n++){
+   for(var n=min;n<=max;n++){
     var a=v?n*80+pos-1:(pos-1)*80+n,b=v?n*80+pos:pos*80+n;
-    var interior=n<Math.max(lo,hi)&&set.has(a)&&set.has(b);
+    var interior=n<max&&set.has(a)&&set.has(b);
     if(interior&&aStart===null)aStart=n;
     if(!interior&&aStart!==null)run(n);
    }
   }
   function handle(id,axis,p,min,max){return {id:id,axis:axis,point:p,min:min,max:max};}
   var handles=[],bad=position<=low||position>=high;
-  if(options.kind==='L'){
+  if(options.kind==='corner'){
+   var corners=['top-left','top-right','bottom-right','bottom-left'];options.corner=corners.includes(opts.corner)?opts.corner:'top-left';
+   var onLeft=options.corner.endsWith('left'),onTop=options.corner.startsWith('top');
+   options.x=Number.isInteger(opts.x)?opts.x:Math.round(onLeft?left+(right-left)/4:right-(right-left)/4);
+   options.y=Number.isInteger(opts.y)?opts.y:Math.round(onTop?top+(bottom-top)/4:bottom-(bottom-top)/4);
+   var x=options.x,y=options.y,vStart=onTop?top:y,vEnd=onTop?y:bottom,hStart=onLeft?left:x,hEnd=onLeft?x:right;
+   cut(true,x,vStart,vEnd);cut(false,y,hStart,hEnd);
+   handles=[handle('x','x',[x,onTop?vStart+(vEnd-vStart)/4:vEnd-(vEnd-vStart)/4],left+1,right-1),handle('y','y',[onLeft?hStart+(hEnd-hStart)/4:hEnd-(hEnd-hStart)/4,y],top+1,bottom-1)];
+   bad=x<=left||x>=right||y<=top||y>=bottom;
+  }else if(options.kind==='L'){
    options.first=Number.isInteger(opts.first)?opts.first:Math.round(low+(high-low)/3);
    options.second=Number.isInteger(opts.second)?opts.second:Math.round(low+2*(high-low)/3);
    options.offset=Number.isInteger(opts.offset)?opts.offset:Math.round((from+to)/2);
@@ -113,5 +129,21 @@
   if(spaces(next).length!==spaces(f).length)throw new Error('Keep the divider joined to the surrounding walls.');
   return next;
  }
- return {empty:empty,blank:blank,outline:outline,spaces:spaces,decode:decode,split:split,moveWall:moveWall};
+ function closeOutline(points){
+  if(!Array.isArray(points)||points.length<3||points.length>33||!points.every(point))throw new Error('Choose at least three valid outside corners.');
+  var p=points.map(function(v){return v.slice();}),first=p[0],last=p[p.length-1];
+  if(first[0]===last[0]&&first[1]===last[1]){p.pop();last=p[p.length-1];}
+  var candidates=[p];
+  if(first[0]!==last[0]&&first[1]!==last[1]){
+   var prior=p[p.length-2],vertical=prior[0]===last[0],a=[first[0],last[1]],b=[last[0],first[1]];
+   candidates=[p.concat([vertical?a:b]),p.concat([vertical?b:a])];
+  }
+  var problem;
+  for(var i=0;i<candidates.length;i++){
+   try{var next=candidates[i];if(next.length>32)throw new Error('Maximum 32 outside corners.');G.polygon(next.map(function(v){return [v[0]*8,v[1]*8];}));next.forEach(function(v,j){var n=next[(j+1)%next.length];if(v[0]!==n[0]&&v[1]!==n[1])throw new Error('Outside walls must be horizontal or vertical.');});return next;}
+   catch(error){problem=error;}
+  }
+  throw new Error('Cannot close this outline: '+problem.message);
+ }
+ return {empty:empty,blank:blank,outline:outline,spaces:spaces,decode:decode,split:split,moveWall:moveWall,closeOutline:closeOutline};
 });
