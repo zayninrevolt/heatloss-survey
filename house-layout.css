@@ -55,4 +55,7 @@
  #layoutActions{padding-top:4px;padding-bottom:max(4px,env(safe-area-inset-bottom))}
  #layoutActions button{padding-top:9px;padding-bottom:9px}
 }
+#houseLayoutCanvas #layoutAddRadiator{position:absolute;bottom:10px;left:10px;touch-action:none;user-select:none;background:#fff7f2;color:#91341f;border-color:#c77762;box-shadow:0 2px 12px #172b3a20}
+#houseLayoutSvg [data-plan-radiator]{cursor:grab;outline:none}
+#houseLayoutSvg [data-plan-radiator]:focus-visible rect{stroke:#2563eb;stroke-width:2}
 @media print{#houseLayoutCanvas{display:none!important}}

@@ -1,20 +1,20 @@
 (function(win){
  'use strict';
- var doc=win.document,M=win.FloorPlanModel,G=win.HouseLayoutModel,field=doc.getElementById('house_layout');
+ var doc=win.document,M=win.FloorPlanModel,G=win.HouseLayoutModel,R=win.PlanRadiators,field=doc.getElementById('house_layout');
  if(!field||!M||doc.getElementById('houseLayoutCanvas'))return;
  var state=M.empty(),floorId='ground',selected=null,lastRaw=null,loadError=false,legacy=false,history=[],tool='select',draft=null,start=null,splitDraft=null,previewFloor=null,gesture=null,pointers=new Map(),analyses=new Map(),readRaw=null,readValue=null,exitTab='frontTab',returnScroll=0;
- var view={x:0,y:0,w:640,h:480};
+ var view={x:0,y:0,w:640,h:480},placingRadiator=null;
  doc.getElementById('layoutForm').replaceChildren();
  var panel=doc.createElement('section');panel.id='houseLayoutCanvas';panel.setAttribute('role','main');panel.tabIndex=-1;panel.setAttribute('aria-label','Floor plan editor');
  // Static markup only. Survey text is inserted with textContent or escaped SVG.
  panel.innerHTML='<header class="plan-topbar"><button type="button" id="layoutBack" aria-label="Back to survey">‹ Back</button><select id="layoutFloor" aria-label="Floor"></select><button type="button" id="layoutUndo" aria-label="Undo sketch edit">Undo</button><button type="button" id="layoutMore" aria-label="More plan options">More</button></header>'+
  '<div class="plan-caption"><strong id="layoutCanvasTitle">Floor plan</strong><span>Visual only · not to scale</span></div>'+
  '<div id="layoutStage"><svg id="houseLayoutSvg" viewBox="0 0 640 480" role="group" aria-label="Whole-floor plan drawing" aria-describedby="layoutDrawingHelp" tabindex="0"></svg><div id="layoutEmpty"><h2>Start this floor</h2><p>Choose its outside shape. Then split it into rooms.</p><button type="button" data-shape="Rectangle">Rectangle</button><button type="button" data-shape="L">L-shaped floor</button><button type="button" data-shape="custom">Custom outline</button></div><div class="plan-zoom"><button type="button" id="layoutZoomIn" aria-label="Zoom in">+</button><button type="button" id="layoutZoomOut" aria-label="Zoom out">−</button><button type="button" id="layoutFit" aria-label="Fit whole floor">Fit</button></div></div>'+
- '<p id="layoutStatus" role="status" aria-live="polite"></p><p id="layoutDrawingHelp">Tap a space to name it. Pinch to zoom.</p>'+
+ '<button type="button" id="layoutAddRadiator" aria-label="Add radiator marker">+ Radiator</button><p id="layoutStatus" role="status" aria-live="polite"></p><p id="layoutDrawingHelp">Tap a space to name it. Pinch to zoom.</p>'+
  '<footer id="layoutActions"><div id="layoutNormalActions"><button type="button" id="layoutSplit">Split space</button><button type="button" id="layoutName">Name space</button><button type="button" id="layoutAdjust" aria-pressed="false">Adjust walls</button></div><div id="layoutSplitActions" hidden><button type="button" id="layoutSplitCancel">Cancel split</button><button type="button" id="layoutRotate" aria-label="Rotate divider">Rotate</button><button type="button" id="layoutFlip" aria-label="Flip L-shaped divider">Flip</button><button type="button" id="layoutSplitApply">Apply split</button></div><div id="layoutDrawingActions" hidden><button type="button" id="layoutCancelCustom">Cancel drawing</button><button type="button" id="layoutFinishCustom">Finish floor outline</button></div><div id="layoutToolActions" hidden><button type="button" id="layoutDone">Done</button></div></footer>'+
  '<dialog id="layoutSheet" aria-labelledby="layoutSheetTitle"><div class="plan-sheet-head"><h2 id="layoutSheetTitle"></h2><button type="button" id="layoutSheetClose" aria-label="Close plan options">Done</button></div><div id="layoutSheetBody"></div></dialog>';
  doc.querySelector('.app').appendChild(panel);
- var svg=doc.getElementById('houseLayoutSvg'),sheet=doc.getElementById('layoutSheet');
+ var svg=doc.getElementById('houseLayoutSvg'),sheet=doc.getElementById('layoutSheet');doc.getElementById('layoutStage').appendChild(doc.getElementById('layoutAddRadiator'));
  // Keep the physical touch target mounted while the scene changes. Removing a touched
  // SVG handle mid-drag loses native touchend delivery to the document.
  var scene=doc.createElementNS('http://www.w3.org/2000/svg','g'),surface=doc.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -26,7 +26,7 @@
  function names(){return new Map(win.allRoomNames().map(function(n){return [win.roomKeyFromName(n),n];}));}
  function floor(){return state.floors.find(function(f){return f.id===floorId;})||state.floors[0];}
  function replaceFloor(f){state.floors=state.floors.map(function(old){return old.id===f.id?f:old;});}
- function spaces(f){var token=JSON.stringify(f),saved=analyses.get(f.id);if(!saved||saved.token!==token){saved={token:token,value:M.spaces(f)};analyses.set(f.id,saved);}return saved.value;}
+ function spaces(f){var token=JSON.stringify([f.outline,f.walls,f.labels]),saved=analyses.get(f.id);if(!saved||saved.token!==token){saved={token:token,value:M.spaces(f)};analyses.set(f.id,saved);}return saved.value;}
  function chosen(){return spaces(floor()).find(function(s){return s.cells.includes(selected);});}
  function cached(){if(readRaw!==field.value){var value=M.decode(field.value);readRaw=field.value;readValue=value;}return readValue;}
  function option(el,value,text,disabled){var o=doc.createElement('option');o.value=value;o.textContent=text;o.disabled=!!disabled;el.appendChild(o);}
@@ -42,6 +42,7 @@
   });
   f.walls.forEach(function(w){var attrs='x1="'+w.a[0]*8+'" y1="'+w.a[1]*8+'" x2="'+w.b[0]*8+'" y2="'+w.b[1]*8+'"';body+='<g'+(editing?' data-wall="'+esc(w.id)+'"':'')+'><line '+attrs+' stroke="#243544" stroke-width="4" pointer-events="none"/>'+(editing&&tool==='erase'?'<line '+attrs+' stroke="transparent" stroke-width="'+44/scale()+'" pointer-events="stroke"/>':'')+'</g>';});
   if(f.outline.length)body+='<polygon data-floor-outline="true" points="'+f.outline.map(function(p){return p[0]*8+','+p[1]*8;}).join(' ')+'" fill="none" stroke="#243544" stroke-width="6" stroke-linejoin="round" pointer-events="none"/>';
+  (f.radiators||[]).forEach(function(r,i){var g=R.geometry(spaces(f),r),l=g.length*8,h=g.depth*8;body+='<g data-radiator-symbol="true"'+(editing?' data-plan-radiator="'+esc(r.id)+'" role="button" tabindex="0" aria-label="Radiator marker '+(i+1)+'"':'')+' transform="translate('+g.x*8+' '+g.y*8+') rotate('+g.rotation+')">'+(editing?'<rect x="'+(-Math.max(l,44/scale())/2)+'" y="'+(-Math.max(h,44/scale())/2)+'" width="'+Math.max(l,44/scale())+'" height="'+Math.max(h,44/scale())+'" fill="transparent"/>':'')+'<rect x="'+(-l/2)+'" y="'+(-h/2)+'" width="'+l+'" height="'+h+'" rx="1.5" fill="#d55438" stroke="#8c291a" stroke-width="1"/>'+'<path d="M'+(-l/3)+' '+(-h/2)+'v'+h+'M0 '+(-h/2)+'v'+h+'M'+l/3+' '+(-h/2)+'v'+h+'" stroke="#fff" stroke-width="1" pointer-events="none"/></g>';});
   return body;
  }
  function handle(attrs,p,axis,name){var r=23/scale(),size=9/scale(),x=p[0]*8,y=p[1]*8;return '<g '+attrs+' role="button" tabindex="0" aria-label="'+esc(name)+'"><circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="#fff" stroke="#2563eb" stroke-width="'+2/scale()+'"/><path d="'+(axis==='x'?'M'+(x-size)+' '+y+'h'+size*2+'m-'+size*1.5+' -'+size*.5+'l-'+size*.5+' '+size*.5+' '+size*.5+' '+size*.5+'m'+size+' 0l'+size*.5+' -'+size*.5+' -'+size*.5+' -'+size*.5:'M'+x+' '+(y-size)+'v'+size*2+'m-'+size*.5+' -'+size*1.5+'l'+size*.5+' -'+size*.5+' '+size*.5+' '+size*.5+'m0 '+size+'l-'+size*.5+' '+size*.5+' -'+size*.5+' -'+size*.5)+'" stroke="#2563eb" stroke-width="'+2/scale()+'" fill="none" pointer-events="none"/></g>';}
@@ -54,6 +55,8 @@
   if(draft){
    scene.insertAdjacentHTML('beforeend','<polyline points="'+draft.map(function(p){return p[0]*8+','+p[1]*8;}).join(' ')+'" fill="none" stroke="#2563eb" stroke-width="3" pointer-events="none"/>');
    draft.forEach(function(p,i){scene.insertAdjacentHTML('beforeend','<g data-draft-point="'+i+'" '+(i===0&&draft.length>=3?'role="button" tabindex="0" aria-label="Close custom outline"':'role="img" aria-label="Outside corner '+(i+1)+'"')+'><circle cx="'+p[0]*8+'" cy="'+p[1]*8+'" r="'+23/scale()+'" fill="transparent" pointer-events="all"/><circle cx="'+p[0]*8+'" cy="'+p[1]*8+'" r="'+6/scale()+'" fill="'+(i===0?'#fff':'#2563eb')+'" stroke="#2563eb" stroke-width="'+2/scale()+'" pointer-events="none"/></g>');});
+   // The guide interpolates only validated numeric draft coordinates, never labels or imported HTML.
+   var pending=start&&(start.end[0]!==start.a[0]||start.end[1]!==start.a[1]),guide=pending?draft.concat([start.end]):draft,end=guide[guide.length-1],first=guide[0];if(guide.length>=4&&(end[0]===first[0]||end[1]===first[1])){try{M.closeOutline(guide);scene.insertAdjacentHTML('beforeend','<g data-custom-snap="alignment" pointer-events="none"><line x1="'+end[0]*8+'" y1="'+end[1]*8+'" x2="'+first[0]*8+'" y2="'+first[1]*8+'" stroke="#16803d" stroke-width="'+2/scale()+'" stroke-dasharray="6 4"/><circle cx="'+first[0]*8+'" cy="'+first[1]*8+'" r="'+10/scale()+'" fill="none" stroke="#16803d" stroke-width="'+2/scale()+'"/></g>');}catch(error){}}
   }
   if(start)scene.insertAdjacentHTML('beforeend','<line x1="'+start.a[0]*8+'" y1="'+start.a[1]*8+'" x2="'+start.end[0]*8+'" y2="'+start.end[1]*8+'" stroke="#2563eb" stroke-width="4" stroke-dasharray="6 3" pointer-events="none"/>');
  }
@@ -61,13 +64,14 @@
   floorId=floor().id;var f=floor(),s=chosen(),select=$('layoutFloor');select.replaceChildren();state.floors.forEach(function(f){option(select,f.id,f.name);});select.value=floorId;select.disabled=!!draft||!!splitDraft;
   $('layoutCanvasTitle').textContent=f.name;$('layoutEmpty').hidden=!!f.outline.length||!!draft;
   $('layoutSplit').disabled=!s;$('layoutName').disabled=!s;$('layoutAdjust').disabled=!f.walls.length;$('layoutAdjust').setAttribute('aria-pressed',String(tool==='adjust'));
-  $('layoutUndo').disabled=!!splitDraft||(draft?!draft.length:!history.length);$('layoutMore').disabled=!!splitDraft||!!draft;
+  $('layoutUndo').disabled=tool==='radiator'||!!splitDraft||(draft?!draft.length:!history.length);$('layoutMore').disabled=tool==='radiator'||!!splitDraft||!!draft;
+  $('layoutFloor').disabled=$('layoutFloor').disabled||tool==='radiator';$('layoutAddRadiator').disabled=!f.outline.length||!!draft||!!splitDraft||!['select','adjust'].includes(tool);$('layoutDone').textContent=tool==='radiator'?'Cancel placement':'Done';
   $('layoutNormalActions').hidden=!!splitDraft||!!draft||!['select','adjust'].includes(tool);
   $('layoutSplitActions').hidden=!splitDraft;$('layoutDrawingActions').hidden=!draft;$('layoutToolActions').hidden=!!draft||!!splitDraft||['select','adjust'].includes(tool);
   $('layoutFinishCustom').disabled=!draft||draft.length<3;
   $('layoutFlip').hidden=!splitDraft||splitDraft.result.options.kind!=='L';$('layoutSplitApply').disabled=!splitDraft||!!splitDraft.result.error;
   var cornerRoom=splitDraft&&splitDraft.result.options.kind==='corner';$('layoutSplitApply').textContent=cornerRoom?'Add corner room':'Apply split';$('layoutRotate').textContent=cornerRoom?'Corner':'Rotate';$('layoutRotate').setAttribute('aria-label',cornerRoom?'Change room corner':'Rotate divider');
-  $('layoutDrawingHelp').textContent=splitDraft?(cornerRoom?'Drag width and depth handles. Corner switches position.':'Drag the blue handles, then Apply split.'):draft?'Tap corners, or drag from the last blue point. Finish closes the outline.':({select:'Tap a space to name it. Pinch to zoom.',adjust:'Drag a blue handle to move its wall. Pinch to zoom.',outline:'Drag the corners to reshape this floor.',wall:'Manual wall: tap its start and end, or drag.',erase:'Tap a wall to remove it. Room labels are protected.'}[tool]);paint();
+  $('layoutDrawingHelp').textContent=splitDraft?(cornerRoom?'Drag width and depth handles. Corner switches position.':'Drag the blue handles, then Apply split.'):draft?'Tap corners or drag from the last dot. Green guides snap the ends into line.':({radiator:'Tap near a wall to place the radiator. Visual position only.',select:'Tap a space to name it. Pinch to zoom.',adjust:'Drag a blue handle to move its wall. Pinch to zoom.',outline:'Drag the corners to reshape this floor.',wall:'Manual wall: tap its start and end, or drag.',erase:'Tap a wall to remove it. Room labels are protected.'}[tool]);paint();
  }
  function closeSheet(){if(sheet.open)sheet.close();}
  function openSheet(title,html){closeSheet();$('layoutSheetTitle').textContent=title;$('layoutSheetBody').innerHTML=html;sheet.showModal();}
@@ -75,7 +79,7 @@
  function reload(){
   if(field.value===lastRaw)return;lastRaw=field.value;legacy=false;loadError=false;
   try{var value=cached();legacy=value.version===1;state=legacy?M.empty():M.decode(value);status(legacy?'Old room-box sketch retained. Back up before replacing it.':'');}catch(error){state=M.empty();loadError=true;status('Saved layout could not be read. Export a backup before replacing it.');}
-  selected=null;draft=null;start=null;splitDraft=null;previewFloor=null;gesture=null;history=[];analyses.clear();closeSheet();render();
+  selected=null;placingRadiator=null;if(tool==='radiator')tool='select';draft=null;start=null;splitDraft=null;previewFloor=null;gesture=null;history=[];analyses.clear();closeSheet();render();
  }
  function save(){
   var old=field.value,previous=loadError?'':old,savedHistory=history.slice(),cell=selected;
@@ -84,8 +88,8 @@
   catch(error){lastRaw=null;reload();history=savedHistory;selected=cell;render();status(error.message);return false;}
  }
  function fit(){view={x:0,y:0,w:640,h:480};paint();}
- function create(points){floor().outline=points;floor().walls=[];floor().labels=[];draft=null;start=null;tool='select';selected=M.spaces(floor())[0].anchor;closeSheet();fit();save();}
- function shape(value){if(floor().outline.length&&!win.confirm('Replace this floor drawing and its sketch labels? Survey measurements are unchanged.'))return;closeSheet();if(value==='custom'){draft=[];start=null;tool='select';render();}else create(M.outline(value));}
+ function create(points){floor().outline=points;floor().walls=[];floor().labels=[];if(floor().radiators!==undefined)floor().radiators=[];draft=null;start=null;tool='select';selected=M.spaces(floor())[0].anchor;closeSheet();fit();save();}
+ function shape(value){if(floor().outline.length&&!win.confirm('Replace this floor drawing, its sketch labels and radiator markers? Survey measurements are unchanged.'))return;closeSheet();if(value==='custom'){draft=[];start=null;tool='select';render();}else create(M.outline(value));}
  panel.querySelectorAll('[data-shape]').forEach(function(b){b.onclick=function(){shape(b.dataset.shape);};});
  function nameSpace(){
   var s=chosen();if(!s)return;openSheet(s.label?labelText(s.label):'Name this space','<label for="layoutRoom">Room from survey</label><select id="layoutRoom"></select><div class="plan-sheet-actions"><button type="button" id="layoutAssign">Label selected space</button><button type="button" id="layoutSplitSpace">Split this space</button></div><button type="button" id="layoutRemove">Remove room label</button>');
@@ -103,7 +107,7 @@
  $('layoutFlip').onclick=function(){var o=splitDraft.result.options;changeSplit({...o,first:o.second,second:o.first});};
  $('layoutSplitApply').onclick=function(){if(!splitDraft||!splitDraft.result.floor)return;var next=splitDraft.result.floor;splitDraft=null;replaceFloor(next);var regions=M.spaces(next);if(!regions.some(function(s){return s.cells.includes(selected);}))selected=regions[0].anchor;save();};
  $('layoutAdjust').onclick=function(){tool=tool==='adjust'?'select':'adjust';status('');render();};
- $('layoutDone').onclick=function(){tool='select';start=null;render();};
+ $('layoutDone').onclick=function(){tool='select';start=null;previewFloor=null;placingRadiator=null;gesture=null;render();};
  function addFloor(){if(state.floors.length>=8||draft)return;var n=win.prompt('Name the new floor, for example Loft or Basement.','');if(n===null)return;n=n.trim();if(!n||n.length>40||state.floors.some(function(f){return f.name.toLowerCase()===n.toLowerCase();})){status('Choose a unique floor name, up to 40 characters.');return;}var i=state.floors.length+1;while(state.floors.some(function(f){return f.id==='floor'+i;}))i++;floorId='floor'+i;state.floors.push(M.blank(floorId,n));selected=null;tool='select';closeSheet();fit();save();}
  function more(){
   openSheet('Plan options','<label for="layoutFront">Front of property</label><select id="layoutFront"><option value="bottom">Bottom of drawing</option><option value="top">Top of drawing</option><option value="left">Left of drawing</option><option value="right">Right of drawing</option></select><label class="layout-report-option"><input type="checkbox" id="layoutInclude"> Include layout in report</label><div class="plan-sheet-actions"><button type="button" id="layoutSaveImage">Save layout image</button><button type="button" id="layoutAddFloor">Add floor</button><button type="button" id="layoutOutlineOptions">Floor outline</button></div><details><summary>Advanced drawing</summary><div class="plan-sheet-actions"><button type="button" data-plan-tool="wall">Draw internal wall</button><button type="button" data-plan-tool="erase">Remove wall</button><button type="button" data-plan-tool="outline">Edit floor outline</button></div></details>');
@@ -115,18 +119,39 @@
  $('layoutMore').onclick=more;
  $('layoutFloor').onchange=function(){floorId=this.value;selected=null;tool='select';previewFloor=null;status('');fit();render();};
  $('layoutUndo').onclick=function(){if(draft){draft.pop();render();return;}if(!history.length||splitDraft)return;var raw=history.pop(),keep=history.slice();field.value=raw;lastRaw=null;reload();history=keep;win.update();render();status('Sketch edit undone. Measurements unchanged.');};
- function finish(){if(!draft||draft.length<3)return;try{create(M.closeOutline(draft));}catch(error){status(error.message);}}
+ function finish(points){points=Array.isArray(points)?points:draft;if(!points||points.length<3)return;try{create(M.closeOutline(points));}catch(error){status(error.message);}}
  $('layoutFinishCustom').onclick=finish;$('layoutCancelCustom').onclick=function(){draft=null;start=null;render();};
+ function radiatorOptions(id){
+  var r=(floor().radiators||[]).find(function(r){return r.id===id;});if(!r)return;openSheet('Radiator position','<p>Visual position only. This does not change radiator size, quantity or heat-loss calculations.</p><div class="plan-sheet-actions"><button type="button" id="layoutRepositionRadiator">Reposition radiator</button><button type="button" id="layoutRemoveRadiator">Remove radiator marker</button></div>');
+  $('layoutRepositionRadiator').onclick=function(){closeSheet();placingRadiator=id;tool='radiator';status('');render();svg.focus({preventScroll:true});};
+  $('layoutRemoveRadiator').onclick=function(){floor().radiators=floor().radiators.filter(function(r){return r.id!==id;});if(save()){closeSheet();svg.focus({preventScroll:true});}};
+ }
+ function radiatorId(){var i=1,used=new Set((floor().radiators||[]).map(function(r){return r.id;}));while(used.has('r'+i))i++;return 'r'+i;}
+ function updateRadiator(p,g){
+  try{var snapped=R.snap(spaces(g.base),p,{cell:g.room});if(snapped.distance*8*scale()>48)throw Error('Move closer to a wall to snap the radiator.');var next=clone(g.base),r={id:g.id,cell:snapped.cell,edge:snapped.edge,point:snapped.point};next.radiators=(next.radiators||[]).filter(function(r){return r.id!==g.id;}).concat([r]);previewFloor=next;status('Radiator position only · sizing unchanged');}
+  catch(error){previewFloor=null;status(error.message);}paint();
+ }
+ function beginRadiator(e,id,palette){
+  var base=clone(floor()),r=(base.radiators||[]).find(function(r){return r.id===id;}),p=point(e);tool='radiator';gesture={type:'radiator',base:base,id:id||radiatorId(),existing:!!r,palette:!!palette,moved:false,x:e.clientX,y:e.clientY,offset:r?[r.point[0]-p[0],r.point[1]-p[1]]:[0,0]};pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});svg.setPointerCapture(e.pointerId);render();
+ }
+ $('layoutAddRadiator').addEventListener('pointerdown',function(e){if(e.button!==0||this.disabled)return;e.preventDefault();beginRadiator(e,null,true);});
+ $('layoutAddRadiator').onclick=function(e){if(e.detail===0){var s=chosen()||spaces(floor())[0],id=radiatorId(),r=R.snap(spaces(floor()),[s.anchor%80+.5,Math.floor(s.anchor/80)+.5],{cell:s.anchor});updateRadiator(r.point,{id:id,base:clone(floor()),room:s.anchor});if(previewFloor){replaceFloor(previewFloor);previewFloor=null;save();var el=svg.querySelector('[data-plan-radiator="'+id+'"]');if(el)el.focus({preventScroll:true});}}};
  function point(e){var p=new win.DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());return [Math.max(0,Math.min(80,Math.round(p.x/8))),Math.max(0,Math.min(60,Math.round(p.y/8)))];}
  function near(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1])*8*scale()<=23;}
  function aligned(a,b){return Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1])?[b[0],a[1]]:[a[0],b[1]];}
+ function snapCustom(anchor,p,points){
+  var q=aligned(anchor,p),axis=q[1]===anchor[1]?0:1;if(points.length<3)return q;
+  var first=points[0],candidate=q.slice();candidate[axis]=first[axis];
+  if(Math.abs(q[axis]-first[axis])*8*scale()<=24&&(candidate[0]!==anchor[0]||candidate[1]!==anchor[1])){try{M.closeOutline(points.concat([candidate]));return candidate;}catch(error){}}
+  return q;
+ }
  function addWall(a,b){b=aligned(a,b);start=null;if(a[0]===b[0]&&a[1]===b[1]){render();return;}var i=1;while(floor().walls.some(function(w){return w.id==='w'+i;}))i++;floor().walls.push({id:'w'+i,a:a,b:b});save();}
  function zoom(factor,client){var before=svg.getScreenCTM(),p=new win.DOMPoint(client?client.x:svg.getBoundingClientRect().x+svg.clientWidth/2,client?client.y:svg.getBoundingClientRect().y+svg.clientHeight/2).matrixTransform(before.inverse()),w=Math.max(160,Math.min(960,view.w/factor)),ratio=w/view.w;view={x:p.x-(p.x-view.x)*ratio,y:p.y-(p.y-view.y)*ratio,w:w,h:w*.75};paint();}
  $('layoutZoomIn').onclick=function(){zoom(1.4);};$('layoutZoomOut').onclick=function(){zoom(1/1.4);};$('layoutFit').onclick=fit;
  function pinchInfo(){var a=Array.from(pointers.values()),p=a[0],q=a[1];return {distance:Math.hypot(p.x-q.x,p.y-q.y),x:(p.x+q.x)/2,y:(p.y+q.y)/2};}
  svg.addEventListener('pointerdown',function(e){
   if(e.button!==0)return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});svg.setPointerCapture(e.pointerId);
-  if(pointers.size===2){previewFloor=null;if(gesture&&gesture.type==='custom'){draft=gesture.before;start=null;}gesture={type:'pinch',info:pinchInfo()};paint();return;}
+  if(pointers.size===2){previewFloor=null;var resetRadiator=gesture&&gesture.type==='radiator';if(resetRadiator){tool='select';placingRadiator=null;}if(gesture&&gesture.type==='custom'){draft=gesture.before;start=null;status('');}gesture={type:'pinch',info:pinchInfo()};if(resetRadiator)render();else paint();return;}
   if(pointers.size>2)return;
   surface.style.pointerEvents='none';var target=doc.elementFromPoint(e.clientX,e.clientY)||svg;surface.style.pointerEvents='';
   var p=point(e),h=target.closest('[data-split-handle]'),w=target.closest('[data-move-wall]'),corner=target.closest('[data-layout-corner]');
@@ -137,9 +162,11 @@
    var before=clone(draft),last=draft[draft.length-1];
    if(draft.length>=3&&near(p,draft[0])){gesture={type:'custom-close',x:e.clientX,y:e.clientY,moved:false};return;}
    if(!last){draft.push(p);last=p;}
-   else if(!near(p,last)){if(draft.length>=31){status('Maximum 31 drawn corners before closing.');return;}p=aligned(last,p);if(p[0]!==last[0]||p[1]!==last[1])draft.push(p);last=p;}
+   else if(!near(p,last)){if(draft.length>=31){status('Maximum 31 drawn corners before closing.');return;}p=snapCustom(last,p,draft);if(p[0]!==last[0]||p[1]!==last[1])draft.push(p);last=p;}
    gesture={type:'custom',before:before,anchor:last.slice(),offset:[last[0]-p[0],last[1]-p[1]]};start={a:last.slice(),end:last.slice()};status('');render();return;
   }
+  var radiator=target.closest('[data-plan-radiator]');if(radiator&&['select','adjust'].includes(tool)){var nearest=(floor().radiators||[]).map(function(r){var g=R.geometry(spaces(floor()),r);return {id:r.id,distance:Math.hypot(g.x-p[0],g.y-p[1])};}).sort(function(a,b){return a.distance-b.distance;})[0];beginRadiator(e,nearest.id,false);return;}
+  if(tool==='radiator'){gesture={type:'radiator',id:placingRadiator||radiatorId(),tapMove:true,base:clone(floor()),offset:[0,0]};updateRadiator(p,gesture);return;}
   if(tool==='wall'){if(start){addWall(start.a,p);gesture=null;return;}start={a:p,end:p};gesture={type:'manual',x:e.clientX,y:e.clientY};paint();return;}
   var targetSpace=target.closest('[data-space]'),wall=target.closest('[data-wall]');gesture={type:'tap',space:targetSpace?Number(targetSpace.dataset.space):null,erase:tool==='erase'&&wall?wall.dataset.wall:null,x:e.clientX,y:e.clientY,view:{...view}};
  });
@@ -150,8 +177,9 @@
   if(g.type==='split'&&splitDraft){var h=splitDraft.result.handles.find(function(h){return h.id===g.id;}),o={...splitDraft.result.options};o[h.id]=Math.max(h.min,Math.min(h.max,p[h.axis==='x'?0:1]+g.offset));changeSplit(o);}
   else if(g.type==='wall'){try{var w=g.base.walls.find(function(w){return w.id===g.id;});previewFloor=M.moveWall(g.base,g.id,p[w.a[0]===w.b[0]?0:1]+g.offset);status('');paint();}catch(error){status(error.message);}}
   else if(g.type==='corner'){try{var candidate={...g.base,outline:G.vertex(g.base.outline,g.index,p)},copy=clone(state);copy.floors=copy.floors.map(function(f){return f.id===candidate.id?candidate:f;});M.decode(copy);previewFloor=candidate;status('');paint();}catch(error){status(error.message);}}
+  else if(g.type==='radiator'){if(Math.hypot(e.clientX-g.x,e.clientY-g.y)>6)g.moved=true;var box=svg.getBoundingClientRect();if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom){previewFloor=null;status('Drop inside the drawing. Placement unchanged.');paint();}else updateRadiator([p[0]+g.offset[0],p[1]+g.offset[1]],g);}
   else if(g.type==='custom-close'){g.moved=Math.hypot(e.clientX-g.x,e.clientY-g.y)>8;}
-  else if(g.type==='custom'&&start){var q=[Math.max(0,Math.min(80,p[0]+g.offset[0])),Math.max(0,Math.min(60,p[1]+g.offset[1]))];start.end=aligned(g.anchor,q);paint();}
+  else if(g.type==='custom'&&start){var q=[Math.max(0,Math.min(80,p[0]+g.offset[0])),Math.max(0,Math.min(60,p[1]+g.offset[1]))];start.end=snapCustom(g.anchor,q,draft);start.close=draft.length>=3&&near(q,draft[0])&&start.end[0]===draft[0][0]&&start.end[1]===draft[0][1];if(start.close){try{M.closeOutline(draft.concat([start.end]));}catch(error){start.close=false;}}status(start.close?'Release to connect to the first dot.':'');paint();}
   else if(g.type==='manual'&&start){start.end=aligned(start.a,p);g.moved=Math.hypot(e.clientX-g.x,e.clientY-g.y)>6;paint();}
   else if(g.type==='tap'){if(Math.hypot(e.clientX-g.x,e.clientY-g.y)>8)g.panned=true;if(g.panned){var s=scale();view.x=g.view.x-(e.clientX-g.x)/s;view.y=g.view.y-(e.clientY-g.y)/s;paint();}}
  });
@@ -159,9 +187,10 @@
   pointers.delete(e.pointerId);if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);var g=gesture;
   if(g&&g.type==='pinch'&&pointers.size){var p=Array.from(pointers.values())[0];gesture={type:'tap',space:null,erase:null,x:p.x,y:p.y,view:{...view},panned:true};return;}
   gesture=null;if(!g)return;
-  if(cancelled){previewFloor=null;if(g.type==='custom')draft=g.before;if(g.type==='manual'||g.type==='custom')start=null;render();return;}
-  if(g.type==='custom-close'){if(!g.moved)finish();}
-  else if(g.type==='custom'&&start){var end=start.end,last=draft[draft.length-1];if(end[0]!==last[0]||end[1]!==last[1]){if(draft.length<31)draft.push(end.slice());else status('Maximum 31 drawn corners before closing.');}start=null;render();}
+  if(cancelled){previewFloor=null;if(g.type==='radiator'){tool='select';placingRadiator=null;}if(g.type==='custom'){draft=g.before;status('');}if(g.type==='manual'||g.type==='custom')start=null;render();return;}
+  if(g.type==='radiator'){if(g.existing&&!g.moved&&!g.tapMove){previewFloor=null;tool='select';render();radiatorOptions(g.id);}else if(previewFloor){replaceFloor(previewFloor);previewFloor=null;placingRadiator=null;tool='select';save();}else{if(g.existing)tool='select';render();}}
+  else if(g.type==='custom-close'){if(!g.moved)finish();}
+  else if(g.type==='custom'&&start){var end=start.end,last=draft[draft.length-1],close=start.close;start=null;if(close){finish(draft.concat([end]));return;}if(end[0]!==last[0]||end[1]!==last[1]){if(draft.length<31)draft.push(end.slice());else status('Maximum 31 drawn corners before closing.');}render();}
   else if((g.type==='wall'||g.type==='corner')&&previewFloor){replaceFloor(previewFloor);previewFloor=null;save();}
   else if(g.type==='manual'&&g.moved&&start)addWall(start.a,start.end);
   else if(g.type==='tap'&&!g.panned&&!splitDraft){if(g.erase){floor().walls=floor().walls.filter(function(w){return w.id!==g.erase;});save();}else if(tool==='select'||tool==='adjust'){var s=spaces(floor()).find(function(s){return s.id===g.space;});selected=s?s.anchor:null;tool='select';render();if(s)nameSpace();}}
@@ -169,8 +198,10 @@
  svg.addEventListener('pointerup',function(e){release(e,false);});svg.addEventListener('pointercancel',function(e){release(e,true);});
  svg.addEventListener('keydown',function(e){
   var moves={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]},target=e.target.closest('[data-space]'),h=e.target.closest('[data-split-handle]'),w=e.target.closest('[data-move-wall]'),corner=e.target.closest('[data-layout-corner]');
+  var radiator=e.target.closest('[data-plan-radiator]');if(radiator&&(e.key==='Enter'||e.key===' ')){e.preventDefault();radiatorOptions(radiator.dataset.planRadiator);return;}
+  if(radiator&&moves[e.key]){e.preventDefault();var id=radiator.dataset.planRadiator,r=floor().radiators.find(function(r){return r.id===id;}),d=moves[e.key];updateRadiator([r.point[0]+d[0],r.point[1]+d[1]],{id:id,base:clone(floor()),room:r.cell});if(previewFloor){replaceFloor(previewFloor);previewFloor=null;save();}var el=svg.querySelector('[data-plan-radiator="'+id+'"]');if(el)el.focus({preventScroll:true});return;}
   if(draft&&draft.length>=3&&e.target.closest('[data-draft-point="0"]')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();finish();return;}
-  if(e.key==='Escape'){splitDraft=null;previewFloor=null;gesture=null;start=null;draft=null;tool='select';render();return;}
+  if(e.key==='Escape'){placingRadiator=null;splitDraft=null;previewFloor=null;gesture=null;start=null;draft=null;tool='select';render();return;}
   if(target&&(e.key==='Enter'||e.key===' ')){var s=spaces(floor()).find(function(s){return s.id===Number(target.dataset.space);});selected=s.anchor;render();nameSpace();e.preventDefault();}
   if(moves[e.key]&&(h||w||corner)){var d=moves[e.key],focus;
    try{if(h&&splitDraft){var id=h.dataset.splitHandle,handle=splitDraft.result.handles.find(function(a){return a.id===id;}),o={...splitDraft.result.options};o[id]=Math.max(handle.min,Math.min(handle.max,o[id]+d[handle.axis==='x'?0:1]));changeSplit(o);focus=svg.querySelector('[data-split-handle="'+id+'"]');}
@@ -180,13 +211,13 @@
   }
  });
  $('layoutBack').onclick=function(){closeSheet();var tab=$(exitTab)||$('frontTab');if(tab)tab.click();win.requestAnimationFrame(function(){win.scrollTo(0,returnScroll);});};
- doc.querySelectorAll('.tab').forEach(function(tab){tab.addEventListener('click',function(){var entering=tab.id==='layoutTab';if(entering)returnScroll=win.scrollY;else exitTab=tab.id;doc.body.classList.toggle('house-layout-mode',entering);var skip=doc.querySelector('.skip-link');if(skip){skip.setAttribute('href',entering?'#houseLayoutCanvas':'#preview');skip.textContent=entering?'Skip to floor plan':'Skip to document preview';}if(entering){doc.body.classList.remove('hl-rads-focus-mode');reload();render();win.scrollTo(0,0);}else{closeSheet();splitDraft=null;previewFloor=null;gesture=null;pointers.clear();}});});
+ doc.querySelectorAll('.tab').forEach(function(tab){tab.addEventListener('click',function(){var entering=tab.id==='layoutTab';if(entering)returnScroll=win.scrollY;else exitTab=tab.id;doc.body.classList.toggle('house-layout-mode',entering);var skip=doc.querySelector('.skip-link');if(skip){skip.setAttribute('href',entering?'#houseLayoutCanvas':'#preview');skip.textContent=entering?'Skip to floor plan':'Skip to document preview';}if(entering){doc.body.classList.remove('hl-rads-focus-mode');reload();render();win.scrollTo(0,0);}else{closeSheet();if(tool==='radiator')tool='select';placingRadiator=null;splitDraft=null;previewFloor=null;gesture=null;pointers.clear();}});});
  var frame=0;win.addEventListener('resize',function(){if(!frame&&doc.body.classList.contains('house-layout-mode'))frame=win.requestAnimationFrame(function(){frame=0;paint();});});
  var oldSet=win.setData;win.setData=function(data){var raw=data&&Object.prototype.hasOwnProperty.call(data,'house_layout')?data.house_layout:'';if(typeof raw!=='string')throw new Error('Invalid layout in this survey.');M.decode(raw);var old=field.value;field.value=raw;lastRaw=null;try{var value=oldSet.apply(this,arguments);reload();return value;}catch(error){field.value=old;lastRaw=null;reload();throw error;}};
  var oldUpdate=win.update;win.update=function(){reload();return oldUpdate.apply(this,arguments);};
  // PDF popups copy inline styles, not linked stylesheets.
  var printStyle=doc.createElement('style');printStyle.id='houseLayoutPrintStyles';printStyle.textContent='.layout-sheet-wrap{background:#fff;color:#172b3a}.layout-sheet-wrap>svg{display:block;width:100%;height:auto}.layout-sheet-wrap>p{font:12px Arial,sans-serif;color:#253b52}@media print{.layout-sheet-wrap{break-inside:avoid;page-break-inside:avoid}.layout-sheet-wrap>svg{display:block;width:220mm!important;height:165mm!important;margin:0 auto}.layout-sheet-wrap>h2{margin:0 0 3mm!important;font:700 14pt Arial,sans-serif!important}.layout-sheet-wrap>p{margin:0 0 3mm!important;font:9pt Arial,sans-serif!important}}';doc.head.appendChild(printStyle);
- function image(f,front){return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480" role="img" aria-label="'+esc(f.name)+' floor plan">'+drawing(f,false,front)+'<text x="16" y="20" font-family="Arial,sans-serif" font-size="12" fill="#253b52">'+esc(f.name)+'</text><text x="16" y="470" font-family="Arial,sans-serif" font-size="10" fill="#253b52">Not to scale</text></svg>';}
+ function image(f,front){return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480" role="img" aria-label="'+esc(f.name)+' floor plan">'+drawing(f,false,front)+'<text x="16" y="20" font-family="Arial,sans-serif" font-size="12" fill="#253b52">'+esc(f.name)+'</text><text x="16" y="470" font-family="Arial,sans-serif" font-size="10" fill="#253b52">Not to scale</text>'+((f.radiators||[]).length?'<text x="624" y="470" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#8c291a">Radiator symbols: visual positions only</text>':'')+'</svg>';}
  async function saveImage(){if(draft||!floor().outline.length)return;var f=M.decode(state).floors.find(function(f){return f.id===floorId;}),front=state.front,button=this,url;button.disabled=true;try{url=win.URL.createObjectURL(new win.Blob([image(f,front)],{type:'image/svg+xml;charset=utf-8'}));var img=new win.Image();img.src=url;await img.decode();var c=doc.createElement('canvas');c.width=1280;c.height=960;var ctx=c.getContext('2d');if(!ctx)throw Error('Image export unavailable.');ctx.drawImage(img,0,0,c.width,c.height);var blob=await new Promise(function(resolve){c.toBlob(resolve,'image/png');});if(!blob)throw Error('Image export failed.');var a=doc.createElement('a'),u=win.URL.createObjectURL(blob);a.href=u;a.download='layout-'+(f.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'floor')+'.png';doc.body.appendChild(a);a.click();a.remove();win.setTimeout(function(){win.URL.revokeObjectURL(u);},1000);status('Floor-plan image downloaded.');}catch(error){status('Could not save the image. '+error.message);}finally{if(url)win.URL.revokeObjectURL(url);button.disabled=!floor().outline.length||!!draft;}}
  function insertLayouts(container){if(!container)return;container.querySelectorAll('.layout-sheet-wrap').forEach(function(el){el.remove();});var plan;try{plan=cached();}catch(error){return;}if(plan.version!==2||!plan.includeReport)return;var anchor=Array.from(container.children).find(function(n){var h=n.querySelector('h2');return h&&['A12a','Customer Profile'].includes(h.textContent.trim());});plan.floors.filter(function(f){return f.outline.length;}).forEach(function(f){var section=doc.createElement('section');section.className='sheet-wrap layout-sheet-wrap';section.innerHTML='<h2 class="sheet-title">Room layout: '+esc(f.name)+'</h2><p>Whole-floor visual guide. Not to scale; not used for heat-loss calculations.</p>'+image(f,plan.front);container.insertBefore(section,anchor||null);});}
  var oldRender=win.renderPreview;win.renderPreview=function(){var value=oldRender.apply(this,arguments);insertLayouts($('preview'));return value;};var oldPrint=win.buildPrintHtml;win.buildPrintHtml=function(title,titles){var html=oldPrint.apply(this,arguments);if(!Array.from(titles||[]).includes('Front')||!Array.from(titles||[]).includes('Rads'))return html;var parsed=new win.DOMParser().parseFromString(html,'text/html');insertLayouts(parsed.querySelector('main'));return '<!doctype html>\n'+parsed.documentElement.outerHTML;};
