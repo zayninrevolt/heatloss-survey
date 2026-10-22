@@ -72,17 +72,17 @@
   $('layoutFinishCustom').disabled=!draft||draft.length<3;
   $('layoutFlip').hidden=!splitDraft||splitDraft.result.options.kind!=='L';$('layoutSplitApply').disabled=!splitDraft||!!splitDraft.result.error;
   var cornerRoom=splitDraft&&splitDraft.result.options.kind==='corner';$('layoutSplitApply').textContent=cornerRoom?'Add corner room':'Apply split';$('layoutRotate').textContent=cornerRoom?'Corner':'Rotate';$('layoutRotate').setAttribute('aria-label',cornerRoom?'Change room corner':'Rotate divider');
-  $('layoutDrawingHelp').textContent=splitDraft?(cornerRoom?'Drag width and depth handles. Corner switches position.':'Drag the blue handles, then Apply split.'):draft?'Tap corners or drag from the last dot. Green guides snap the ends into line.':({radiator:'Tap near a wall to place the radiator. Visual position only.',select:'Tap a space to name it. Pinch to zoom.',adjust:'Drag a blue handle to move its wall. Pinch to zoom.',outline:'Drag the corners to reshape this floor.',wall:'Manual wall: tap its start and end, or drag.',erase:'Tap a wall to remove it. Room labels are protected.'}[tool]);paint();
+  $('layoutDrawingHelp').textContent=splitDraft?(cornerRoom?'Drag width and depth handles. Corner switches position.':'Drag the blue handles, then Apply split.'):draft?'Tap corners or drag from the last dot. Green guides snap the ends into line.':({radiator:'Aim above your finger. Release to place.',select:'Tap a space to name it. Pinch to zoom.',adjust:'Drag a blue handle to move its wall. Pinch to zoom.',outline:'Drag the corners to reshape this floor.',wall:'Manual wall: tap its start and end, or drag.',erase:'Tap a wall to remove it. Room labels are protected.'}[tool]);paint();
  }
  function paintRadiatorLift(f){
   var g=gesture;if(!g||g.type!=='radiator'||!g.touch||!g.client)return;
-  var s=scale(),box=svg.getBoundingClientRect(),cx=g.client.x,cy=g.client.y-72;
-  if(cy<box.top+34)cx+=cx+96<box.right?72:-72;
-  cx=Math.max(box.left+34,Math.min(box.right-34,cx));cy=Math.max(box.top+34,Math.min(box.bottom-34,cy));
-  var p=new win.DOMPoint(cx,cy).matrixTransform(svg.getScreenCTM().inverse()),r=(previewFloor||g.existing&&!g.moved)?(f.radiators||[]).find(function(r){return r.id===g.id;}):null,target='',color=r?'#16803d':'#64748b';
-  if(r){var geom=R.geometry(spaces(f),r);g.rotation=geom.rotation;var node=scene.querySelector('[data-plan-radiator="'+g.id+'"]');if(node)node.setAttribute('opacity','0');target='<line x1="'+r.point[0]*8+'" y1="'+r.point[1]*8+'" x2="'+p.x+'" y2="'+p.y+'" stroke="'+color+'" stroke-width="'+1.5/s+'" stroke-dasharray="4 3"/><circle data-radiator-drop-target="true" cx="'+r.point[0]*8+'" cy="'+r.point[1]*8+'" r="'+6/s+'" fill="white" stroke="'+color+'" stroke-width="'+2/s+'"/>';}
-  // Avatar/target are transient numeric SVG, never survey data or exported geometry.
-  scene.insertAdjacentHTML('beforeend','<g data-radiator-drag-overlay="true" pointer-events="none" aria-hidden="true">'+target+'<g data-radiator-lift="true" transform="translate('+p.x+' '+p.y+') scale('+1/s+')"><rect x="-30" y="-30" width="60" height="60" rx="12" fill="white" stroke="'+color+'" stroke-width="2"/><g transform="rotate('+(g.rotation||0)+')"><rect x="-21" y="-6" width="42" height="12" rx="2" fill="#d55438" stroke="#8c291a"/><path d="M-14 -6v12M-7 -6v12M0 -6v12M7 -6v12M14 -6v12" stroke="white" stroke-width="2"/></g></g></g>');
+  var r=previewFloor&&(f.radiators||[]).find(function(r){return r.id===g.id;});
+  if(!r){var old=scene.querySelector('[data-plan-radiator="'+g.id+'"]');if(old&&g.moved)old.setAttribute('opacity','0');return;}
+  var s=scale(),geom=R.geometry(spaces(f),r);
+  // The ordinary marker IS the preview, at exactly the geometry that release saves.
+  // Only the selection halo/contact are transient; never draw a second offset radiator.
+  // SVG interpolation below is validated numeric geometry only, never survey text.
+  scene.insertAdjacentHTML('beforeend','<g data-radiator-drag-overlay="true" pointer-events="none" aria-hidden="true"><circle data-radiator-drop-target="true" cx="'+r.point[0]*8+'" cy="'+r.point[1]*8+'" r="'+2/s+'" fill="#16803d"/><g data-radiator-lift="true" transform="translate('+geom.x*8+' '+geom.y*8+')"><circle r="'+18/s+'" fill="none" stroke="#16803d" stroke-width="'+1.5/s+'"/></g></g>');
  }
  function closeSheet(){if(sheet.open)sheet.close();}
  function openSheet(title,html){closeSheet();$('layoutSheetTitle').textContent=title;$('layoutSheetBody').innerHTML=html;sheet.showModal();}
@@ -142,8 +142,17 @@
   try{var snapped=R.snap(spaces(g.base),p,{cell:g.room});if(snapped.distance*8*scale()>48)throw Error('Move closer to a wall to snap the radiator.');var next=clone(g.base),r={id:g.id,cell:snapped.cell,edge:snapped.edge,point:snapped.point};next.radiators=(next.radiators||[]).filter(function(r){return r.id!==g.id;}).concat([r]);previewFloor=next;status('Radiator position only · sizing unchanged');}
   catch(error){previewFloor=null;status(error.message);}paint();
  }
+ function moveRadiator(e,g){
+  g.client={x:e.clientX,y:e.clientY};
+  var client={x:e.clientX,y:e.clientY-(g.touch?72:0)},box=svg.getBoundingClientRect();
+  // Captured fingers may extend below the canvas to reach its bottom wall. Validate
+  // the visible aiming position instead, never clamp an outside drop onto a wall.
+  if(client.x<box.left||client.x>box.right||client.y<box.top||client.y>box.bottom){previewFloor=null;status('Drop inside the drawing. Placement unchanged.');paint();return;}
+  var q=new win.DOMPoint(client.x,client.y).matrixTransform(svg.getScreenCTM().inverse()),p=g.touch?[q.x/8,q.y/8]:point(e);
+  updateRadiator(g.touch?p:[p[0]+g.offset[0],p[1]+g.offset[1]],g);
+ }
  function beginRadiator(e,id,palette){
-  trackPointer(e);var base=clone(floor()),r=(base.radiators||[]).find(function(r){return r.id===id;}),p=point(e);tool='radiator';gesture={type:'radiator',base:base,id:id||radiatorId(),existing:!!r,palette:!!palette,moved:false,x:e.clientX,y:e.clientY,touch:e.pointerType==='touch',client:{x:e.clientX,y:e.clientY},offset:r?[r.point[0]-p[0],r.point[1]-p[1]]:[0,0]};svg.setPointerCapture(e.pointerId);render();
+  trackPointer(e);var base=clone(floor()),r=(base.radiators||[]).find(function(r){return r.id===id;}),p=point(e);tool='radiator';gesture={type:'radiator',base:base,id:id||radiatorId(),existing:!!r,palette:!!palette,moved:false,x:e.clientX,y:e.clientY,touch:e.pointerType==='touch',client:{x:e.clientX,y:e.clientY},offset:r?[r.point[0]-p[0],r.point[1]-p[1]]:[0,0]};svg.setPointerCapture(e.pointerId);render();if(r&&gesture.touch)moveRadiator(e,gesture);
  }
  $('layoutAddRadiator').addEventListener('pointerdown',function(e){if(e.button!==0||this.disabled)return;e.preventDefault();beginRadiator(e,null,true);});
  $('layoutAddRadiator').onclick=function(e){if(e.detail===0){var s=chosen()||spaces(floor())[0],id=radiatorId(),r=R.snap(spaces(floor()),[s.anchor%80+.5,Math.floor(s.anchor/80)+.5],{cell:s.anchor});updateRadiator(r.point,{id:id,base:clone(floor()),room:s.anchor});if(previewFloor){replaceFloor(previewFloor);previewFloor=null;save();var el=svg.querySelector('[data-plan-radiator="'+id+'"]');if(el)el.focus({preventScroll:true});}}};
@@ -179,7 +188,7 @@
    gesture={type:'custom',before:before,anchor:last.slice(),offset:[last[0]-p[0],last[1]-p[1]]};start={a:last.slice(),end:last.slice()};status('');render();return;
   }
   var radiator=target.closest('[data-plan-radiator]');if(radiator&&['select','adjust'].includes(tool)){var nearest=(floor().radiators||[]).map(function(r){var g=R.geometry(spaces(floor()),r);return {id:r.id,distance:Math.hypot(g.x-p[0],g.y-p[1])};}).sort(function(a,b){return a.distance-b.distance;})[0];beginRadiator(e,nearest.id,false);return;}
-  if(tool==='radiator'){gesture={type:'radiator',id:placingRadiator||radiatorId(),tapMove:true,base:clone(floor()),offset:[0,0],x:e.clientX,y:e.clientY,touch:e.pointerType==='touch',client:{x:e.clientX,y:e.clientY}};updateRadiator(p,gesture);return;}
+  if(tool==='radiator'){gesture={type:'radiator',id:placingRadiator||radiatorId(),tapMove:true,base:clone(floor()),offset:[0,0],x:e.clientX,y:e.clientY,touch:e.pointerType==='touch',client:{x:e.clientX,y:e.clientY}};moveRadiator(e,gesture);return;}
   if(tool==='wall'){if(start){addWall(start.a,p);gesture=null;return;}start={a:p,end:p};gesture={type:'manual',x:e.clientX,y:e.clientY};paint();return;}
   var targetSpace=target.closest('[data-space]'),wall=target.closest('[data-wall]');gesture={type:'tap',space:targetSpace?Number(targetSpace.dataset.space):null,erase:tool==='erase'&&wall?wall.dataset.wall:null,x:e.clientX,y:e.clientY,view:{...view}};
  });
@@ -190,7 +199,7 @@
   if(g.type==='split'&&splitDraft){var h=splitDraft.result.handles.find(function(h){return h.id===g.id;}),o={...splitDraft.result.options};o[h.id]=Math.max(h.min,Math.min(h.max,p[h.axis==='x'?0:1]+g.offset));changeSplit(o);}
   else if(g.type==='wall'){try{var w=g.base.walls.find(function(w){return w.id===g.id;});previewFloor=M.moveWall(g.base,g.id,p[w.a[0]===w.b[0]?0:1]+g.offset);status('');paint();}catch(error){status(error.message);}}
   else if(g.type==='corner'){try{var candidate={...g.base,outline:G.vertex(g.base.outline,g.index,p)},copy=clone(state);copy.floors=copy.floors.map(function(f){return f.id===candidate.id?candidate:f;});M.decode(copy);previewFloor=candidate;status('');paint();}catch(error){status(error.message);}}
-  else if(g.type==='radiator'){g.client={x:e.clientX,y:e.clientY};if(Math.hypot(e.clientX-g.x,e.clientY-g.y)>6)g.moved=true;var box=svg.getBoundingClientRect();if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom){previewFloor=null;status('Drop inside the drawing. Placement unchanged.');paint();}else updateRadiator([p[0]+g.offset[0],p[1]+g.offset[1]],g);}
+  else if(g.type==='radiator'){if(Math.hypot(e.clientX-g.x,e.clientY-g.y)>6)g.moved=true;moveRadiator(e,g);}
   else if(g.type==='custom-close'){g.moved=Math.hypot(e.clientX-g.x,e.clientY-g.y)>8;}
   else if(g.type==='custom'&&start){var q=[Math.max(0,Math.min(80,p[0]+g.offset[0])),Math.max(0,Math.min(60,p[1]+g.offset[1]))];start.end=snapCustom(g.anchor,q,draft);start.close=draft.length>=3&&near(q,draft[0])&&start.end[0]===draft[0][0]&&start.end[1]===draft[0][1];if(start.close){try{M.closeOutline(draft.concat([start.end]));}catch(error){start.close=false;}}status(start.close?'Release to connect to the first dot.':'');paint();}
   else if(g.type==='manual'&&start){start.end=aligned(start.a,p);g.moved=Math.hypot(e.clientX-g.x,e.clientY-g.y)>6;paint();}
