@@ -25,7 +25,9 @@
 /* Reserve feedback space so announcing a snap/error cannot move the drawing
    underneath a captured finger or move the marker when it is released. */
 #houseLayoutCanvas #layoutStatus:empty{visibility:hidden}
-#houseLayoutCanvas #layoutDrawingHelp{margin:0;padding:6px 12px;font-size:12px;flex-shrink:0}
+/* Tool instructions can wrap on phones. Reserve two lines so starting a drag
+   cannot move the SVG underneath the pointer or change its saved position. */
+#houseLayoutCanvas #layoutDrawingHelp{margin:0;padding:6px 12px;font-size:12px;flex-shrink:0;height:46px;overflow:auto}
 #layoutActions{flex-shrink:0;padding:6px max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));background:var(--plan-panel);border-top:1px solid var(--plan-border)}
 #layoutActions>div{display:flex;justify-content:center;gap:6px}
 #layoutActions button{flex:1;max-width:220px;padding:12px 7px}
@@ -53,12 +55,21 @@
  #houseLayoutCanvas #layoutEmpty p{display:none}
  #houseLayoutCanvas #layoutEmpty button{width:min(30%,200px)}
  #houseLayoutCanvas .plan-caption{padding:2px 12px}
- #houseLayoutCanvas #layoutDrawingHelp{padding:3px 12px}
+ #houseLayoutCanvas #layoutDrawingHelp{padding:3px 12px;height:24px;white-space:nowrap}
+ #houseLayoutCanvas #layoutStatus{height:24px;padding:3px 12px;white-space:nowrap}
+ #houseLayoutCanvas #layoutServiceKey{padding:1px 8px;gap:2px 12px}
+ #layoutServiceKey svg{width:20px;height:20px}
  .plan-topbar{padding-top:4px;padding-bottom:4px}
  #layoutActions{padding-top:4px;padding-bottom:max(4px,env(safe-area-inset-bottom))}
  #layoutActions button{padding-top:9px;padding-bottom:9px}
 }
 #houseLayoutCanvas #layoutAddRadiator{position:absolute;bottom:10px;left:10px;touch-action:none;user-select:none;background:#fff7f2;color:#91341f;border-color:#c77762;box-shadow:0 2px 12px #172b3a20}
+#houseLayoutCanvas #layoutAddService{position:absolute;bottom:62px;left:10px;background:var(--plan-panel);box-shadow:0 2px 12px #172b3a20}
+#layoutServiceKey{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:2px 12px;padding:3px 8px;flex-shrink:0;font-size:11px;line-height:1.2}
+#layoutServiceKey span{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+#layoutServiceKey svg{flex-shrink:0}
+#houseLayoutSvg [data-plan-service]{cursor:grab;outline:none}
+#houseLayoutSvg [data-plan-service]:focus-visible>rect:first-child{stroke:#2563eb;stroke-width:2}
 #houseLayoutSvg [data-plan-radiator]{cursor:grab;outline:none}
 #houseLayoutSvg [data-plan-radiator]:focus-visible rect{stroke:#2563eb;stroke-width:2}
 @media print{#houseLayoutCanvas{display:none!important}}

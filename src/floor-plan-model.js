@@ -41,6 +41,16 @@
  }
  function point(p){return Array.isArray(p)&&p.length===2&&p.every(Number.isInteger)&&p[0]>=0&&p[0]<=80&&p[1]>=0&&p[1]<=60;}
  function text(t,n){return typeof t==='string'&&t.trim()&&t.length<=n&&!/[\u0000-\u001f]/.test(t);}
+ var serviceTypes=[{type:'boiler',label:'Boiler',code:'B',color:'#a63c22'},{type:'gas-meter',label:'Gas meter',code:'GM',color:'#236342'},{type:'stop-tap',label:'Stop tap',code:'ST',color:'#1c5cad'},{type:'electric-meter',label:'Electric meter',code:'EM',color:'#805900'}];
+ function serviceMarkers(raw,hasOutline){
+  if(!Array.isArray(raw)||raw.length>60)throw Error('Invalid service markers.');
+  if(raw.length&&!hasOutline)throw Error('Draw a floor outline before adding service markers.');
+  var ids=new Set();
+  return raw.map(function(s){
+   if(!s||typeof s.id!=='string'||!/^[a-z0-9_-]{1,40}$/.test(s.id)||ids.has(s.id)||!serviceTypes.some(function(t){return t.type===s.type;})||!Array.isArray(s.point)||s.point.length!==2||!s.point.every(function(n){return Number.isFinite(n)&&Number.isInteger(n*2);})||s.point[0]<0||s.point[0]>80||s.point[1]<0||s.point[1]>60)throw Error('Invalid service marker.');
+   ids.add(s.id);return {id:s.id,type:s.type,point:s.point.slice()};
+  });
+ }
  function decode(raw){
   if(raw===''||raw===undefined)return empty();
   if(typeof raw==='string'&&raw.length>50000)throw new Error('Layout is too large.');
@@ -48,7 +58,7 @@
   if(v&&v.version===1)return G.decode(v);
   if(!v||Array.isArray(v)||v.version!==2)throw new Error('Unsupported floor-plan version.');
   if(!['top','bottom','left','right'].includes(v.front)||typeof v.includeReport!=='boolean'||!Array.isArray(v.floors)||!v.floors.length||v.floors.length>8)throw new Error('Invalid floor plan.');
-  var ids=new Set(),keys=new Set(),count=0,radiatorCount=0;
+  var ids=new Set(),keys=new Set(),count=0,radiatorCount=0,serviceCount=0;
   var floors=v.floors.map(function(f){
    if(!f||typeof f.id!=='string'||!/^[a-z][a-z0-9_-]{0,39}$/.test(f.id)||ids.has(f.id)||!text(f.name,40)||!Array.isArray(f.outline)||!Array.isArray(f.walls)||!Array.isArray(f.labels)||f.outline.length>32||f.walls.length>120)throw new Error('Invalid floor.');
    ids.add(f.id);var o=f.outline.map(function(p){if(!point(p))throw new Error('Invalid floor corner.');return p.slice();});
@@ -56,7 +66,8 @@
    else if(f.walls.length||f.labels.length)throw new Error('Draw a floor outline first.');
    var walls=new Set();var w=f.walls.map(function(w){if(!w||typeof w.id!=='string'||!/^[a-z0-9_-]{1,40}$/.test(w.id)||walls.has(w.id)||!point(w.a)||!point(w.b)||(w.a[0]!==w.b[0]&&w.a[1]!==w.b[1])||(w.a[0]===w.b[0]&&w.a[1]===w.b[1]))throw new Error('Invalid internal wall.');walls.add(w.id);return {id:w.id,a:w.a.slice(),b:w.b.slice()};});
    var labels=f.labels.map(function(l){count++;if(count>60||!l||typeof l.key!=='string'||!/^[a-z0-9_]{1,80}$/.test(l.key)||keys.has(l.key)||!text(l.label,80)||!Number.isInteger(l.cell)||l.cell<0||l.cell>=4800)throw new Error('Invalid or duplicate room label.');keys.add(l.key);return {key:l.key,label:l.label,cell:l.cell};});
-   var next={id:f.id,name:f.name,outline:o,walls:w,labels:labels},regions=spaces(next);if(f.radiators!==undefined){next.radiators=R.validate(regions,f.radiators);radiatorCount+=next.radiators.length;if(radiatorCount>120)throw Error('Too many radiator markers.');}return next;
+   var next={id:f.id,name:f.name,outline:o,walls:w,labels:labels},regions=spaces(next);if(f.radiators!==undefined){next.radiators=R.validate(regions,f.radiators);radiatorCount+=next.radiators.length;if(radiatorCount>120)throw Error('Too many radiator markers.');}
+   if(f.services!==undefined){next.services=serviceMarkers(f.services,o.length>0);serviceCount+=next.services.length;if(serviceCount>120)throw Error('Too many service markers.');}return next;
   });
   var clean={version:2,front:v.front,includeReport:v.includeReport,floors:floors};if(JSON.stringify(clean).length>50000)throw new Error('Layout is too large.');return clean;
  }
@@ -118,6 +129,7 @@
   return {floor:candidate,error:error,walls:added,handles:handles,options:options};
  }
  function reflowRadiators(before,after,moving){
+  if(before.services!==undefined)after.services=serviceMarkers(before.services,after.outline.length>0);
   if(before.radiators===undefined)return after;
   var old=spaces(before),next=spaces(after);
   after.radiators=before.radiators.map(function(r){
@@ -155,5 +167,5 @@
   }
   throw new Error('Cannot close this outline: '+problem.message);
  }
- return {empty:empty,blank:blank,outline:outline,spaces:spaces,decode:decode,split:split,moveWall:moveWall,closeOutline:closeOutline};
+ return {empty:empty,blank:blank,outline:outline,spaces:spaces,decode:decode,split:split,moveWall:moveWall,closeOutline:closeOutline,serviceTypes:serviceTypes};
 });
