@@ -137,7 +137,10 @@
     card.innerHTML = '<h2>Report cover</h2>' +
       '<div class="field" id="reportCompanyField"><label for="site_company">Company name (optional)</label></div>' +
       '<p>The portrait cover is previewed with the other documents and included in the report PDF. A property photo is optional. Report pages stay landscape; the photo and company name are included in your editable JSON backup.</p>' +
-      '<label for="propertyPhotoFile">Add or replace property photo</label>' +
+      '<button type="button" id="takePropertyPhoto">Take photo</button>' +
+      '<input type="file" id="propertyPhotoCamera" accept="image/*" capture="environment" hidden>' +
+      '<p>Take a photo using your phone or tablet camera, or choose an existing photo below. Devices without camera capture will offer a file picker instead.</p>' +
+      '<label for="propertyPhotoFile">Choose existing photo</label>' +
       '<input type="file" id="propertyPhotoFile" accept="image/jpeg,image/png,image/webp">' +
       '<img id="propertyPhotoPreview" alt="Selected front-of-property photo" hidden>' +
       '<button type="button" id="removePropertyPhoto" hidden>Remove photo</button>' +
@@ -151,6 +154,8 @@
     company.addEventListener('input', function (event) { win.update(event); });
     company.addEventListener('change', function () { win.update(); });
     var picker = doc.getElementById('propertyPhotoFile');
+    var camera = doc.getElementById('propertyPhotoCamera');
+    doc.getElementById('takePropertyPhoto').addEventListener('click', function () { camera.click(); });
     var preview = doc.getElementById('propertyPhotoPreview');
     var remove = doc.getElementById('removePropertyPhoto');
     var status = doc.getElementById('propertyPhotoStatus');
@@ -192,11 +197,12 @@
       });
     }
 
-    picker.addEventListener('change', async function () {
-      var file = picker.files[0];
+    async function addPhoto(event) {
+      var source = event.currentTarget;
+      var file = source.files[0];
       if (!file) return;
       var token = ++generation;
-      picker.value = '';
+      source.value = '';
       card.removeAttribute('aria-busy');
       if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 20 * 1024 * 1024) {
         report('Choose a JPEG, PNG or WebP image no larger than 20 MB. Your existing photo has not changed.');
@@ -214,7 +220,9 @@
       } finally {
         if (token === generation) card.removeAttribute('aria-busy');
       }
-    });
+    }
+    picker.addEventListener('change', addPhoto);
+    camera.addEventListener('change', addPhoto);
     remove.addEventListener('click', function () {
       generation += 1; field.value = ''; sync(); win.update();
       card.removeAttribute('aria-busy'); report('Photo removed. The cover remains available with a photo placeholder.');

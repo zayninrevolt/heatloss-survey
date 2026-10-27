@@ -33,6 +33,55 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
+test('Take photo requests the rear camera and saves the captured photo on the report cover', async ({ page }, testInfo) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 844 });
+  const capture = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Take photo', exact: true }).click();
+  const chooser = await capture;
+  const input = chooser.element();
+  expect(await input.getAttribute('capture')).toBe('environment');
+  expect(await input.getAttribute('accept')).toBe('image/*');
+  expect(chooser.isMultiple()).toBe(false);
+  await expect(page.locator('#propertyPhotoFile')).not.toHaveAttribute('capture');
+  await chooser.setFiles(await syntheticPhoto(page));
+  await expect(page.locator('#propertyPhotoStatus')).toContainText('Photo added.');
+  const photo = await page.locator('#property_photo').inputValue();
+  expect(photo).toMatch(/^data:image\/jpeg;base64,/);
+  expect(photo.length).toBeLessThanOrEqual(360000);
+  await expect(page.locator('#propertyPhotoPreview')).toHaveAttribute('src', photo);
+  await expect(page.locator('#preview .report-cover img')).toHaveAttribute('src', photo);
+  expect(await input.inputValue()).toBe('');
+  await page.reload();
+  await expect(page.locator('#property_photo')).toHaveValue(photo);
+  await expect(page.locator('#propertyPhotoPreview')).toHaveAttribute('src', photo);
+  const print = await page.evaluate(() => buildPrintHtml('Camera photo', ['Front', 'Rads'], 'landscape'));
+  expect(print).toContain(photo);
+  await page.locator('#propertyPhotoCard').screenshot({ path: testInfo.outputPath('camera-photo-mobile.png') });
+  expect(errors).toEqual([]);
+});
+
+test('cancelling or rejecting a camera photo keeps the existing photo and the library picker works', async ({ page }) => {
+  const photo = await uploadPhoto(page);
+  await page.locator('#propertyPhotoCamera').setInputFiles([]);
+  await expect(page.locator('#property_photo')).toHaveValue(photo);
+  await expect(page.locator('#propertyPhotoPreview')).toHaveAttribute('src', photo);
+  await page.locator('#propertyPhotoCamera').setInputFiles({ name: 'broken-camera.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('not an image') });
+  await expect(page.locator('#propertyPhotoStatus')).toContainText('could not be read');
+  await expect(page.locator('#property_photo')).toHaveValue(photo);
+  await page.locator('#propertyPhotoCamera').setInputFiles({ name: 'unsafe.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg onload="alert(1)"></svg>') });
+  await expect(page.locator('#propertyPhotoStatus')).toContainText('Choose a JPEG, PNG or WebP');
+  await expect(page.locator('#property_photo')).toHaveValue(photo);
+  const choosing = page.waitForEvent('filechooser');
+  await page.getByLabel('Choose existing photo', { exact: true }).click();
+  const chooser = await choosing;
+  expect(await chooser.element().getAttribute('capture')).toBeNull();
+  await chooser.setFiles(await syntheticPhoto(page, 1200, 1800));
+  await expect(page.locator('#propertyPhotoStatus')).toContainText('Photo added.');
+  await expect(page.locator('#property_photo')).not.toHaveValue(photo);
+});
+
 test('property photo is compressed and survives JSON export, import and reload', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
