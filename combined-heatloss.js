@@ -201,6 +201,10 @@
     },
     loft: {
       'Heated room above': 0,
+      // Party ceilings: MCS published defaults derived from CIBSE DHDG 2026
+      // Table 2-45. Use the adjacent dwelling temperature, never outdoor delta-T.
+      'Solid concrete ceiling to another flat, uninsulated': 1.82,
+      'Solid concrete ceiling to another flat, 100mm insulation': 0.57,
       'Plasterboard, no loft insulation': 2.3,
       'Plasterboard with 50mm insulation': 0.68,
       'Plasterboard with 100mm insulation': 0.4,
@@ -370,6 +374,7 @@
     'floor_adjacent_temp',
     'loft_type',
     'roof_adjacent_temp',
+    'party_ceiling_adjacent_temp',
     'rooflight_area',
     'rooflight_type',
     'internal_segment_1_length',
@@ -421,6 +426,10 @@
     return field ? String(field.value || '') : '';
   }
 
+  function isPartyCeiling(type) {
+    return String(type || '').indexOf('Solid concrete ceiling to another flat, ') === 0;
+  }
+
   function setValue(id, value) {
     var field = document.getElementById(id);
     if (field && String(field.value) !== String(value)) {
@@ -463,7 +472,8 @@
         (id === 'hl_mvhr_efficiency' ? ' max="100"' : '') +
         (numberInput && !(id === 'hl_outdoor_temp' || id === 'hl_property_altitude' ||
           id.endsWith('_internal_adjacent_temp') || id.endsWith('_floor_adjacent_temp') ||
-          id.endsWith('_roof_adjacent_temp') || id.endsWith('_segment_1_adjacent_temp') ||
+          id.endsWith('_roof_adjacent_temp') || id.endsWith('_party_ceiling_adjacent_temp') ||
+          id.endsWith('_segment_1_adjacent_temp') ||
           id.endsWith('_segment_2_adjacent_temp') || id.endsWith('_segment_3_adjacent_temp') ||
           id.endsWith('_segment_4_adjacent_temp'))
           ? ' min="0"' : '') + '>';
@@ -702,12 +712,14 @@
       '<input type="hidden" id="hl_' + escapeHtml(key) +
       '_floor_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_floor_adjacent_temp">' +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft),
-        'Roof and loft constructions use the outdoor design temperature because the loft space is already included in the U-value.') +
+        'Roof and loft constructions use the outdoor design temperature. Concrete ceilings to another flat use its recorded temperature; choose 100mm insulation only where confirmed.') +
+      fieldHtml('hl_' + key + '_party_ceiling_adjacent_temp', 'Temperature in the flat above (°C)', 'number', null,
+        'Required for a concrete ceiling to another flat. Record the adjoining flat design temperature or a justified unheated-space assumption; no outdoor temperature is substituted.') +
       '<input type="hidden" id="hl_' + escapeHtml(key) +
       '_roof_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_roof_adjacent_temp">' +
       '<div class="field" id="hl_' + escapeHtml(key) + '_interstorey_links" data-if-host="' + escapeHtml(key) + '" hidden></div>' +
       fieldHtml('hl_' + key + '_interstorey_floor_remainder', 'Unshared floor construction (reference check)', 'select', ['', 'Uninsulated exposed floor','Insulated exposed floor']) +
-      fieldHtml('hl_' + key + '_interstorey_roof_remainder', 'Unshared ceiling construction (reference check)', 'select', [''].concat(Object.keys(VALUES.loft).filter(function(type){return type !== 'Heated room above' && !/Sloping/.test(type);}))) +
+      fieldHtml('hl_' + key + '_interstorey_roof_remainder', 'Unshared ceiling construction (reference check)', 'select', [''].concat(Object.keys(VALUES.loft).filter(function(type){return type !== 'Heated room above' && !isPartyCeiling(type) && !/Sloping/.test(type);}))) +
       fieldHtml('hl_' + key + '_rooflight_type', 'Rooflights', 'select',
         optionsFromMap(VALUES.rooflight)) +
       fieldHtml('hl_' + key + '_rooflight_area', 'Total rooflight area (m²)', 'number', null, 'Keep rooflights separate from the roof or ceiling area.') +
@@ -2409,9 +2421,11 @@
     var doorU = mappedValue('door', doorType);
     var floorU = mappedValue('floor', floorType);
     var roofU = mappedValue('loft', loftType);
-    var roofAdjacentTemperatureText = stringValue('hl_' + key + '_roof_adjacent_temp');
+    var partyCeiling = isPartyCeiling(loftType);
+    var roofAdjacentTemperatureText = stringValue('hl_' + key +
+      (partyCeiling ? '_party_ceiling_adjacent_temp' : '_roof_adjacent_temp'));
     var roofDeltaT = window.HeatLossCalculations.roofTemperatureDifference(
-      indoor, outdoor, loftType === 'Heated room above'
+      indoor, outdoor, partyCeiling || loftType === 'Heated room above'
         ? roofAdjacentTemperatureText : ''
     );
     var rooflightType = stringValue('hl_' + key + '_rooflight_type');
@@ -2419,7 +2433,7 @@
       ? Math.max(0, numberValue('hl_' + key + '_rooflight_area', 0)) : 0;
     var rooflightU = mappedValue('rooflight', rooflightType);
     var hasExternalEnvelope = wallLength > 0 || windowArea > 0 || doorArea > 0 ||
-      rooflightArea > 0 || floorU > 0 || roofU > 0;
+      rooflightArea > 0 || floorU > 0 || (!partyCeiling && roofU > 0);
     var roomAgeBand = stringValue('hl_' + key + '_element_age_band');
     if (!roomAgeBand || roomAgeBand === 'Unknown') {
       roomAgeBand = stringValue('hl_property_age_band') || 'Unknown';
@@ -2538,7 +2552,7 @@
       ? THERMAL_BRIDGE_FACTORS[propertyAgeBand] || THERMAL_BRIDGE_FACTORS.Unknown
       : null;
     var bridgeArea = netWallArea + windowArea + doorArea +
-      (floorU > 0 ? floorArea : 0) + (roofU > 0 ? floorArea : 0);
+      (floorU > 0 ? floorArea : 0) + (!partyCeiling && roofU > 0 ? floorArea : 0);
     var radiatorOutputsKw = [];
     for (var radiatorIndex = 1; radiatorIndex <= 2; radiatorIndex += 1) {
       var radiatorSuffix = radiatorIndex > 1 ? '_' + radiatorIndex : '';
@@ -2561,6 +2575,8 @@
       rooflightArea: stringValue('hl_' + key + '_rooflight_area'),
       grossRoofArea: floorArea,
       heatedRoomAbove: loftType === 'Heated room above',
+      partyCeiling: partyCeiling,
+      partyCeilingTemperature: partyCeiling ? roofAdjacentTemperatureText : null,
       uValues: [
         { label: 'External wall', value: wallU, required: wallLength > 0 },
         { label: 'Internal wall', value: internalWallU, required: internalWallSegments.length === 0 && internalWallLength > 0 },
@@ -2794,7 +2810,7 @@
       floorAdjacentTemperature: floorAdjacentTemperatureText === ''
         ? null : Number(floorAdjacentTemperatureText),
       loftType: loftType,
-      roofAdjacentTemperature: loftType !== 'Heated room above' ||
+      roofAdjacentTemperature: (!partyCeiling && loftType !== 'Heated room above') ||
           roofAdjacentTemperatureText === ''
         ? null : Number(roofAdjacentTemperatureText),
       roofDeltaT: roofDeltaT,
@@ -4185,6 +4201,9 @@
       if (!results || !results.includedRooms.length || results.incompleteRooms.length) {
         throw Error('Complete the started rooms before comparing reference loads');
       }
+      if (results.includedRooms.some(function (room) { return isPartyCeiling(room.loftType); })) {
+        throw Error('Party ceilings to another dwelling are outside this experimental reference check');
+      }
       var storeys = recordedStoreyCount();
       var facades = window.DesignReview.exposedFacadesForAttachment(stringValue('hl_dwelling_attachment'));
       if (facades === 1) throw Error('The single-facade direction factor is not benchmarked');
@@ -4244,7 +4263,7 @@
           var map = side === 'floor' ? VALUES.floor : VALUES.loft;
           if (!type || !Object.prototype.hasOwnProperty.call(map,type) || !map[type] ||
               (side === 'floor' && !['Uninsulated exposed floor','Insulated exposed floor'].includes(type)) ||
-              /Sloping/.test(type)) {
+              isPartyCeiling(type) || /Sloping/.test(type)) {
             throw Error(room.roomName + ': record the exposed construction for the unshared ' +
               (side === 'floor' ? 'floor' : 'ceiling') + ' area (' + area.toFixed(2) + ' m²)');
           }
@@ -4519,7 +4538,7 @@
             : '') + '</td>' +
           '<td>' + uValueAssumption(room.loftType, room.roofU, room.roofU > 0) +
           (room.roofAdjacentTemperature == null
-            ? '' : '<br>Adjacent room: ' + room.roofAdjacentTemperature.toFixed(1) + '°C') +
+            ? '' : '<br>' + (isPartyCeiling(room.loftType) ? 'Adjacent flat: ' : 'Adjacent room: ') + room.roofAdjacentTemperature.toFixed(1) + '°C') +
           (room.rooflightArea > 0
             ? '<br>Rooflight: ' + room.rooflightArea.toFixed(2) + 'm², U ' + room.rooflightU.toFixed(2)
             : '') + '</td>' +
@@ -4703,6 +4722,8 @@
         stringValue('hl_' + key + '_ventilation_device') === 'Open chimney');
       setRadsFieldVisibility('hl_' + key + '_rooflight_area',
         stringValue('hl_' + key + '_rooflight_type') !== 'No rooflights');
+      setRadsFieldVisibility('hl_' + key + '_party_ceiling_adjacent_temp',
+        isPartyCeiling(stringValue('hl_' + key + '_loft_type')));
     });
   }
 
@@ -4897,6 +4918,7 @@
       'hl_' + key + '_floor_adjacent_temp',
       'hl_' + key + '_loft_type',
       'hl_' + key + '_roof_adjacent_temp',
+      'hl_' + key + '_party_ceiling_adjacent_temp',
       'hl_' + key + '_interstorey_links',
       'hl_' + key + '_interstorey_floor_remainder',
       'hl_' + key + '_interstorey_roof_remainder',

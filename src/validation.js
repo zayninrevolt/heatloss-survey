@@ -103,6 +103,12 @@
         'Manual air-change rate is outside the expected 0–5 ACH range');
     }
 
+    if (input.partyCeiling) {
+      requiredRange('party-ceiling-temperature', 'Temperature in the flat above',
+        input.partyCeilingTemperature, -30, 40,
+        'Temperature in the flat above is outside the expected -30 to 40°C range');
+    }
+
     if (input.rooflightSelected) {
       var rooflightArea = finiteValue(input.rooflightArea);
       if (rooflightArea === null || rooflightArea <= 0) {
@@ -115,6 +121,10 @@
       if (input.heatedRoomAbove) {
         add('rooflight-area', 'boundary', 'error',
           'Rooflights cannot be assigned beneath a heated room above; check the ceiling construction');
+      }
+      if (input.partyCeiling) {
+        add('rooflight-area', 'boundary', 'error',
+          'Rooflights cannot be assigned beneath another flat; check the ceiling construction');
       }
     }
 

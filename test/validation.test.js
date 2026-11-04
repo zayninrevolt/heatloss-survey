@@ -4,6 +4,24 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const validation = require('../src/validation.js');
 
+test('party ceilings require a finite plausible adjacent-flat temperature and reject rooflights', () => {
+  for (const temperature of ['', null, NaN, Infinity, -31, 41]) {
+    const issues = validation.validateRoomDetails({ partyCeiling: true, partyCeilingTemperature: temperature });
+    assert.equal(validation.canRecommendRadiator(issues), false);
+    assert.ok(issues.some((issue) => issue.field === 'party-ceiling-temperature'));
+  }
+  for (const temperature of [0, 10, 18.5, 21, 24]) {
+    assert.deepEqual(validation.validateRoomDetails({ partyCeiling: true, partyCeilingTemperature: temperature }), []);
+  }
+  const rooflightIssues = validation.validateRoomDetails({
+    partyCeiling: true, partyCeilingTemperature: 18,
+    rooflightSelected: true, rooflightArea: 1, grossRoofArea: 12
+  });
+  assert.ok(rooflightIssues.some((issue) => issue.code === 'boundary' &&
+    issue.message.includes('beneath another flat')));
+  assert.equal(validation.canRecommendRadiator(rooflightIssues), false);
+});
+
 test('accepts plausible room inputs', () => {
   assert.deepEqual(validation.validateRoom({
     started: true, length: 4, width: 5, height: 2.4,
