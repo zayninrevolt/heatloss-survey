@@ -1314,7 +1314,7 @@
         if (entry[1]) field.dataset.restoredValue = entry[1];
         else delete field.dataset.restoredValue;
       }
-      if (field.tagName === 'SELECT' && /_new_size$/.test(field.id) && entry[1] &&
+      if (/_new_size(?:_2)?$/.test(field.id) && entry[1] &&
           entry[1] !== NO_NEW_RADIATOR_SELECTION) {
         field.dataset.userSelected = 'yes';
       }
@@ -2007,6 +2007,53 @@
         }
       }
     }
+    var displayOptions = options.slice();
+    var displaySecondOptions = secondOptions.slice();
+    if (validTemperature && requiredWatts > 0) {
+      var catalogue = stelradIndividualOptions(correctionFactor, filters, roomName, deltaT, true);
+      var firstField = document.getElementById('rad_' + key + '_new_size');
+      var manualFirst = firstField && firstField.dataset.userSelected === 'yes';
+      var manualSecond = currentSecondField && currentSecondField.dataset.userSelected === 'yes';
+      if (!usesTwo) {
+        displayOptions = window.RadiatorSizing.closestReplacementChoices(requiredWatts, options, catalogue);
+        var manualSingle = manualFirst && displayOptions.find(function (option) {
+          return option.size === currentFirstSize;
+        });
+        if (manualSingle) selected = selectedFirst = manualSingle;
+      } else {
+        displayOptions = window.RadiatorSizing.closestPairChoices(requiredWatts, options, catalogue);
+        var manualPairFirst = (manualFirst || manualSecond) && displayOptions.find(function (option) {
+          return option.size === currentFirstSize;
+        });
+        var displayedFirst = manualPairFirst || selectedFirst;
+        if (displayedFirst) {
+          var normalPartners = catalogue.filter(function (option) {
+            var combined = displayedFirst.watts + option.watts;
+            return combined >= requiredWatts && combined <= requiredWatts * 1.5 + 0.01;
+          });
+          displaySecondOptions = window.RadiatorSizing.closestReplacementChoices(
+            requiredWatts, normalPartners, catalogue, { otherWatts: displayedFirst.watts });
+          if (manualPairFirst) {
+            var displayedSecond = displaySecondOptions.find(function (option) {
+              return option.size === currentSecondSize;
+            }) || displaySecondOptions.reduce(function (closest, option) {
+              return !closest || option.watts < closest.watts ? option : closest;
+            }, null);
+            if (displayedSecond) {
+              selectedFirst = displayedFirst;
+              selectedSecond = displayedSecond;
+              selected = {
+                first: selectedFirst, second: selectedSecond,
+                watts: selectedFirst.watts + selectedSecond.watts,
+                size: selectedFirst.size + ' + ' + selectedSecond.size, quantity: 2,
+                oversizePercent: Math.max(0, (selectedFirst.watts + selectedSecond.watts -
+                  requiredWatts) / requiredWatts * 100)
+              };
+            }
+          }
+        }
+      }
+    }
     return {
       flow: flow,
       returnTemperature: returnTemperature,
@@ -2019,6 +2066,8 @@
       usesTwo: usesTwo,
       options: options,
       secondOptions: secondOptions,
+      displayOptions: displayOptions,
+      displaySecondOptions: displaySecondOptions,
       selectedFirst: selectedFirst,
       selectedSecond: selectedSecond,
       pairCount: pairCount,
@@ -2750,6 +2799,13 @@
         ? 'No two-radiator combination meets the room requirement within the 50% oversize limit'
         : 'No single radiator option meets the room requirement within the 50% oversize limit');
     }
+    if (radiator && radiator.selected && !keepingExistingAdequateRadiator &&
+        !newRadiatorDeclined && radiatorRequirementWatts > 0 &&
+        radiator.selected.watts > radiatorRequirementWatts * 1.5 + 0.01) {
+      warnings.push('Selected radiator output is above the 50% oversize limit (' +
+        Math.round((radiator.selected.watts / radiatorRequirementWatts - 1) * 100) +
+        '% oversized). This is a larger alternative or minimum-size exception; review sizing and controls.');
+    }
     var heatedInternalWatts = internalWallSegments.length
       ? internalWallSegments.reduce(function (sum, segment) {
         var isUnheatedBoundary = Number(segment.adjacentTemperature) === 10;
@@ -2930,6 +2986,11 @@
     var label = option.size + ' | ' + (option.watts / 1000).toFixed(2) + ' kW';
     if (option.minimumSizeFallback) label += ' | minimum size';
     if (option.existingReplacement) label += ' | existing size';
+    if (option.oversizeAlternative || (!individual && option.watts > requiredWatts * 1.5 + 0.01)) {
+      var oversize = option.oversizePercent == null
+        ? (option.watts / requiredWatts - 1) * 100 : option.oversizePercent;
+      label += ' | oversized' + (individual ? ' combination' : '') + ' +' + Math.round(oversize) + '%';
+    }
     if (!individual) {
       label += ' | +' + Math.round(Math.max(0, option.watts - requiredWatts)) + ' W';
     }
@@ -3156,6 +3217,7 @@
       select.dataset.id = field.dataset.id;
       select.className = field.className;
       select.setAttribute('aria-label', result.roomName + ' - Replacement radiator');
+      select.dataset.userSelected = field.dataset.userSelected || 'no';
       field.replaceWith(select);
       field = select;
     }
@@ -3173,6 +3235,7 @@
     if (secondField && secondField.dataset.stelradWired !== 'yes') {
       secondField.dataset.stelradWired = 'yes';
       secondField.addEventListener('change', function () {
+        secondField.dataset.userSelected = 'yes';
         if (typeof update === 'function') update();
         persistCombinedData();
       });
@@ -3215,7 +3278,7 @@
         ' - Replacement radiator');
       populateRadiatorSelect(
         field,
-        radiator.options,
+        radiator.displayOptions || radiator.options,
         field.dataset.userSelected === 'yes' ? existingValue : '',
         'Existing radiator is adequate, no replacement required',
         result.totalWatts,
@@ -3231,7 +3294,7 @@
     }
     populateRadiatorSelect(
       field,
-      radiator ? radiator.options : [],
+      radiator ? (radiator.displayOptions || radiator.options) : [],
       result.keepingExistingAdequateRadiator
         ? NO_NEW_RADIATOR_SELECTION
         : result.newRadiatorDeclined
@@ -3254,9 +3317,10 @@
     if (secondField) {
       if (secondWrap) secondWrap.hidden = !usesTwo;
       if (usesTwo) {
+        secondField.disabled = false;
         populateRadiatorSelect(
           secondField,
-          radiator.secondOptions,
+          radiator.displaySecondOptions || radiator.secondOptions,
           radiator.selectedSecond ? radiator.selectedSecond.size : secondField.value,
           radiator.temperatureWarning ? 'Review the radiator design temperature' :
             'Choose radiator 2',
@@ -3271,7 +3335,8 @@
       }
     }
     field.title = 'Suitable Stelrad Elite and Myson fan-convector options at the selected design temperature. ' +
-      'Choose another size, position or panel type where required.';
+      'At least four closest adequate choices are offered where the catalogue permits. ' +
+      'Larger alternatives beyond 50% oversize are labelled and require manual selection.';
     return { first: field, second: secondField };
   }
 
@@ -3607,6 +3672,17 @@
           '<small>Output adjusted for the selected design temperature at ΔT' +
           result.radiator.deltaT.toFixed(1) + '.</small>') +
         '</div>';
+    }
+    if (result.radiator && !result.radiator.temperatureWarning && result.radiatorRequirementWatts > 0) {
+      var displayedChoices = result.radiator.displayOptions || result.radiator.options;
+      var normalSizes = new Set(result.radiator.options.map(function (option) { return option.size; }));
+      var extraChoices = displayedChoices.filter(function (option) { return !normalSizes.has(option.size); }).length;
+      if (extraChoices) radiatorHtml += '<div class="hl-radiator-result"><small>' +
+        extraChoices + ' additional closest-output alternative(s) are offered to provide at least four choices. ' +
+        'Options beyond the 50% oversize limit are labelled; the automatic recommendation is unchanged.</small></div>';
+      if (displayedChoices.length < 4) radiatorHtml += '<div class="hl-radiator-result"><small>' +
+        'Fewer than four adequate choices fit the available catalogue and recorded size limits; ' +
+        'no undersized or unsupported model has been added.</small></div>';
     }
     if (summary) {
       summary.textContent = result.existingRadiatorAdequate

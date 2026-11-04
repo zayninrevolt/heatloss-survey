@@ -124,6 +124,74 @@
     });
   }
 
+  // Display alternatives only. Keep suitableOptions/suitablePairs and their
+  // automatic selection limits unchanged; larger choices require user selection.
+  function choiceWithCombinedOutput(option, combinedWatts, requiredWatts) {
+    return Object.assign({}, option, {
+      choiceCombinedWatts: combinedWatts,
+      oversizeAlternative: combinedWatts > requiredWatts * 1.5 + 0.01,
+      oversizePercent: Math.max(0, (combinedWatts / requiredWatts - 1) * 100)
+    });
+  }
+
+  function topUpChoices(recommended, candidates) {
+    var seen = new Set();
+    var choices = [];
+    (recommended || []).forEach(function (option) {
+      if (seen.has(option.size)) return;
+      seen.add(option.size);
+      choices.push(option);
+    });
+    candidates.sort(function (a, b) {
+      return a.choiceCombinedWatts - b.choiceCombinedWatts ||
+        a.watts - b.watts || String(a.size).localeCompare(String(b.size));
+    }).some(function (option) {
+      if (choices.length >= 4) return true;
+      if (!seen.has(option.size)) {
+        choices.push(option);
+        seen.add(option.size);
+      }
+      return false;
+    });
+    return choices;
+  }
+
+  function closestReplacementChoices(requiredWatts, recommended, catalogue, config) {
+    requiredWatts = Number(requiredWatts);
+    if (!Number.isFinite(requiredWatts) || requiredWatts <= 0) return [];
+    var otherWatts = Number(config && config.otherWatts) || 0;
+    var candidates = (catalogue || []).filter(function (option) {
+      return Number.isFinite(option.watts) && option.watts > 0 &&
+        option.watts + otherWatts >= requiredWatts;
+    }).map(function (option) {
+      return choiceWithCombinedOutput(option, option.watts + otherWatts, requiredWatts);
+    });
+    return topUpChoices(recommended, candidates);
+  }
+
+  function closestPairChoices(requiredWatts, recommended, catalogue) {
+    requiredWatts = Number(requiredWatts);
+    if (!Number.isFinite(requiredWatts) || requiredWatts <= 0) return [];
+    var units = (catalogue || []).filter(function (option) {
+      return Number.isFinite(option.watts) && option.watts > 0;
+    }).slice().sort(function (a, b) { return a.watts - b.watts; });
+    var candidates = units.map(function (first) {
+      // Find its nearest adequate partner without building another O(n²) pair
+      // catalogue during every form update. Two identical units are permitted.
+      var low = 0;
+      var high = units.length;
+      while (low < high) {
+        var middle = Math.floor((low + high) / 2);
+        if (first.watts + units[middle].watts < requiredWatts) low = middle + 1;
+        else high = middle;
+      }
+      return units[low]
+        ? choiceWithCombinedOutput(first, first.watts + units[low].watts, requiredWatts)
+        : null;
+    }).filter(Boolean);
+    return topUpChoices(recommended, candidates);
+  }
+
   function suitablePairs(requiredWatts, options) {
     requiredWatts = Math.max(0, Number(requiredWatts) || 0);
     if (!requiredWatts) return { units: [], pairs: [] };
@@ -198,6 +266,8 @@
     sharedRadiatorDisplay: sharedRadiatorDisplay,
     sortOptions: sortOptions,
     suitableOptions: suitableOptions,
+    closestReplacementChoices: closestReplacementChoices,
+    closestPairChoices: closestPairChoices,
     suitablePairs: suitablePairs
   };
 });
