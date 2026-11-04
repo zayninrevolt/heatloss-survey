@@ -657,14 +657,17 @@ test('browser calculation uses signed gains, chimney ACH and room allowances', a
       hl_lounge_chimney_restricted: 'No',
       hl_lounge_radiator_installation: '0.8',
       hl_lounge_radiator_finish: '0.85',
+      hl_lounge_internal_wall_count: '1',
+      hl_lounge_internal_wall_type: 'Heated room, aerated block',
       hl_lounge_internal_segment_1_length: '3',
-      hl_lounge_internal_segment_1_type: 'Heated room, aerated block',
-      hl_lounge_internal_segment_1_adjacent_room: 'bath',
+      hl_lounge_internal_segment_1_adjacent_temp: '22',
       hl_reheat_factor: '1.1'
     };
     for (const [id, value] of Object.entries(values)) {
       const field = document.getElementById(id);
+      if (!field) throw new Error(`Missing signed-gain fixture field ${id}`);
       field.value = value;
+      if (field.value !== value) throw new Error(`Rejected signed-gain fixture ${id}=${value}`);
       field.dispatchEvent(new Event('change', { bubbles: true }));
     }
   });
@@ -674,6 +677,7 @@ test('browser calculation uses signed gains, chimney ACH and room allowances', a
   );
   expect(lounge.complete, JSON.stringify({ warnings: lounge.warnings, missing: lounge.missing })).toBe(true);
   expect(lounge.internalWallWatts).toBeLessThan(0);
+  expect(lounge.internalWallWatts).toBeCloseTo(3 * lounge.height * 0.82 * (lounge.indoor - 22), 8);
   expect(lounge.chimneyAch).toBe(5);
   expect(lounge.factorMultiplier).toBeCloseTo(1.1, 5);
   expect(lounge.radiatorOutputFactor).toBeCloseTo(0.68, 5);
