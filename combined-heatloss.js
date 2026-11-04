@@ -374,7 +374,6 @@
     'floor_adjacent_temp',
     'loft_type',
     'roof_adjacent_temp',
-    'party_ceiling_adjacent_temp',
     'rooflight_area',
     'rooflight_type',
     'internal_segment_1_length',
@@ -472,8 +471,7 @@
         (id === 'hl_mvhr_efficiency' ? ' max="100"' : '') +
         (numberInput && !(id === 'hl_outdoor_temp' || id === 'hl_property_altitude' ||
           id.endsWith('_internal_adjacent_temp') || id.endsWith('_floor_adjacent_temp') ||
-          id.endsWith('_roof_adjacent_temp') || id.endsWith('_party_ceiling_adjacent_temp') ||
-          id.endsWith('_segment_1_adjacent_temp') ||
+          id.endsWith('_roof_adjacent_temp') || id.endsWith('_segment_1_adjacent_temp') ||
           id.endsWith('_segment_2_adjacent_temp') || id.endsWith('_segment_3_adjacent_temp') ||
           id.endsWith('_segment_4_adjacent_temp'))
           ? ' min="0"' : '') + '>';
@@ -712,9 +710,7 @@
       '<input type="hidden" id="hl_' + escapeHtml(key) +
       '_floor_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_floor_adjacent_temp">' +
       fieldHtml('hl_' + key + '_loft_type', 'Ceiling or loft', 'select', optionsFromMap(VALUES.loft),
-        'Roof and loft constructions use the outdoor design temperature. Concrete ceilings to another flat use its recorded temperature; choose 100mm insulation only where confirmed.') +
-      fieldHtml('hl_' + key + '_party_ceiling_adjacent_temp', 'Temperature in the flat above (°C)', 'number', null,
-        'Required for a concrete ceiling to another flat. Record the adjoining flat design temperature or a justified unheated-space assumption; no outdoor temperature is substituted.') +
+        'Roof and loft constructions use the outdoor design temperature. Concrete ceilings to another flat use a fixed 10°C unheated-space assumption; choose 100mm insulation only where confirmed.') +
       '<input type="hidden" id="hl_' + escapeHtml(key) +
       '_roof_adjacent_temp" data-id="hl_' + escapeHtml(key) + '_roof_adjacent_temp">' +
       '<div class="field" id="hl_' + escapeHtml(key) + '_interstorey_links" data-if-host="' + escapeHtml(key) + '" hidden></div>' +
@@ -2471,8 +2467,10 @@
     var floorU = mappedValue('floor', floorType);
     var roofU = mappedValue('loft', loftType);
     var partyCeiling = isPartyCeiling(loftType);
-    var roofAdjacentTemperatureText = stringValue('hl_' + key +
-      (partyCeiling ? '_party_ceiling_adjacent_temp' : '_roof_adjacent_temp'));
+    // Separate flats use the agreed unheated-space design assumption, not an
+    // assumed actual temperature or an extra survey input.
+    var roofAdjacentTemperatureText = partyCeiling ? '10' :
+      stringValue('hl_' + key + '_roof_adjacent_temp');
     var roofDeltaT = window.HeatLossCalculations.roofTemperatureDifference(
       indoor, outdoor, partyCeiling || loftType === 'Heated room above'
         ? roofAdjacentTemperatureText : ''
@@ -4614,7 +4612,8 @@
             : '') + '</td>' +
           '<td>' + uValueAssumption(room.loftType, room.roofU, room.roofU > 0) +
           (room.roofAdjacentTemperature == null
-            ? '' : '<br>' + (isPartyCeiling(room.loftType) ? 'Adjacent flat: ' : 'Adjacent room: ') + room.roofAdjacentTemperature.toFixed(1) + '°C') +
+            ? '' : '<br>' + (isPartyCeiling(room.loftType) ? 'Adjacent flat: ' : 'Adjacent room: ') + room.roofAdjacentTemperature.toFixed(1) + '°C' +
+              (isPartyCeiling(room.loftType) ? ' (unheated-space assumption)' : '')) +
           (room.rooflightArea > 0
             ? '<br>Rooflight: ' + room.rooflightArea.toFixed(2) + 'm², U ' + room.rooflightU.toFixed(2)
             : '') + '</td>' +
@@ -4798,8 +4797,6 @@
         stringValue('hl_' + key + '_ventilation_device') === 'Open chimney');
       setRadsFieldVisibility('hl_' + key + '_rooflight_area',
         stringValue('hl_' + key + '_rooflight_type') !== 'No rooflights');
-      setRadsFieldVisibility('hl_' + key + '_party_ceiling_adjacent_temp',
-        isPartyCeiling(stringValue('hl_' + key + '_loft_type')));
     });
   }
 
@@ -4994,7 +4991,6 @@
       'hl_' + key + '_floor_adjacent_temp',
       'hl_' + key + '_loft_type',
       'hl_' + key + '_roof_adjacent_temp',
-      'hl_' + key + '_party_ceiling_adjacent_temp',
       'hl_' + key + '_interstorey_links',
       'hl_' + key + '_interstorey_floor_remainder',
       'hl_' + key + '_interstorey_roof_remainder',
