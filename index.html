@@ -1784,6 +1784,9 @@
 
 
 
+    <!-- Load the final app palette before rendering the form to avoid a colour flash. -->
+    <link rel="stylesheet" href="combined-heatloss.css?v=95">
+    <link rel="stylesheet" href="house-layout.css?v=6">
   </head>
   <body class="app-shell-theme">
     <a class="skip-link" href="#preview">Skip to document preview</a>
@@ -8934,8 +8937,6 @@
         update();
       })();
     </script>
-    <link rel="stylesheet" href="combined-heatloss.css?v=95">
-    <link rel="stylesheet" href="house-layout.css?v=6">
     <script src="src/heat-loss.js?v=8"></script>
     <script src="src/radiator-sizing.js?v=3"></script>
     <script src="src/myson-fan-convectors.js?v=1"></script>
