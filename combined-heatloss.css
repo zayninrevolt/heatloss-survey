@@ -963,14 +963,27 @@ body.app-shell-theme .signature-placeholder {
 
 body.app-shell-theme .card,
 body.app-shell-theme .pdf-card,
+body.app-shell-theme .pdf-checklist-v53,
 body.app-shell-theme .signature-pad-wrap,
 body.app-shell-theme .extra-room-pill,
+body.app-shell-theme .hidden-room-pill-v50,
 body.app-shell-theme #radsForm details,
 body.app-shell-theme #a12aForm details,
 body.app-shell-theme #commonForm details {
   background: var(--app-panel-raised) !important;
   border-color: var(--app-border) !important;
   color: var(--app-text);
+}
+
+/* Keep signature paper white: the saved strokes and report ink are dark. */
+body.app-shell-theme .v35-signature-box label {
+  color: #111 !important;
+}
+
+body.app-shell-theme .sidebar input::placeholder,
+body.app-shell-theme .sidebar textarea::placeholder {
+  color: var(--app-muted);
+  opacity: 1;
 }
 
 body.app-shell-theme .field input,
@@ -1070,12 +1083,14 @@ body.app-shell-theme .validation-summary {
 }
 
 body.app-shell-theme .validation-summary .missing,
+body.app-shell-theme .pdf-checklist-v53 .missing,
 body.app-shell-theme .validation-message.error,
 body.app-shell-theme #hl_postcode_lookup_status[data-state="error"] {
   color: var(--app-danger) !important;
 }
 
 body.app-shell-theme .validation-message.success,
+body.app-shell-theme .pdf-checklist-v53 .ok,
 body.app-shell-theme #hl_postcode_lookup_status[data-state="success"] {
   color: var(--app-success) !important;
 }
@@ -1131,6 +1146,11 @@ body.app-shell-theme .hl-total-number {
 }
 
 body.app-shell-theme .hl-room-intro,
+body.app-shell-theme #hl_postcode_lookup_status,
+body.app-shell-theme .hl-radiator-panel-heading p,
+body.app-shell-theme .hl-radiator-result,
+body.app-shell-theme .pdf-checklist-v53 .check-note,
+body.app-shell-theme .v55-help-dismiss,
 body.app-shell-theme .hl-help,
 body.app-shell-theme .hl-fields-grid small,
 body.app-shell-theme .hl-room-geometry,
