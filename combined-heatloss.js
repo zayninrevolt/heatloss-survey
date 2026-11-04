@@ -5076,7 +5076,13 @@
     if (summary && roomsCard.previousElementSibling !== summary) {
       summary.insertAdjacentElement('afterend', roomsCard);
     }
-    setActiveRoomWorkspace(activeRoomWorkspaceKey || roomKeyFromName(roomNames[0] || ''));
+    // A rebuild may remove the selected room (Hide/Delete). Resolve its
+    // replacement before opening editors, not later in the navigator refresh.
+    var workspaceKeys = roomNames.map(roomKeyFromName);
+    var selectedKey = workspaceKeys.includes(activeRoomWorkspaceKey)
+      ? activeRoomWorkspaceKey
+      : (workspaceKeys[0] || '');
+    setActiveRoomWorkspace(selectedKey);
     wireRadsWorkspaceToggle();
   }
 
