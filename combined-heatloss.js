@@ -339,6 +339,7 @@
     'alternative_wall_type',
     'internal_wall_length',
     'internal_wall_count',
+    'internal_wall_count_mode',
     'internal_wall_type',
     'internal_door_count',
     'internal_adjacent_room',
@@ -532,6 +533,8 @@
         '</div>';
     }).join('');
     return '<div class="hl-wall-segments">' +
+      '<input type="hidden" id="hl_' + escapeHtml(key) +
+        '_internal_wall_count_mode" data-id="hl_' + escapeHtml(key) + '_internal_wall_count_mode">' +
       '<div class="hl-fields-grid">' +
       fieldHtml('hl_' + key + '_internal_wall_count', 'Number of internal walls',
         'select', countOptions,
@@ -1305,6 +1308,12 @@
       }
       field.value = entry[0] === 'hl_default_internal_wall'
         ? normaliseDefaultInternalWall(entry[1]) : entry[1];
+      if (/_internal_wall_count$/.test(entry[0])) {
+        // Preserve recorded choices (including zero) and retain the provenance of
+        // new automatic suggestions across reloads and form rebuilds.
+        field.dataset.hlCountManual = data[entry[0] + '_mode'] === 'automatic' ||
+          field.value === '' ? 'no' : 'yes';
+      }
     });
     migrateOldHeatLossValues(data || {});
   }
@@ -2244,6 +2253,9 @@
       (!internalWallCountField.dataset.hlCountWired ||
         internalWallCountField.dataset.hlCountManual === 'yes');
     var internalWallCountText = internalWallCountIsManual ? storedInternalWallCount : '';
+    var automaticInternalWallCount = internalWallCountField &&
+      internalWallCountField.dataset.hlCountWired === 'yes' &&
+      internalWallCountField.dataset.hlCountManual !== 'yes';
     var legacySegmentCount = 0;
     for (var legacySegmentIndex = 1; legacySegmentIndex <= 4; legacySegmentIndex += 1) {
       if (numberValue('hl_' + key + '_internal_segment_' + legacySegmentIndex +
@@ -2254,7 +2266,8 @@
     var suggestedInternalWallCount = Math.max(0, Math.min(4, 4 - outsideWallCount));
     var internalWallCount = internalWallCountText !== ''
       ? Math.max(0, Math.min(4, Math.round(Number(internalWallCountText) || 0)))
-      : legacySegmentCount || suggestedInternalWallCount;
+      : automaticInternalWallCount ? suggestedInternalWallCount
+        : legacySegmentCount || suggestedInternalWallCount;
     var enteredWallLength = numberValue('hl_' + key + '_external_wall_length', 0);
     var wallLength = enteredWallLength > 0
       ? enteredWallLength
@@ -2299,7 +2312,8 @@
     var internalDoorType = stringValue('hl_internal_door_type');
     var internalDoorCount = Math.max(0, Math.round(numberValue(
       'hl_' + key + '_internal_door_count', 0)));
-    var numberedInternalWallMode = internalWallCountText !== '' || legacySegmentCount === 0;
+    var numberedInternalWallMode = internalWallCountText !== '' ||
+      automaticInternalWallCount || legacySegmentCount === 0;
     var internalWallSegments = [];
     var internalWallMissing = [];
     for (var segmentIndex = 1; segmentIndex <= internalWallCount; segmentIndex += 1) {
@@ -3255,6 +3269,8 @@
     var internalHelp = document.getElementById('hl_' + result.key + '_internal_wall_help');
     var internalCountField = document.getElementById(
       'hl_' + result.key + '_internal_wall_count');
+    var internalCountMode = document.getElementById(
+      'hl_' + result.key + '_internal_wall_count_mode');
     var hasDimensions = result.length > 0 && result.width > 0;
     if (geometry) {
       if (!hasDimensions) {
@@ -3277,14 +3293,23 @@
     if (internalCountField) {
       if (!internalCountField.dataset.hlCountWired) {
         internalCountField.dataset.hlCountWired = 'yes';
-        internalCountField.dataset.hlCountManual = internalCountField.value === '' ? 'no' : 'yes';
-        internalCountField.addEventListener('change', function () {
+        if (!internalCountField.dataset.hlCountManual) {
+          internalCountField.dataset.hlCountManual = internalCountField.value === '' ? 'no' : 'yes';
+        }
+        var markInternalWallCountManual = function () {
           internalCountField.dataset.hlCountManual = 'yes';
-        }, true);
+          if (internalCountMode) internalCountMode.value = 'manual';
+        };
+        // Selects emit input before change: mark intent before recalculation can
+        // replace the selected value with the automatic suggestion.
+        internalCountField.addEventListener('input', markInternalWallCountManual, true);
+        internalCountField.addEventListener('change', markInternalWallCountManual, true);
       }
       if (internalCountField.dataset.hlCountManual !== 'yes') {
         internalCountField.value = String(result.internalWallCount);
       }
+      if (internalCountMode) internalCountMode.value =
+        internalCountField.dataset.hlCountManual === 'yes' ? 'manual' : 'automatic';
     }
     if (internalHelp && hasDimensions) {
       internalHelp.textContent = formatWallLength(result.calculatedInternalWallLength) +
