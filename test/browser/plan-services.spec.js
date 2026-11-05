@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs/promises');
 const { point, tap, options, back } = require('../helpers/floor-plan-driver');
 const { chromiumPdfPages } = require('../helpers/chromium-pdf.cjs');
-const symbols = [['boiler', 'Boiler'], ['gas-meter', 'Gas meter'], ['stop-tap', 'Stop tap'], ['electric-meter', 'Electric meter']];
+const symbols = [['boiler', 'Boiler'], ['gas-meter', 'Gas meter'], ['stop-tap', 'Stop tap'], ['electric-meter', 'Electric meter'], ['100a-isolator', '100A isolator']];
 async function rectangle(page) {
   await page.goto('/index.html');
   await page.getByRole('tab', { name: 'Layout', exact: true }).click();
@@ -14,11 +14,11 @@ async function add(page, label, x, y) {
   await tap(page, x, y);
 }
 
-test('all four service symbols can be placed with a matching key underneath the layout', async ({ page }, info) => {
+test('all five service symbols can be placed with a matching key underneath the layout', async ({ page }, info) => {
   await rectangle(page);
   const before = await page.evaluate(() => getData());
   for (const [i, [type, label]] of symbols.entries()) {
-    await add(page, label, 112 + i * 120, 176);
+    await add(page, label, 112 + i * 100, 176);
     await expect(page.locator('#houseLayoutSvg [data-service-symbol="' + type + '"]')).toHaveCount(1);
     await expect(page.getByRole('group', { name: 'Layout symbol key', exact: true })).toContainText(label);
   }
@@ -27,7 +27,7 @@ test('all four service symbols can be placed with a matching key underneath the 
   const after = await page.evaluate(() => getData());
   const f = JSON.parse(after.house_layout).floors[0];
   expect(f.services.map(s => s.type)).toEqual(symbols.map(s => s[0]));
-  expect(f.services.map(s => s.point)).toEqual([[14,22],[29,22],[44,22],[59,22]]);
+  expect(f.services.map(s => s.point)).toEqual([[14,22],[26.5,22],[39,22],[51.5,22],[64,22]]);
   delete before.house_layout; delete after.house_layout;
   expect(after).toEqual(before);
   await page.screenshot({ path: info.outputPath('layout-services.png') });
@@ -35,17 +35,17 @@ test('all four service symbols can be placed with a matching key underneath the 
 
 test('service symbols drag, reposition, remove and Undo without changing survey measurements', async ({ page }) => {
   await rectangle(page);
-  await add(page, 'Boiler', 112, 176);
+  await add(page, '100A isolator', 112, 176);
   const id = JSON.parse(await page.locator('#house_layout').inputValue()).floors[0].services[0].id;
   const a = await point(page, 112, 176), b = await point(page, 280, 208);
   await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 8 }); await page.mouse.up();
   const moved = JSON.parse(await page.locator('#house_layout').inputValue()).floors[0].services[0];
-  expect(moved).toEqual({ id, type: 'boiler', point: [35, 26] });
+  expect(moved).toEqual({ id, type: '100a-isolator', point: [35, 26] });
   await tap(page, 280, 208);
   await page.getByRole('button', { name: 'Reposition symbol', exact: true }).click();
   await tap(page, 400, 320);
   const raw = await page.locator('#house_layout').inputValue();
-  expect(JSON.parse(raw).floors[0].services[0]).toEqual({ id, type: 'boiler', point: [50, 40] });
+  expect(JSON.parse(raw).floors[0].services[0]).toEqual({ id, type: '100a-isolator', point: [50, 40] });
   await tap(page, 400, 320);
   await page.getByRole('button', { name: 'Remove symbol', exact: true }).click();
   await expect(page.locator('#houseLayoutSvg [data-plan-service]')).toHaveCount(0);
@@ -60,13 +60,14 @@ test('service symbols and their key survive JSON reload, PNG export and the port
   const calculations = await page.evaluate(() => JSON.stringify(window.heatLossResultsV60));
   await page.getByRole('tab', { name: 'Layout', exact: true }).click();
   await page.getByRole('button', { name: 'Rectangle', exact: true }).click();
-  for (const [i, [, label]] of symbols.entries()) await add(page, label, 112 + i * 120, 176);
+  for (const [i, [, label]] of symbols.entries()) await add(page, label, 112 + i * 100, 176);
   await page.locator('#layoutFloor').selectOption('first');
   await page.getByRole('button', { name: 'L-shaped floor', exact: true }).click();
   await add(page, 'Stop tap', 240, 200);
   expect(await page.evaluate(() => JSON.stringify(window.heatLossResultsV60))).toBe(calculations);
   await options(page); await page.locator('#layoutInclude').check();
   await expect(page.locator('#preview [data-service-key]')).toHaveCount(2);
+
   const png = page.waitForEvent('download'); await page.locator('#layoutSaveImage').click();
   const pngPath = info.outputPath('services-with-key.png'); await (await png).saveAs(pngPath);
   const bytes = await fs.readFile(pngPath);
@@ -84,9 +85,16 @@ test('service symbols and their key survive JSON reload, PNG export and the port
   await other.getByRole('button', { name: 'Save PDF', exact: true }).click();
   const opening = other.waitForEvent('popup'); await other.getByRole('button', { name: 'Save report PDF', exact: true }).click();
   const print = await opening; await print.waitForLoadState('load');
-  await expect(print.locator('[data-service-symbol]')).toHaveCount(5);
+  await expect(print.locator('[data-service-symbol]')).toHaveCount(6);
   await expect(print.locator('[data-service-key]')).toHaveCount(2);
   for (const [, label] of symbols) await expect(print.locator('[data-service-key]').first()).toContainText(label);
+  // Use the visible print document: getBBox on the hidden survey preview is zero.
+  const keyBounds = await print.locator('[data-service-key]').first().evaluate(el => {
+    const b = el.getBBox(); return { x: b.x, width: b.width, right: b.x + b.width, bottom: b.y + b.height };
+  });
+  expect(keyBounds.width).toBeGreaterThan(600);
+  expect(keyBounds.x).toBeGreaterThanOrEqual(0); expect(keyBounds.right).toBeLessThanOrEqual(640);
+  expect(keyBounds.bottom).toBeLessThanOrEqual(520);
   const pages = chromiumPdfPages(await print.pdf({ path: info.outputPath('services-report.pdf'), printBackground: true, preferCSSPageSize: true }));
   await print.locator('.layout-sheet-wrap').screenshot({ path: info.outputPath('services-layout-print.png') });
   expect(pages.at(-3).width).toBeCloseTo(595, 0); expect(pages.at(-3).height).toBeCloseTo(842, 0);
@@ -100,7 +108,7 @@ test('service symbols and their key survive JSON reload, PNG export and the port
 test('keyboard can place a service symbol, nudge it and open its options', async ({ page }) => {
   await rectangle(page);
   await page.locator('#layoutAddService').focus(); await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Stop tap', exact: true }).focus(); await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: '100A isolator', exact: true }).focus(); await page.keyboard.press('Enter');
   await page.keyboard.press('Enter');
   const marker = page.locator('#houseLayoutSvg [data-plan-service]');
   await expect(marker).toHaveCount(1); await expect(marker).toBeFocused();
@@ -109,7 +117,7 @@ test('keyboard can place a service symbol, nudge it and open its options', async
   const after = JSON.parse(await page.locator('#house_layout').inputValue()).floors[0].services[0];
   expect(after).toEqual({ ...before, point: [before.point[0] + 1, before.point[1]] });
   await expect(marker).toBeFocused(); await page.keyboard.press('Enter');
-  await expect(page.locator('#layoutSheetTitle')).toHaveText('Stop tap position');
+  await expect(page.locator('#layoutSheetTitle')).toHaveText('100A isolator position');
 });
 
 for (const route of ['button', 'escape', 'back', 'import']) test('cancel service placement safely using ' + route, async ({ page }) => {
@@ -149,7 +157,7 @@ test('invalid service imports reject atomically and do not alter any survey fiel
 test.describe('service touch gestures', () => {
   test.use({ hasTouch: true });
   for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 320, height: 568 }]) test('visible service drop and key fit ' + viewport.width + 'x' + viewport.height, async ({ page }, info) => {
-    await page.setViewportSize(viewport); await rectangle(page); await add(page, 'Electric meter', 240, 200);
+    await page.setViewportSize(viewport); await rectangle(page); await add(page, '100A isolator', 240, 200);
     const before = await page.locator('#house_layout').inputValue(), a = await point(page, 240, 200), aim = await point(page, 400, 240), c = await page.context().newCDPSession(page);
     await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...a, id: 0 }] });
     await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: aim.x, y: aim.y + 72, id: 0 }] });

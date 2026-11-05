@@ -8,9 +8,10 @@ function plan() {
   return p;
 }
 
-test('all four service marker types survive floor-plan decoding without changing old layouts', () => {
+test('all five service marker types including the 100A isolator survive decoding without changing old layouts', () => {
   const p = plan();
-  p.floors[0].services = ['boiler', 'gas-meter', 'stop-tap', 'electric-meter'].map((type, i) => ({ id: 's' + i, type, point: [12 + i * 14, 20.5] }));
+  assert.deepEqual(M.serviceTypes.find(t => t.type === '100a-isolator'), { type: '100a-isolator', label: '100A isolator', code: '100A', color: '#683b85' });
+  p.floors[0].services = ['boiler', 'gas-meter', 'stop-tap', 'electric-meter', '100a-isolator'].map((type, i) => ({ id: 's' + i, type, point: [12 + i * 14, 20.5] }));
   const clean = M.decode(JSON.stringify(p));
   assert.deepEqual(clean.floors[0].services, p.floors[0].services);
   assert.deepEqual(M.decode(JSON.stringify(M.empty())), M.empty());

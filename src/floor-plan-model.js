@@ -41,7 +41,7 @@
  }
  function point(p){return Array.isArray(p)&&p.length===2&&p.every(Number.isInteger)&&p[0]>=0&&p[0]<=80&&p[1]>=0&&p[1]<=60;}
  function text(t,n){return typeof t==='string'&&t.trim()&&t.length<=n&&!/[\u0000-\u001f]/.test(t);}
- var serviceTypes=[{type:'boiler',label:'Boiler',code:'B',color:'#a63c22'},{type:'gas-meter',label:'Gas meter',code:'GM',color:'#236342'},{type:'stop-tap',label:'Stop tap',code:'ST',color:'#1c5cad'},{type:'electric-meter',label:'Electric meter',code:'EM',color:'#805900'}];
+ var serviceTypes=[{type:'boiler',label:'Boiler',code:'B',color:'#a63c22'},{type:'gas-meter',label:'Gas meter',code:'GM',color:'#236342'},{type:'stop-tap',label:'Stop tap',code:'ST',color:'#1c5cad'},{type:'electric-meter',label:'Electric meter',code:'EM',color:'#805900'},{type:'100a-isolator',label:'100A isolator',code:'100A',color:'#683b85'}];
  function serviceMarkers(raw,hasOutline){
   if(!Array.isArray(raw)||raw.length>60)throw Error('Invalid service markers.');
   if(raw.length&&!hasOutline)throw Error('Draw a floor outline before adding service markers.');
