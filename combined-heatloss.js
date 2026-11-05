@@ -98,6 +98,11 @@
     60: 1.268, 61: 1.296, 62: 1.324, 63: 1.352, 64: 1.38,
     65: 1.408
   };
+  var BRICK_CAVITY_HELP = 'Brick/brick examples: U 1.49 unfilled; U 0.52 with 50mm mineral wool (conductivity 0.035 W/mK). Assumes 115mm brick leaves and 13mm plaster. Source: Open University, Energy in buildings, Activity 7. Use only where the recorded build-up matches.';
+  var BRICK_CAVITY_NOTES = {
+    'Brick, unfilled cavity, brick + plaster': 'Open University, Energy in buildings, Activity 7(a), Table 7: 115mm brick leaves and 13mm plaster, unfilled cavity example.',
+    'Brick, filled cavity, brick + plaster (50mm mineral wool)': 'Open University, Energy in buildings, Activity 7(b), Table 8: 115mm brick leaves and 13mm plaster, 50mm mineral wool, conductivity 0.035 W/mK. Confirm the fill and cavity width.'
+  };
   var VALUES = {
     externalWall: {
       'Solid stone, uninsulated': 1.7,
@@ -105,6 +110,9 @@
       'Solid wall with 50mm internal or external insulation': 0.55,
       'Solid wall with 100mm internal or external insulation': 0.32,
       'Cavity wall, uninsulated': 1.6,
+      // Published Open University Activity 7 worked examples, not age-based defaults.
+      'Brick, unfilled cavity, brick + plaster': 1.49,
+      'Brick, filled cavity, brick + plaster (50mm mineral wool)': 0.52,
       'Brick, open cavity, 100mm aerated block + 13mm plaster': 0.87,
       'Brick, open cavity, 125mm aerated block + 13mm plaster': 0.77,
       'Cavity wall, insulated': 0.55,
@@ -674,7 +682,7 @@
       fieldHtml('hl_' + key + '_indoor_temp', 'Room design temperature', 'select', temperatures) +
       sharedRadiatorFieldHtml(key) +
       fieldHtml('hl_' + key + '_external_wall_length', 'Exposed wall length (m)', 'number', null, 'Leave blank to estimate it from the outside wall count above.') +
-      fieldHtml('hl_' + key + '_wall_type', 'External wall construction', 'select', optionsFromMap(VALUES.externalWall)) +
+      fieldHtml('hl_' + key + '_wall_type', 'External wall construction', 'select', optionsFromMap(VALUES.externalWall), BRICK_CAVITY_HELP) +
       '</div></section>' +
       '<section class="hl-internal-wall" id="hl_' + escapeHtml(key) +
       '_internal_wall" hidden><div class="hl-internal-wall-heading"><h4>Internal wall details</h4><p id="hl_' +
@@ -798,7 +806,7 @@
       '<details class="hl-property-defaults"><summary>Property construction defaults</summary>' +
       '<p class="hl-help">Choose common external-wall, internal-wall and window materials, then press Apply to all rooms. Blank choices leave room selections unchanged. You will be asked before replacing existing room choices. The internal-door type is property-wide; wall counts, lengths and temperatures on the other side stay room-specific. Floor, loft and ventilation devices must be selected inside each room.</p>' +
       '<div class="hl-summary-grid">' +
-      fieldHtml('hl_default_wall', 'External wall', 'select', optionsFromMap(VALUES.externalWall)) +
+      fieldHtml('hl_default_wall', 'External wall', 'select', optionsFromMap(VALUES.externalWall), BRICK_CAVITY_HELP) +
       fieldHtml('hl_default_internal_wall', 'Internal wall construction', 'select', internalWallConstructionOptions(),
         'Choose a common material to apply to rooms. A blank choice leaves their construction unchanged. Record wall counts and temperatures on the other side inside each room.') +
       fieldHtml('hl_default_window', 'Windows', 'select', optionsFromMap(VALUES.window)) +
@@ -4473,7 +4481,9 @@
     }
     if (!included) return 'Not included';
     return escapeHtml(label || 'Unknown') + '<br><b>' +
-      Number(value || 0).toFixed(2) + ' W/m²K</b>';
+      Number(value || 0).toFixed(2) + ' W/m²K</b>' +
+      (Object.prototype.hasOwnProperty.call(BRICK_CAVITY_NOTES, label)
+        ? '<br><small>' + escapeHtml(BRICK_CAVITY_NOTES[label]) + '</small>' : '');
   }
 
   // The lowest room design ΔT in the current result, or null when no room is
